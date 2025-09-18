@@ -1,0 +1,20 @@
+{
+  "hosting": {
+    "site": "oftautomacao-9b427",
+    "source": ".",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "frameworksBackend": {
+      "region": "us-central1"
+    },
+    "rewrites": [
+      {
+        "source": "**",
+        "function": "ssroftautomacao9b427"
+      }
+    ]
+  }
+}

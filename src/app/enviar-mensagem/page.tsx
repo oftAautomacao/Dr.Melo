@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import SidebarLayout from '@/components/layout/sidebar-layout';
-import { useState, useEffect, useRef, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useSearchParams } from 'next/navigation';
 import { MessagesSquare, RefreshCcw, Send } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +50,7 @@ function EnviarMensagemComponent() {
     { content: string; role: "user" | "assistant" }[]
   >([]);
   const [messageContent, setMessageContent] = useState("");
+  const [manualSelection, setManualSelection] = useState(false);
 
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -84,7 +85,7 @@ function EnviarMensagemComponent() {
   }, [selectedUnit]);
 
   /* --------------------- busca conversa do paciente ------------------ */
-  const handlePatientSelect = async (patientId: string) => {
+  const handlePatientSelect = useCallback(async (patientId: string) => {
     setSelectedPatient(patientId);
     if (!selectedUnit) return;
     try {
@@ -117,10 +118,11 @@ function EnviarMensagemComponent() {
       toast.error("Falha ao carregar o histórico da conversa.");
       setConversationHistory([]);
     }
-  };
+  }, [selectedUnit]);
 
   /* -------- seleção automática enquanto digita ou via URL -------- */
   useEffect(() => {
+    if (manualSelection) return;
     if (searchTerm.trim() === "") {
       setSelectedPatient(null);
       setConversationHistory([]);
@@ -132,7 +134,7 @@ function EnviarMensagemComponent() {
           handlePatientSelect(match);
         }
     }
-  }, [searchTerm, patientList, selectedPatient, handlePatientSelect]);
+  }, [searchTerm, patientList, selectedPatient, handlePatientSelect, manualSelection]);
 
   /* -------------------- envia mensagem -------------------- */
   const handleSendMessage = async () => {
@@ -235,7 +237,10 @@ function EnviarMensagemComponent() {
               type="text"
               placeholder="🔍 Buscar telefone"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setManualSelection(false);
+              }}
               className="w-full px-2 py-1 rounded-full text-sm placeholder-blue-200 bg-blue-500 text-white focus:outline-none"
             />
           </div>
@@ -247,7 +252,10 @@ function EnviarMensagemComponent() {
               .map((phone, idx) => (
                 <div
                   key={phone}
-                  onClick={() => handlePatientSelect(phone)}
+                  onClick={() => {
+                    handlePatientSelect(phone);
+                    setManualSelection(true);
+                  }}
                   className={`flex items-center px-3 py-1.5 rounded cursor-pointer transition-colors ${
                     selectedPatient === phone
                       ? "bg-blue-200"

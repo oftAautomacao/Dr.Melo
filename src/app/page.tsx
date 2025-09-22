@@ -220,7 +220,7 @@ export default function Home() {
  {unidades.map((unit) => (
  <Card
  key={unit}
- className="w-full max-w-sm rounded-2xl shadow-lg bg-white flex flex-col items-center p-4 cursor-pointer"
+ className="w-full max-w-sm rounded-2xl shadow-lg bg-white flex flex-col items-center p-4 cursor-pointer transition-transform duration-200 hover:scale-105"
  >
  <div className="relative w-full h-full">
  {/* Link para visualizar agendamentos da unidade com filtro */}

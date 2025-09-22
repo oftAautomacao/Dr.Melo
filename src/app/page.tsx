@@ -55,7 +55,7 @@ export default function Home() {
   const [patientData, setPatientData] =
     useState<Record<string, Record<string, any>>>({});
   const [unitConfig, setUnitConfig] =
-    useState<Record<string, { bairro?: string }>>({});
+    useState<Record<string, { bairro?: string; empresa?: string }>>({});
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState<string | null>(null);
   const [filter,  setFilter]  = useState<string>("");
@@ -234,9 +234,14 @@ export default function Home() {
  <CardHeader className="p-0 pb-2 flex flex-row items-center justify-between space-y-0 relative z-10 w-full">
  <div className="flex items-center justify-between w-full">
  {/* nome da unidade (com reticências se passar do limite) */}
- <span className="text-lg font-semibold text-blue-700 truncate pr-2">
- {unitConfig?.[unit]?.bairro ?? unit}
+ <div className="flex flex-col truncate pr-2">
+ <span className="text-base font-semibold text-blue-700 truncate">
+ {unitConfig?.[unit]?.empresa ?? unit}
  </span>
+ <span className="text-xs text-gray-500 truncate">
+ {unitConfig?.[unit]?.bairro}
+ </span>
+ </div>
 
  {/* ícone “+” - Este link permanece apenas no ícone, com z-index ainda maior */}
  <Link
@@ -252,10 +257,10 @@ export default function Home() {
 
                       {/* contagem + valor - CardContent com position: relative e z-index maior */}
                         <CardContent className="p-0 text-center">
-                          <div className="text-xl font-bold text-gray-800">
+                          <div className="text-lg font-bold text-gray-800">
                             {filteredCounts[unit]}
                           </div>
-                        <div className="text-base font-semibold text-green-600 mt-1">
+                        <div className="text-sm font-semibold text-green-600 mt-1">
                           {`R$ ${(filteredCounts[unit] * 30).toLocaleString(
                             "pt-BR",
                             { minimumFractionDigits: 2 }

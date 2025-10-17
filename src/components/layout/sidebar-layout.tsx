@@ -3,6 +3,7 @@ import Link from 'next/link';
 
 import { Home, CalendarDays, PlusCircle } from "lucide-react"; // Importando ícones
 import { MessageSquareText, Settings } from "lucide-react"; // Importando ícone de mensagem e configurações
+import WhatsAppIcon from '@/components/ui/whatsapp-icon';
 interface SidebarLayoutProps {
   children: ReactNode;
   unit: 'DRM' | 'OFT/45' | null; // Adiciona a prop unit
@@ -30,17 +31,18 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit }) => {
  <CalendarDays className="mr-3 h-5 w-5" /> {/* Ícone */}
             Visualizar Agendamentos
           </Link>
- <Link href="/enviar-mensagem" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
+           <Link href="/enviar-mensagem" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <MessageSquareText className="mr-3 h-5 w-5" /> {/* Ícone de Mensagem */}
             Enviar Mensagem Paciente
           </Link>
- <Link href="/configuracoes" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
+          <Link href="/whastsapp" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
+            <WhatsAppIcon className="mr-3 h-5 w-5" />
+            WhastsApp
+          </Link>
+          <Link href="/configuracoes" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <Settings className="mr-3 h-5 w-5" /> {/* Ícone de Configurações */}
             Configurações
- </Link>
-        </nav>
- <nav className="flex flex-col p-4 space-y-2">
-          {/* Existing navigation links - will be replaced by the new ones */}
+          </Link>
         </nav>
       </div>
 

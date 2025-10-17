@@ -3,9 +3,16 @@
 import SidebarLayout from "@/components/layout/sidebar-layout";
 import Image from "next/image";
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { DollarSign, Plus, Landmark } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import {
   Card,
   CardHeader,
@@ -22,6 +29,7 @@ import {
 import { ref, onValue } from "firebase/database";
 import { database } from "@/lib/firebase";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
+import { FinancialSheetContent } from "@/components/financial-sheet-content";
 
 /* ---------- helpers ---------- */
 const MESES = [
@@ -244,6 +252,7 @@ export default function Home() {
  </div>
 
  {/* ícone “+” - Este link permanece apenas no ícone, com z-index ainda maior */}
+ <div className="flex flex-col items-center space-y-2">
  <Link
  href={`/novo-agendamento?unidade=${encodeURIComponent(unit)}`}
  aria-label="Novo agendamento"
@@ -252,6 +261,28 @@ export default function Home() {
                           >
                             <Plus className="h-5 w-5 text-green-600 hover:opacity-80 transition" />
                           </Link>
+ <Sheet>
+ <SheetTrigger asChild>
+ <button
+ className="shrink-0 z-20"
+ onClick={(e) => {
+ e.stopPropagation();
+                                }}
+ >
+ <DollarSign className="h-5 w-5 text-green-600 hover:opacity-80 transition" />
+ </button>
+ </SheetTrigger>
+ <SheetContent className="sm:max-w-lg">
+ <SheetHeader>
+ <SheetTitle className="flex items-center text-xl font-semibold text-gray-800">
+ <Landmark className="mr-2 h-5 w-5 text-blue-600" />
+ <span>Financeiro - {unitConfig?.[unit]?.empresa ?? unit}</span>
+ </SheetTitle>
+ </SheetHeader>
+ <FinancialSheetContent unit={unit} patientData={patientData} initialMonth={filter} />
+ </SheetContent>
+ </Sheet>
+ </div>
                         </div>
                       </CardHeader>
 

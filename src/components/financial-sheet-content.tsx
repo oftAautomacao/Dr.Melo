@@ -79,15 +79,18 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     const message = `Olá, tudo bem?\n\nVocê poderia verificar quais desses pacientes vindos do Dr. Melo foram realmente atendidos na ${unitName}?\n\n🧾 Pacientes agendados:\n\n${patientListString}`;
 
     let apiCredentials: { id: string; token: string; };
+    let phoneNumber: string;
 
     if (ENVIRONMENT === "teste") {
       apiCredentials = {
         id: "3B74CE9AFF0D20904A9E9E548CC778EF",
         token: "A8F754F1402CAE3625D5D578",
       };
-      toast.info(`AMBIENTE DE TESTE: Mensagem para 5521971938840 sendo enviada.`);
+      phoneNumber = "5521971938840";
+      toast.info(`AMBIENTE DE TESTE: Mensagem para ${phoneNumber} sendo enviada.`);
 
     } else { // Ambiente de PRODUÇÃO
+      phoneNumber = "5521984934862";
       if (selectedUnit === "DRM") {
         apiCredentials = {
           id: "3D460A6CB6DA10A09FAD12D00F179132",
@@ -113,7 +116,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
             "Content-Type": "application/json",
             "Client-Token": "Fe948ba6a317942849b010c88cd9e6105S",
           },
-          body: JSON.stringify({ phone: "5521971938840", message: message }),
+          body: JSON.stringify({ phone: phoneNumber, message: message }),
         }
       );
 

@@ -279,7 +279,7 @@ export default function Home() {
  <span>Financeiro - {unitConfig?.[unit]?.empresa ?? unit}</span>
  </SheetTitle>
  </SheetHeader>
- <FinancialSheetContent unit={unit} patientData={patientData} initialMonth={filter} />
+ <FinancialSheetContent unit={unit} patientData={patientData} initialMonth={filter} unitConfig={unitConfig} />
  </SheetContent>
  </Sheet>
  </div>

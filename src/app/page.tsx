@@ -201,7 +201,7 @@ export default function Home() {
  <div className="flex flex-col items-end pt-4"> {/* Added pt-4 for top padding */}
  <h2 className="text-xl font-bold text-gray-800 ml-4"> {/* Changed mr-4 to ml-4 */}
                 Pacientes
-                {getFirebasePathBase() === 'OFT/45' ? ' por Médicos' : ' por Unidade'} <br />
+                {selectedUnit === 'OFT/45' ? ' por Médicos' : ' por Unidade'} <br />
  </h2>
  <Select value={filter} onValueChange={setFilter}>
  <SelectTrigger className="w-[180px]">

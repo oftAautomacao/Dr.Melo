@@ -277,49 +277,51 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
                         {age !== null && ` (${age} anos)`}
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-3 pt-0 text-sm text-gray-700 space-y-1">
-                      <div className="flex items-center">
-                        <Calendar className="mr-2 h-4 w-4 text-green-600" />
-                        <span>{new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às {app.horario}</span>
-                      </div>
-                      <div className="flex items-center">
-                          <Phone className="mr-2 h-4 w-4 text-gray-500" />
-                          <span>{app.telefone}</span>
-                      </div>
-                      <div className="flex items-center">
-                          <Shield className="mr-2 h-4 w-4 text-gray-500" />
-                          <span>{app.convenio}</span>
-                      </div>
-                      {app.exames && app.exames.length > 0 && (
-                          <div className="flex items-center">
-                              <FlaskConical className="mr-2 h-4 w-4 text-gray-500" />
-                              <span>{app.exames.join(', ')}</span>
-                          </div>
-                      )}
-                    </CardContent>
-                    <div className="p-4 pt-0 flex gap-2">
-                      <Button
-                        className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-yellow-800"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setAppointmentToReschedule(app);
-                          setIsRescheduleFormOpen(true);
-                        }}
-                      >
-                        Reagendar
-                      </Button>
+                    <div className="flex justify-between items-start">
+                      <CardContent className="p-3 pt-0 text-sm text-gray-700 space-y-1">
+                        <div className="flex items-center">
+                          <Calendar className="mr-2 h-4 w-4 text-green-600" />
+                          <span>{new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às {app.horario}</span>
+                        </div>
+                        <div className="flex items-center">
+                            <Phone className="mr-2 h-4 w-4 text-gray-500" />
+                            <span>{app.telefone}</span>
+                        </div>
+                        <div className="flex items-center">
+                            <Shield className="mr-2 h-4 w-4 text-gray-500" />
+                            <span>{app.convenio}</span>
+                        </div>
+                        {app.exames && app.exames.length > 0 && (
+                            <div className="flex items-center">
+                                <FlaskConical className="mr-2 h-4 w-4 text-gray-500" />
+                                <span>{app.exames.join(', ')}</span>
+                            </div>
+                        )}
+                      </CardContent>
+                      <div className="p-4 pt-0 flex flex-col gap-2">
+                        <Button
+                          className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-yellow-800"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => {
+                            setAppointmentToReschedule(app);
+                            setIsRescheduleFormOpen(true);
+                          }}
+                        >
+                          Reagendar
+                        </Button>
 
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => {
-                          setAppointmentToCancel(app);
-                          setIsConfirmCancelDialogOpen(true);
-                        }}
-                      >
-                        Cancelar
-                      </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => {
+                            setAppointmentToCancel(app);
+                            setIsConfirmCancelDialogOpen(true);
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
                     </div>
                   </Card>
                 )

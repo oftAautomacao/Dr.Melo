@@ -92,6 +92,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
   const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
   const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
+  const [isNewAppointmentFormOpen, setIsNewAppointmentFormOpen] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<CalendarAppointment | undefined>(undefined);
   const [appointmentToReschedule, setAppointmentToReschedule] = useState<CalendarAppointment | undefined>(undefined);
   const [cancelReason, setCancelReason] = useState("");
@@ -260,6 +261,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
           </SelectContent>
         </Select>
         <Button onClick={handleGenerateReport}>Gerar Relatório</Button>
+        <Button onClick={() => setIsNewAppointmentFormOpen(true)}>Agendar</Button>
       </div>
 
       <div className="mt-4">
@@ -452,6 +454,27 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
                 firebaseBase={getFirebasePathBase()}
               />
             )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------------- NOVO AGENDAMENTO ---------------- */}
+      <Dialog open={isNewAppointmentFormOpen} onOpenChange={setIsNewAppointmentFormOpen}>
+        <DialogContent className="sm:max-w-[425px] md:max-w-2xl lg:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Novo Agendamento</DialogTitle>
+            <DialogDescription>
+              Preencha os dados do paciente para criar um novo agendamento.
+            </DialogDescription>
+          </DialogHeader>
+
+          <ScrollArea className="h-[calc(100vh-200px)]">
+            <PatientForm
+              onRescheduleComplete={() => {
+                setIsNewAppointmentFormOpen(false);
+              }}
+              firebaseBase={getFirebasePathBase()}
+            />
           </ScrollArea>
         </DialogContent>
       </Dialog>

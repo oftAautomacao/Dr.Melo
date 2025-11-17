@@ -618,6 +618,9 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 <SelectItem value="Consulta reagendada">
                   Consulta reagendada
                 </SelectItem>
+                <SelectItem value="Consulta de Retorno">
+                  Consulta de Retorno
+                </SelectItem>
                 <SelectItem value="Não compareceu à consulta">
                   Não compareceu à consulta
                 </SelectItem>

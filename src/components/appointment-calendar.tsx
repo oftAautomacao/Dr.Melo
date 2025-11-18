@@ -57,6 +57,7 @@ import {
   isHoliday as checkIsHoliday,
   type Holiday,
 } from "@/lib/holidays";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -187,6 +188,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     useState<CalendarAppointment | undefined>(undefined);
 
   const [cancelReason, setCancelReason] = useState("");
+  const [dontSendSecretaryMessage, setDontSendSecretaryMessage] =
+    useState(true);
 
   /* ---------------------- CARREGA FERIADOS --------------------------- */
   useEffect(() => {
@@ -594,7 +597,13 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       {/* ---------------- CONFIRMAR CANCELAMENTO ---------------- */}
       <Dialog
         open={isConfirmCancelDialogOpen}
-        onOpenChange={setIsConfirmCancelDialogOpen}
+        onOpenChange={(isOpen) => {
+          setIsConfirmCancelDialogOpen(isOpen);
+          if (!isOpen) {
+            setCancelReason("");
+            setDontSendSecretaryMessage(true);
+          }
+        }}
       >
         <DialogContent>
           <DialogHeader>
@@ -606,43 +615,64 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
-            <Label className="text-sm">Motivo</Label>
-            <Select onValueChange={setCancelReason} defaultValue="">
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o motivo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Convênio não aceito na unidade">
-                  Convênio não aceito na unidade
-                </SelectItem>
-                <SelectItem value="Consulta reagendada">
-                  Consulta reagendada
-                </SelectItem>
-                <SelectItem value="Consulta de Retorno">
-                  Consulta de Retorno
-                </SelectItem>
-                <SelectItem value="Não compareceu à consulta">
-                  Não compareceu à consulta
-                </SelectItem>
-                <SelectItem value="Cancelado pelo paciente">
-                  Cancelado pelo paciente
-                </SelectItem>
-                <SelectItem value="Cancelado pela secretária">
-                  Cancelado pela secretária
-                </SelectItem>
-                <SelectItem value="Exame não aceito pela unidade">
-                  Exame não aceito pela unidade
-                </SelectItem>
-                <SelectItem value="Paciente Reagendado">
-                  Paciente Reagendado
-                </SelectItem>
-                <SelectItem value="Preço da consulta">
-                  Preço da consulta
-                </SelectItem>
-                <SelectItem value="Erro do sistema">Erro do sistema</SelectItem>
-                <SelectItem value="Teste do sistema">Teste do sistema</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="grid gap-2">
+              <Label className="text-sm">Motivo</Label>
+              <Select onValueChange={setCancelReason} defaultValue="">
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o motivo" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  <SelectItem value="Convênio não aceito na unidade">
+                    Convênio não aceito na unidade
+                  </SelectItem>
+                  <SelectItem value="Consulta reagendada">
+                    Consulta reagendada
+                  </SelectItem>
+                  <SelectItem value="Consulta de Retorno">
+                    Consulta de Retorno
+                  </SelectItem>
+                  <SelectItem value="Não compareceu à consulta">
+                    Não compareceu à consulta
+                  </SelectItem>
+                  <SelectItem value="Cancelado pelo paciente">
+                    Cancelado pelo paciente
+                  </SelectItem>
+                  <SelectItem value="Cancelado pela secretária">
+                    Cancelado pela secretária
+                  </SelectItem>
+                  <SelectItem value="Exame não aceito pela unidade">
+                    Exame não aceito pela unidade
+                  </SelectItem>
+                  <SelectItem value="Paciente Reagendado">
+                    Paciente Reagendado
+                  </SelectItem>
+                  <SelectItem value="Preço da consulta">
+                    Preço da consulta
+                  </SelectItem>
+                  <SelectItem value="Erro do sistema">
+                    Erro do sistema
+                  </SelectItem>
+                  <SelectItem value="Teste do sistema">
+                    Teste do sistema
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="send-secretary-message"
+                checked={dontSendSecretaryMessage}
+                onCheckedChange={(checked) =>
+                  setDontSendSecretaryMessage(Boolean(checked))
+                }
+              />
+              <Label
+                htmlFor="send-secretary-message"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Não enviar mensagem para secretária
+              </Label>
+            </div>
           </div>
 
           <DialogFooter>
@@ -659,8 +689,6 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   nomePaciente: appointmentToCancel.nomePaciente,
                   nascimento: appointmentToCancel.nascimento,
                   dataAgendamento: appointmentToCancel.dataAgendamento,
-                  // mantém o nome da propriedade conforme seu backend usa;
-                  // se seu tipo usa `horaAgendamento`, ajuste aqui:
                   horaAgendamento: appointmentToCancel.horario as any,
                   convenio: appointmentToCancel.convenio,
                   exames: appointmentToCancel.exames,
@@ -673,14 +701,14 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   }),
                 };
 
-                // FIX: passa `unidade` diretamente do agendamento e usa sempre `hora`
                 await cancelAppointment(getFirebasePathBase(), {
-                  telefone: appointmentToCancel.telefone, // Use telefone from appointmentToCancel
-                  unidade: appointmentToCancel.unidade, // Use original unidade from appointmentToCancel for cancellation path logic
-                  data: appointmentToCancel.dataAgendamento, // Use dataAgendamento from appointmentToCancel
+                  telefone: appointmentToCancel.telefone,
+                  unidade: appointmentToCancel.unidade,
+                  data: appointmentToCancel.dataAgendamento,
                   hora: appointmentToCancel.horario,
-                  appointmentData: appointmentData, // Pass the constructed AppointmentFirebaseRecord
+                  appointmentData: appointmentData,
                   cancelReason,
+                  enviarMsgSecretaria: !dontSendSecretaryMessage,
                 });
                 setIsConfirmCancelDialogOpen(false);
                 setAppointmentToCancel(undefined);

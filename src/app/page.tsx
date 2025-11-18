@@ -225,80 +225,88 @@ export default function Home() {
             <>
  {unidades.length ? (
  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 justify-items-center">
- {unidades.map((unit) => (
- <Card
- key={unit}
- className="w-full max-w-sm rounded-2xl shadow-lg bg-white flex flex-col items-center p-4 cursor-pointer transition-transform duration-200 hover:scale-105"
- >
- <div className="relative w-full h-full">
- {/* Link para visualizar agendamentos da unidade com filtro */}
- <Link href={`/visualizar-agendamentos?unidade=${encodeURIComponent(unit)}&filtro=${encodeURIComponent(filter)}`} passHref className="w-full">
- {/* Div para cobrir a área clicável, com position: absolute e z-index baixo */}
- <div className="absolute inset-0 z-0"></div>
- </Link>
+                  {unidades.map((unit) => (
+                    <Card
+                      key={unit}
+                      className="w-full max-w-sm rounded-2xl shadow-lg bg-white p-4 transition-transform duration-200 hover:scale-105 relative"
+                    >
+                      {/* Conteúdo do card */}
+                      <div className="relative z-10 flex flex-col h-full">
+                        {/* ─────── 1ª linha → Nome + ícones ─────── */}
+                        <CardHeader className="p-0 pb-2 flex flex-row items-start justify-between space-y-0 w-full">
+                          {/* nome da unidade */}
+                          <div className="flex flex-col truncate pr-2">
+                            <span className="text-base font-semibold text-blue-700 truncate">
+                              {unitConfig?.[unit]?.empresa ?? unit}
+                            </span>
+                            <span className="text-xs text-gray-500 truncate">
+                              {unitConfig?.[unit]?.bairro}
+                            </span>
+                          </div>
 
- {/* ─────── 1ª linha → Nome + ícone “+” ─────── */}
- {/* CardHeader com position: relative e z-index maior */}
- <CardHeader className="p-0 pb-2 flex flex-row items-center justify-between space-y-0 relative z-10 w-full">
- <div className="flex items-center justify-between w-full">
- {/* nome da unidade (com reticências se passar do limite) */}
- <div className="flex flex-col truncate pr-2">
- <span className="text-base font-semibold text-blue-700 truncate">
- {unitConfig?.[unit]?.empresa ?? unit}
- </span>
- <span className="text-xs text-gray-500 truncate">
- {unitConfig?.[unit]?.bairro}
- </span>
- </div>
+                          {/* ícones “+” e “$” */}
+                          <div className="flex flex-col items-center space-y-2">
+                            <div className="relative z-20">
+                              <Link
+                                href={`/novo-agendamento?unidade=${encodeURIComponent(
+                                  unit
+                                )}`}
+                                aria-label="Novo agendamento"
+                                className="shrink-0"
+                              >
+                                <Plus className="h-5 w-5 text-green-600 hover:opacity-80 transition" />
+                              </Link>
+                            </div>
+                            <Sheet>
+                              <SheetTrigger asChild>
+                                <button className="shrink-0">
+                                  <DollarSign className="h-5 w-5 text-green-600 hover:opacity-80 transition" />
+                                </button>
+                              </SheetTrigger>
+                              <SheetContent className="sm:max-w-lg">
+                                <SheetHeader>
+                                  <SheetTitle className="flex items-center text-xl font-semibold text-gray-800">
+                                    <Landmark className="mr-2 h-5 w-5 text-blue-600" />
+                                    <span>
+                                      Financeiro -{" "}
+                                      {unitConfig?.[unit]?.empresa ?? unit}
+                                    </span>
+                                  </SheetTitle>
+                                </SheetHeader>
+                                <FinancialSheetContent
+                                  unit={unit}
+                                  patientData={patientData}
+                                  initialMonth={filter}
+                                  unitConfig={unitConfig}
+                                />
+                              </SheetContent>
+                            </Sheet>
+                          </div>
+                        </CardHeader>
 
- {/* ícone “+” - Este link permanece apenas no ícone, com z-index ainda maior */}
- <div className="flex flex-col items-center space-y-2">
- <Link
- href={`/novo-agendamento?unidade=${encodeURIComponent(unit)}`}
- aria-label="Novo agendamento"
- className="shrink-0 z-20"
- onClick={(e) => e.stopPropagation()} // Impede que o clique no "+" acione o link pai
-                          >
-                            <Plus className="h-5 w-5 text-green-600 hover:opacity-80 transition" />
-                          </Link>
- <Sheet>
- <SheetTrigger asChild>
- <button
- className="shrink-0 z-20"
- onClick={(e) => {
- e.stopPropagation();
-                                }}
- >
- <DollarSign className="h-5 w-5 text-green-600 hover:opacity-80 transition" />
- </button>
- </SheetTrigger>
- <SheetContent className="sm:max-w-lg">
- <SheetHeader>
- <SheetTitle className="flex items-center text-xl font-semibold text-gray-800">
- <Landmark className="mr-2 h-5 w-5 text-blue-600" />
- <span>Financeiro - {unitConfig?.[unit]?.empresa ?? unit}</span>
- </SheetTitle>
- </SheetHeader>
- <FinancialSheetContent unit={unit} patientData={patientData} initialMonth={filter} unitConfig={unitConfig} />
- </SheetContent>
- </Sheet>
- </div>
-                        </div>
-                      </CardHeader>
-
-                      {/* contagem + valor - CardContent com position: relative e z-index maior */}
-                        <CardContent className="p-0 text-center">
+                        {/* contagem + valor (ocupa o espaço restante) */}
+                        <CardContent className="p-0 text-center flex-grow flex flex-col justify-center">
                           <div className="text-lg font-bold text-gray-800">
                             {filteredCounts[unit]}
                           </div>
-                        <div className="text-sm font-semibold text-green-600 mt-1">
-                          {`R$ ${(filteredCounts[unit] * 30).toLocaleString(
-                            "pt-BR",
-                            { minimumFractionDigits: 2 }
-                          )}`}
-                        </div>
-                      </CardContent>
+                          <div className="text-sm font-semibold text-green-600 mt-1">
+                            {`R$ ${(
+                              filteredCounts[unit] * 30
+                            ).toLocaleString("pt-BR", {
+                              minimumFractionDigits: 2,
+                            })}`}
+                          </div>
+                        </CardContent>
                       </div>
+
+                      {/* Link de fundo para cobrir o card inteiro */}
+                      <Link
+                        href={`/visualizar-agendamentos?unidade=${encodeURIComponent(
+                          unit
+                        )}&filtro=${encodeURIComponent(filter)}`} // O link de fundo agora funciona corretamente
+                        className="absolute inset-0 z-0"
+                        aria-label={`Visualizar agendamentos para ${unit}`}
+                      />
                     </Card>
                   ))}
                 </div>

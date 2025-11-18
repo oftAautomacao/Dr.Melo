@@ -28,6 +28,7 @@ interface CancelAppointmentParams {
   hora: string;    // HH:mm
   appointmentData: AppointmentFirebaseRecord;
   cancelReason: string;
+  enviarMsgSecretaria: boolean;
 }
 
 interface CancelAppointmentResult {
@@ -172,6 +173,7 @@ export async function cancelAppointment(
     hora,
     appointmentData,
     cancelReason,
+    enviarMsgSecretaria,
   }: CancelAppointmentParams
 ): Promise<CancelAppointmentResult> {
   try {
@@ -189,6 +191,7 @@ export async function cancelAppointment(
       ...ensureOFTMedicoOnRecord(firebaseBase, appointmentData),
       id,
       motivoCancelamento: cancelReason || "Consulta cancelada",
+      enviarMsgSecretaria: enviarMsgSecretaria,
       // Garantir que propriedades opcionais que podem vir como undefined sejam null
       Observacoes: appointmentData.Observacoes ?? null,
       aiCategorization: appointmentData.aiCategorization ?? null, // Adiciona aiCategorization e trata undefined

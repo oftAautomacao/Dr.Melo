@@ -357,7 +357,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o motivo" />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="max-h-60">
                 <SelectItem value="Convênio não aceito na unidade">
                   Convênio não aceito na unidade
                 </SelectItem>
@@ -424,6 +424,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
                   hora: appointmentToCancel.horario,
                   appointmentData: appointmentData,
                   cancelReason,
+                  enviarMsgSecretaria: true, // Adicionado para consistência
                 });
                 setIsConfirmCancelDialogOpen(false);
                 setAppointmentToCancel(undefined);

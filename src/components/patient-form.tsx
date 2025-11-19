@@ -557,6 +557,7 @@ useEffect(() => {
                 aiCategorization: initialData.aiCategorization,
               },
               cancelReason: "Consulta reagendada",
+              enviarMsgSecretaria: true,
             }
           );
 

@@ -118,6 +118,7 @@ type AppointmentsByUnit = Record<string, CalendarAppointment[]>;
 interface AppointmentCalendarProps {
   initialUnit?: string | null;
   initialFilter?: string;
+  initialDay?: string;
 }
 
 /* ---------- helper para converter o texto do filtro em Date ---------- */
@@ -155,12 +156,17 @@ const calculateAge = (birthDate: string): number | null => {
 export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   initialUnit,
   initialFilter,
+  initialDay,
 }) => {
   const { toast } = useToast();
   /* ----------------------------- ESTADOS ----------------------------- */
-  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() =>
-    parseFilterDate(initialFilter) ?? new Date()
-  );
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
+    if (initialDay) {
+      const day = parseISO(initialDay);
+      if (dateFnsIsValid(day)) return day;
+    }
+    return parseFilterDate(initialFilter) ?? new Date();
+  });
 
   const [appointmentsByUnit, setAppointmentsByUnit] =
     useState<AppointmentsByUnit>({});
@@ -521,8 +527,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                         {app.telefone}
                                         <WhatsAppIcon className="ml-1 h-4 w-4" />
                                       </a>
-                                      <Link 
-                                        href={`/enviar-mensagem?telefone=${app.telefone.replace(/\D/g, '')}`}
+                                      <Link
+                                        href={`/enviar-mensagem?telefone=${app.telefone.replace(/\D/g, '')}&unidade=${selectedUnit}&data=${selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}`}
                                         className="ml-2 flex items-center text-primary hover:underline"
                                       >
                                         <InternalChatIcon className="h-5 w-5" />

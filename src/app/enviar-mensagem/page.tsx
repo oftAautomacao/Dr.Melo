@@ -1,11 +1,13 @@
 "use client";
 
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import SidebarLayout from '@/components/layout/sidebar-layout';
 import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { useSearchParams } from 'next/navigation';
-import { MessagesSquare, RefreshCcw, Send } from "lucide-react";
+import { MessagesSquare, RefreshCcw, Send, ArrowLeft } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { db } from "@/lib/firebase";
 import { ENVIRONMENT } from "../../../ambiente";
 import { Toaster, toast } from 'sonner';
@@ -32,6 +34,7 @@ const AVATARS = [
 ];
 
 function EnviarMensagemComponent() {
+  const router = useRouter();
   /* ---------- state ---------- */
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
   const searchParams = useSearchParams();
@@ -224,6 +227,17 @@ function EnviarMensagemComponent() {
     }
   };
 
+  const handleBack = () => {
+    const unidade = searchParams.get('unidade');
+    const data = searchParams.get('data');
+
+    if (unidade && data) {
+      router.push(`/visualizar-agendamentos?unidade=${unidade}&dia=${data}`);
+    } else {
+      router.back();
+    }
+  };
+
   /* -------------------------- UI -------------------------- */
   return (
     <SidebarLayout unit={selectedUnit}>
@@ -278,6 +292,14 @@ function EnviarMensagemComponent() {
         {/* painel direito */}
         <main className="flex-1 flex flex-col">
           <header className="flex items-center px-4 py-2 bg-blue-600 text-white shadow-sm">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="mr-2 text-white hover:bg-blue-700 hover:text-white"
+              onClick={handleBack}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <MessagesSquare className="mr-2 h-5 w-5" />
             <h1 className="text-base font-medium">Conversa</h1>
           </header>
@@ -316,22 +338,23 @@ function EnviarMensagemComponent() {
               onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
               className="flex-1 resize-none h-4 rounded-full bg-blue-50 px-10 py-4 text-sm focus:ring-2 focus:ring-blue-300"
             />
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() =>
                 selectedPatient && handlePatientSelect(selectedPatient)
               }
-              className="p-2 rounded-full bg-blue-100 hover:bg-blue-200"
               title="Recarregar Histórico"
             >
               <RefreshCcw className="h-5 w-5 text-blue-600" />
-            </button>
-            <button
+            </Button>
+            <Button
+              size="icon"
               onClick={handleSendMessage}
-              className="p-2 rounded-full bg-blue-600 hover:bg-blue-700"
               title="Enviar Mensagem"
             >
               <Send className="h-5 w-5 text-white" />
-            </button>
+            </Button>
           </footer>
         </main>
       </div>

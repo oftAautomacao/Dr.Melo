@@ -58,6 +58,7 @@ import {
   type Holiday,
 } from "@/lib/holidays";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -155,6 +156,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   initialUnit,
   initialFilter,
 }) => {
+  const { toast } = useToast();
   /* ----------------------------- ESTADOS ----------------------------- */
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(() =>
     parseFilterDate(initialFilter) ?? new Date()
@@ -685,33 +687,55 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
               onClick={async () => {
                 if (!appointmentToCancel) return;
 
-                const appointmentData: AppointmentFirebaseRecord = {
-                  nomePaciente: appointmentToCancel.nomePaciente,
-                  nascimento: appointmentToCancel.nascimento,
-                  dataAgendamento: appointmentToCancel.dataAgendamento,
-                  horaAgendamento: appointmentToCancel.horario as any,
-                  convenio: appointmentToCancel.convenio,
-                  exames: appointmentToCancel.exames,
-                  motivacao: appointmentToCancel.motivacao,
-                  unidade: appointmentToCancel.unidade,
-                  telefone: appointmentToCancel.telefone,
-                  Observacoes: appointmentToCancel.Observacoes || "",
-                  ...(appointmentToCancel.aiCategorization && {
-                    aiCategorization: appointmentToCancel.aiCategorization,
-                  }),
-                };
+                try {
+                  const appointmentData: AppointmentFirebaseRecord = {
+                    nomePaciente: appointmentToCancel.nomePaciente,
+                    nascimento: appointmentToCancel.nascimento,
+                    dataAgendamento: appointmentToCancel.dataAgendamento,
+                    horaAgendamento: appointmentToCancel.horario as any,
+                    convenio: appointmentToCancel.convenio,
+                    exames: appointmentToCancel.exames,
+                    motivacao: appointmentToCancel.motivacao,
+                    unidade: appointmentToCancel.unidade,
+                    telefone: appointmentToCancel.telefone,
+                    Observacoes: appointmentToCancel.Observacoes || "",
+                    ...(appointmentToCancel.aiCategorization && {
+                      aiCategorization: appointmentToCancel.aiCategorization,
+                    }),
+                  };
 
-                await cancelAppointment(getFirebasePathBase(), {
-                  telefone: appointmentToCancel.telefone,
-                  unidade: appointmentToCancel.unidade,
-                  data: appointmentToCancel.dataAgendamento,
-                  hora: appointmentToCancel.horario,
-                  appointmentData: appointmentData,
-                  cancelReason,
-                  enviarMsgSecretaria: !dontSendSecretaryMessage,
-                });
-                setIsConfirmCancelDialogOpen(false);
-                setAppointmentToCancel(undefined);
+                  const result = await cancelAppointment(getFirebasePathBase(), {
+                    telefone: appointmentToCancel.telefone,
+                    unidade: appointmentToCancel.unidade,
+                    data: appointmentToCancel.dataAgendamento,
+                    hora: appointmentToCancel.horario,
+                    appointmentData: appointmentData,
+                    cancelReason,
+                    enviarMsgSecretaria: !dontSendSecretaryMessage,
+                  });
+
+                  if (result && !result.success) {
+                    toast({
+                      variant: "destructive",
+                      title: "Erro ao Cancelar",
+                      description: result.message,
+                    });
+                  } else {
+                    toast({
+                      title: "Sucesso",
+                      description: "Agendamento cancelado com sucesso.",
+                    });
+                    setIsConfirmCancelDialogOpen(false);
+                    setAppointmentToCancel(undefined);
+                  }
+                } catch (error) {
+                  console.error("Falha ao executar cancelamento:", error);
+                  toast({
+                    variant: "destructive",
+                    title: "Erro Inesperado",
+                    description: "Ocorreu um erro de comunicação. Tente novamente.",
+                  });
+                }
               }}
             >
               Confirmar

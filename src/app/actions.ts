@@ -195,6 +195,8 @@ export async function cancelAppointment(
       // Garantir que propriedades opcionais que podem vir como undefined sejam null
       Observacoes: appointmentData.Observacoes ?? null,
       aiCategorization: appointmentData.aiCategorization ?? null, // Adiciona aiCategorization e trata undefined
+      // Garante que a motivação original não seja undefined, o que causa erro no Firebase.
+      motivacao: (appointmentData as any).motivacao ?? "",
     };
 
     const updates: Record<string, any> = {};

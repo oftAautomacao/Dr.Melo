@@ -186,17 +186,35 @@ export async function cancelAppointment(
     const agBase = `${pathBase}/consultasAgendadas`;
     const cancelBase = `${pathBase}/consultasCanceladas`;
 
-    // Garante que em OFT o registro tenha 'medico'
+    // Objeto defensivo: garante que nenhum campo salvo seja `undefined`
+    const record = appointmentData as any;
+    const medicoInfo = isDRMBase(firebaseBase)
+      ? {}
+      : { medico: record.medico ?? record.unidade ?? setor };
+
     const dataToSave = {
-      ...ensureOFTMedicoOnRecord(firebaseBase, appointmentData),
+      // Campos essenciais do agendamento original com valores padrão
+      nomePaciente: record.nomePaciente ?? "Não informado",
+      nascimento: record.nascimento ?? "Não informado",
+      dataAgendamento: record.dataAgendamento ?? data,
+      horaAgendamento: record.horaAgendamento ?? hora,
+      convenio: record.convenio ?? "Particular",
+      exames: record.exames ?? "Não informado",
+      unidade: record.unidade ?? setor,
+      telefone: record.telefone ?? phone,
+
+      // Campos opcionais, garantindo que não sejam undefined
+      motivacao: record.motivacao ?? "",
+      Observacoes: record.Observacoes ?? null,
+      obs: record.obs ?? null,
+      aiCategorization: record.aiCategorization ?? null,
+
+      ...medicoInfo, // Adiciona o campo 'medico' se for OFT
+
+      // Novos campos do cancelamento
       id,
       motivoCancelamento: cancelReason || "Consulta cancelada",
       enviarMsgSecretaria: enviarMsgSecretaria,
-      // Garantir que propriedades opcionais que podem vir como undefined sejam null
-      Observacoes: appointmentData.Observacoes ?? null,
-      aiCategorization: appointmentData.aiCategorization ?? null, // Adiciona aiCategorization e trata undefined
-      // Garante que a motivação original não seja undefined, o que causa erro no Firebase.
-      motivacao: (appointmentData as any).motivacao ?? "",
     };
 
     const updates: Record<string, any> = {};

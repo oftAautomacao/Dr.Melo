@@ -78,6 +78,7 @@ export interface AppointmentFirebaseRecord {
   Observacoes?: string;
   aiCategorization?: AICategorization;
   bairro?: string; 
+  enviarMsgSecretaria?: boolean;
 }
 
 export interface PatientData extends Omit<PatientFormData, 'dataNascimento' | 'dataAgendamento' | 'exames' | 'observacoes' | 'local' | 'horario'> {

@@ -32,6 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Form,
@@ -128,6 +129,8 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
   const [selectedDateIsHoliday, setSelectedDateIsHoliday] = useState<HolidayType | undefined>(undefined);
   const [allHolidays, setAllHolidays] = useState<HolidayType[]>([]);
   const [isLoadingHolidays, setIsLoadingHolidays] = useState(true);
+  const [dontSendSecretaryMessage, setDontSendSecretaryMessage] = useState(true);
+  const [dontSendSecretaryMessageOnCreate, setDontSendSecretaryMessageOnCreate] = useState(true);
 
   const [isClient, setIsClient] = useState(false);
   const form = useForm<PatientFormData>({
@@ -515,9 +518,9 @@ useEffect(() => {
   }, [toast]);
 
 
+  const isReschedule = !!initialData;
   const onSubmit = async (data: PatientFormData) => {
     setIsSaving(true);
-    const isReschedule = !!initialData;
 
     try {
       // Se for um reagendamento, verifique se precisa cancelar o antigo
@@ -557,7 +560,7 @@ useEffect(() => {
                 aiCategorization: initialData.aiCategorization,
               },
               cancelReason: "Consulta reagendada",
-              enviarMsgSecretaria: true,
+              enviarMsgSecretaria: !dontSendSecretaryMessage,
             }
           );
 
@@ -573,7 +576,8 @@ useEffect(() => {
       const result = await saveAppointmentAction(
         firebaseBase || getFirebasePathBase(),
         data,
-        aiResult || undefined
+        aiResult || undefined,
+        !dontSendSecretaryMessageOnCreate
       );
 
       if (result.success) {
@@ -944,6 +948,40 @@ useEffect(() => {
               )}
             />
             </div>
+            {isReschedule && (
+              <div className="my-4 p-4 border rounded-md space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="reschedule-send-secretary-message-create"
+                    checked={dontSendSecretaryMessageOnCreate}
+                    onCheckedChange={(checked) =>
+                      setDontSendSecretaryMessageOnCreate(Boolean(checked))
+                    }
+                  />
+                  <Label
+                    htmlFor="reschedule-send-secretary-message-create"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Não enviar mensagem para secretária sobre o <strong>novo agendamento</strong>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="reschedule-send-secretary-message-cancel"
+                    checked={dontSendSecretaryMessage}
+                    onCheckedChange={(checked) =>
+                      setDontSendSecretaryMessage(Boolean(checked))
+                    }
+                  />
+                  <Label
+                    htmlFor="reschedule-send-secretary-message-cancel"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Não enviar mensagem para secretária sobre o <strong>cancelamento</strong>
+                  </Label>
+                </div>
+              </div>
+            )}
             <Button type="submit"
               disabled={isSaving || !!selectedDateIsHoliday || isLoadingHolidays || isCategorizing}
               className="bg-accent hover:bg-accent/90 text-accent-foreground"

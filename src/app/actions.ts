@@ -74,7 +74,8 @@ function ensureOFTMedicoOnRecord(
 export async function saveAppointmentAction(
   firebaseBase: string,
   formData: PatientFormData,
-  aiCategorizationResult?: AICategorization
+  aiCategorizationResult?: AICategorization,
+  enviarMsgSecretaria: boolean = true
 ): Promise<SaveAppointmentResult> {
   console.log("SAVE_ACTION - firebaseBase:", firebaseBase);
   console.log("SAVE_ACTION - formData:", formData); // Adicionado log para depuração
@@ -110,6 +111,7 @@ export async function saveAppointmentAction(
       motivacao: v.motivacao,
       unidade: unidadeParaCampo, // Usar o valor determinado acima
       telefone: v.telefone,
+      enviarMsgSecretaria: enviarMsgSecretaria,
       ...(firebaseBase === 'OFT/45' ? { medico: v.local } : {}), // Adicionar campo medico para OFT/45
       ...(aiCategorizationResult &&
       aiCategorizationResult.category &&

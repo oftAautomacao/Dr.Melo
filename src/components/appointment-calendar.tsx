@@ -48,6 +48,7 @@ import {
   CalendarCheck2,
   BellRing,
   Calendar as CalendarIcon,
+  PlusCircle,
 } from "lucide-react";
 import WhatsAppIcon from "@/components/ui/whatsapp-icon";
 import InternalChatIcon from "@/components/ui/internal-chat-icon";
@@ -188,6 +189,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     useState(false);
 
   const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
+  const [isNewAppointmentDialogOpen, setIsNewAppointmentDialogOpen] =
+    useState(false);
 
   const [appointmentToCancel, setAppointmentToCancel] =
     useState<CalendarAppointment | undefined>(undefined);
@@ -444,13 +447,24 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
             {/* --------- DETALHES / LISTA DO DIA --------- */}
             <ScrollArea className="h-[420px] p-3 border rounded-md flex-1">
-              <h3 className="text-lg font-semibold mb-2">
-                {selectedDate && dateFnsIsValid(selectedDate)
-                  ? `Detalhes para ${format(selectedDate, "dd 'de' MMMM 'de' yyyy", {
-                      locale: ptBR,
-                    })}`
-                  : "Selecione uma data"}
-              </h3>
+              <div className="flex justify-between items-center mb-2">
+                <h3 className="text-lg font-semibold">
+                  {selectedDate && dateFnsIsValid(selectedDate)
+                    ? `Detalhes para ${format(selectedDate, "dd 'de' MMMM 'de' yyyy", {
+                        locale: ptBR,
+                      })}`
+                    : "Selecione uma data"}
+                </h3>
+              </div>
+
+              {/* Botão de Adicionar Agendamento */}
+              {selectedDate && dateFnsIsValid(selectedDate) && !selectedDateHolidayInfo && getDay(selectedDate) !== 0 && (
+                <div className="flex justify-end -mt-2 mb-2">
+                  <Button variant="ghost" size="icon" className="hover:bg-blue-100" onClick={() => setIsNewAppointmentDialogOpen(true)}>
+                    <PlusCircle className="h-8 w-8 text-primary" />
+                  </Button>
+                </div>
+              )}
 
               {(isLoading || isLoadingHolidays) && <p>Carregando…</p>}
 
@@ -772,6 +786,30 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 firebaseBase={getFirebasePathBase()}
               />
             )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* ---------------- NOVO AGENDAMENTO PARA O DIA ---------------- */}
+      <Dialog open={isNewAppointmentDialogOpen} onOpenChange={setIsNewAppointmentDialogOpen}>
+        <DialogContent className="sm:max-w-[425px] md:max-w-2xl lg:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Novo Agendamento</DialogTitle>
+            <DialogDescription>
+              Preencha os dados para criar um novo agendamento para o dia {selectedDate ? format(selectedDate, "dd/MM/yyyy") : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[calc(100vh-200px)]">
+            <PatientForm
+              defaultValues={{
+                dataAgendamento: selectedDate,
+                ...(selectedUnit && { local: selectedUnit }),
+              }}
+              onAppointmentSaved={() => {
+                setIsNewAppointmentDialogOpen(false);
+              }}
+              firebaseBase={getFirebasePathBase()}
+            />
           </ScrollArea>
         </DialogContent>
       </Dialog>

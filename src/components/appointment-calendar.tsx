@@ -146,7 +146,8 @@ function parseFilterDate(raw: string | undefined): Date | undefined {
 }
 
 /* ---------- helper para calcular a idade ---------- */
-const calculateAge = (birthDate: string): number | null => {
+const calculateAge = (birthDate: string | null | undefined): number | null => {
+  if (!birthDate) return null;
   let date = parseISO(birthDate);
   if (!dateFnsIsValid(date)) {
     date = dateFnsParse(birthDate, "dd/MM/yyyy", new Date());

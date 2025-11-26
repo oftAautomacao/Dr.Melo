@@ -49,6 +49,8 @@ import {
   BellRing,
   Calendar as CalendarIcon,
   PlusCircle,
+  Sparkle,
+  Eraser,
 } from "lucide-react";
 import WhatsAppIcon from "@/components/ui/whatsapp-icon";
 import InternalChatIcon from "@/components/ui/internal-chat-icon";
@@ -201,6 +203,44 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   const [cancelReason, setCancelReason] = useState("");
   const [dontSendSecretaryMessage, setDontSendSecretaryMessage] =
     useState(true);
+
+  /* -- estados para autopreencher/limpar -- */
+  const [autoFillKey, setAutoFillKey] = useState(0);
+  const [defaults, setDefaults] = useState<Record<string, any>>();
+  const formDefaults = useMemo(() => defaults, [defaults]);
+
+  /* ------------------- Autopreenchimento ------------------- */
+  const handleAutoFill = () => {
+    const now = new Date();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+
+    setDefaults({
+      nomePaciente: "Alexandre Lobo - Teste do Sistema",
+      dataNascimento: "1900-01-01",
+      telefone: "5521984934862",
+      dataAgendamento: selectedDate ? format(selectedDate, "yyyy-MM-dd") : format(tomorrow, "yyyy-MM-dd"),
+      horario: format(now, "HH:mm"),
+      convenio: "Particular",
+      motivacao: "Revisão de Grau",
+      local: selectedUnit || (getFirebasePathBase() === "OFT/45" ? "WilsonBarros" : "OftalmoDayTijuca"),
+      exames: ["Consulta"],
+      observacoes: `Teste de Autopreenchimento ${format(
+        now,
+        "HH:mm dd/MM/yyyy"
+      )}`,
+    });
+
+    setAutoFillKey((k) => k + 1);
+  };
+
+  /* ------------------- Limpar formulário ------------------- */
+  const handleClearForm = () => {
+    setDefaults(undefined);
+    setAutoFillKey((k) => k + 1);
+  };
+
+
 
   /* ---------------------- CARREGA FERIADOS --------------------------- */
   useEffect(() => {
@@ -796,15 +836,37 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           <DialogHeader>
             <DialogTitle>Novo Agendamento</DialogTitle>
             <DialogDescription>
-              Preencha os dados para criar um novo agendamento para o dia {selectedDate ? format(selectedDate, "dd/MM/yyyy") : ""}.
+              Novo agendamento para o dia {selectedDate ? format(selectedDate, "dd/MM/yyyy") : ""} na unidade {selectedUnit?.replace(/([A-Z])/g, " $1").trim()}.
             </DialogDescription>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button
+                variant="ghost"
+                onClick={handleAutoFill}
+                className="text-sm px-4 py-2 h-auto flex items-center gap-2 border border-blue-500"
+              >
+                <Sparkle className="h-4 w-4 mr-2 text-blue-600" />
+                Autopreencher
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={handleClearForm}
+                className="text-sm px-4 py-2 h-auto flex items-center gap-2 border border-gray-300"
+              >
+                <Eraser className="h-4 w-4 mr-2" />
+                Limpar
+              </Button>
+            </div>
           </DialogHeader>
           <ScrollArea className="h-[calc(100vh-200px)]">
             <PatientForm
-              defaultValues={{
-                dataAgendamento: selectedDate,
-                ...(selectedUnit && { local: selectedUnit }),
-              }}
+              key={autoFillKey}
+              defaultValues={
+                formDefaults ?? {
+                  dataAgendamento: selectedDate,
+                  ...(selectedUnit && { local: selectedUnit }),
+                }
+              }
               onAppointmentSaved={() => {
                 setIsNewAppointmentDialogOpen(false);
               }}

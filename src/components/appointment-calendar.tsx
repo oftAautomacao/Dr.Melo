@@ -491,21 +491,19 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
               <div className="flex justify-between items-center mb-2">
                 <h3 className="text-lg font-semibold">
                   {selectedDate && dateFnsIsValid(selectedDate)
-                    ? `Detalhes para ${format(selectedDate, "dd 'de' MMMM 'de' yyyy", {
+                    ? `${format(selectedDate, "dd 'de' MMMM 'de' yyyy", {
                         locale: ptBR,
                       })}`
                     : "Selecione uma data"}
                 </h3>
-              </div>
-
-              {/* Botão de Adicionar Agendamento */}
-              {selectedDate && dateFnsIsValid(selectedDate) && !selectedDateHolidayInfo && getDay(selectedDate) !== 0 && (
-                <div className="flex justify-end -mt-2 mb-2">
+                
+                {/* Botão de Adicionar Agendamento */}
+                {selectedDate && dateFnsIsValid(selectedDate) && !selectedDateHolidayInfo && getDay(selectedDate) !== 0 && (
                   <Button variant="ghost" size="icon" className="hover:bg-blue-100" onClick={() => setIsNewAppointmentDialogOpen(true)}>
                     <PlusCircle className="h-8 w-8 text-primary" />
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
 
               {(isLoading || isLoadingHolidays) && <p>Carregando…</p>}
 

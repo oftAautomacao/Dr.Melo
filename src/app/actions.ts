@@ -75,7 +75,7 @@ export async function saveAppointmentAction(
   firebaseBase: string,
   formData: PatientFormData,
   aiCategorizationResult?: AICategorization,
-  enviarMsgSecretaria: boolean = true
+  enviarMsgSecretaria?: boolean
 ): Promise<SaveAppointmentResult> {
   console.log("SAVE_ACTION - firebaseBase:", firebaseBase);
   console.log("SAVE_ACTION - formData:", formData); // Adicionado log para depuração
@@ -101,7 +101,7 @@ export async function saveAppointmentAction(
 
     // Monta o registro no formato usado (mantendo horaAgendamento)
     // Corrigido o nome do campo para 'medico' e atualizado o tipo
-    const appointmentRecord: AppointmentFirebaseRecord & { medico?: string } = {
+    const appointmentRecord: Partial<AppointmentFirebaseRecord & { medico?: string }> = {
       nomePaciente: v.nomePaciente,
       nascimento: formatDateFn(v.dataNascimento, "dd/MM/yyyy"),
       dataAgendamento: formatDateFn(v.dataAgendamento, "dd/MM/yyyy"),
@@ -111,7 +111,6 @@ export async function saveAppointmentAction(
       motivacao: v.motivacao,
       unidade: unidadeParaCampo, // Usar o valor determinado acima
       telefone: v.telefone,
-      enviarMsgSecretaria: enviarMsgSecretaria,
       ...(firebaseBase === 'OFT/45' ? { medico: v.local } : {}), // Adicionar campo medico para OFT/45
       ...(aiCategorizationResult &&
       aiCategorizationResult.category &&
@@ -121,6 +120,10 @@ export async function saveAppointmentAction(
         ? { aiCategorization: aiCategorizationResult }
         : {}),
     };
+
+    if (enviarMsgSecretaria !== undefined) {
+      appointmentRecord.enviarMsgSecretaria = enviarMsgSecretaria;
+    }
 
     const idxNode = getIdxNode(firebaseBase); // "unidades" | "medicos"
     const setor = v.local;

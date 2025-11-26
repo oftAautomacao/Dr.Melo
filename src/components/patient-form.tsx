@@ -577,7 +577,7 @@ useEffect(() => {
         firebaseBase || getFirebasePathBase(),
         data,
         aiResult || undefined,
-        !dontSendSecretaryMessageOnCreate
+        isReschedule ? !dontSendSecretaryMessageOnCreate : undefined
       );
 
       if (result.success) {

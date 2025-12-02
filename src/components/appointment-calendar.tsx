@@ -201,7 +201,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   const [appointmentToReschedule, setAppointmentToReschedule] =
     useState<CalendarAppointment | undefined>(undefined);
 
-  const [cancelReason, setCancelReason] = useState("");
+  const [cancelReason, setCancelReason] = useState("Não compareceu à consulta");
   const [dontSendSecretaryMessage, setDontSendSecretaryMessage] =
     useState(true);
 
@@ -410,8 +410,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           <aside className="w-full md:w-60 shrink-0">
             <Card className="h-full">
               <CardHeader className="pb-3">                <CardTitle className="text-sm">
-                  {getFirebasePathBase() === 'OFT/45' ? 'Médicos' : 'Unidades'}
-                </CardTitle>
+                {getFirebasePathBase() === 'OFT/45' ? 'Médicos' : 'Unidades'}
+              </CardTitle>
                 <CardDescription className="text-xs">
                   Clique para filtrar
                 </CardDescription>
@@ -492,11 +492,11 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 <h3 className="text-lg font-semibold">
                   {selectedDate && dateFnsIsValid(selectedDate)
                     ? `${format(selectedDate, "dd 'de' MMMM 'de' yyyy", {
-                        locale: ptBR,
-                      })}`
+                      locale: ptBR,
+                    })}`
                     : "Selecione uma data"}
                 </h3>
-                
+
                 {/* Botão de Adicionar Agendamento */}
                 {selectedDate && dateFnsIsValid(selectedDate) && !selectedDateHolidayInfo && getDay(selectedDate) !== 0 && (
                   <Button variant="ghost" size="icon" className="hover:bg-blue-100" onClick={() => setIsNewAppointmentDialogOpen(true)}>
@@ -635,8 +635,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
                                 {idx <
                                   appointmentsForSelectedDate.length - 1 && (
-                                  <Separator className="my-3" />
-                                )}
+                                    <Separator className="my-3" />
+                                  )}
                               </div>
                             );
                           })}
@@ -661,7 +661,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
         onOpenChange={(isOpen) => {
           setIsConfirmCancelDialogOpen(isOpen);
           if (!isOpen) {
-            setCancelReason("");
+            setCancelReason("Não compareceu à consulta");
             setDontSendSecretaryMessage(true);
           }
         }}
@@ -678,7 +678,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label className="text-sm">Motivo</Label>
-              <Select onValueChange={setCancelReason} defaultValue="">
+              <Select onValueChange={setCancelReason} defaultValue="Não compareceu à consulta">
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>

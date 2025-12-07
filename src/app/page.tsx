@@ -65,8 +65,8 @@ export default function Home() {
   const [unitConfig, setUnitConfig] =
     useState<Record<string, { bairro?: string; empresa?: string }>>({});
   const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState<string | null>(null);
-  const [filter,  setFilter]  = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<string>("");
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null); // Adiciona estado para a unidade
 
   /* ---------- get unit from localStorage ---------- */
@@ -152,7 +152,7 @@ export default function Home() {
     const mesAtual = `${MESES[hoje.getMonth()]} de ${hoje.getFullYear()}`;
     if (mesesDisponiveis.includes(mesAtual)) setFilter(mesAtual);
     else if (mesesDisponiveis.length) setFilter(mesesDisponiveis.at(-1)!);
-    else if (anosDisponiveis.length)     setFilter(anosDisponiveis[0]);
+    else if (anosDisponiveis.length) setFilter(anosDisponiveis[0]);
   }, [filter, mesesDisponiveis, anosDisponiveis]);
 
   /* ---------- contagem filtrada ---------- */
@@ -175,56 +175,53 @@ export default function Home() {
     return result;
   }, [patientData, filter]);
 
-  const unidades          = Object.keys(filteredCounts);
-  const totalPacientes    = unidades.reduce((s, u) => s + filteredCounts[u], 0);
-  const totalValorFormat  = (totalPacientes * 30).toLocaleString("pt-BR", {
+  const unidades = Object.keys(filteredCounts);
+  const totalPacientes = unidades.reduce((s, u) => s + filteredCounts[u], 0);
+  const totalValorFormat = (totalPacientes * 30).toLocaleString("pt-BR", {
     minimumFractionDigits: 2,
   });
 
   /* ---------- UI ---------- */
   return (
     <SidebarLayout unit={selectedUnit}>
- <div className="flex flex-col items-center p-6 md:p-10 lg:p-16 bg-gradient-to-b from-blue-100 via-white to-blue-100 min-h-screen w-full relative overflow-auto">
- {/* Top section with logo on the right and filter on the left */}
- <section className="w-full flex justify-between items-start mb-8">
- {/* Left side: Logo and Subtitle */}
- <div className="flex flex-col items-start">
- {selectedUnit === "OFT/45" ? (
- <Image src="/images/logo pequena.png" alt="OFT Logo" width={150} height={60} layout="intrinsic" className="mb-4" />
- ) : (
- <Image src="/images/image1.png" alt="Dr. Melo Logo" width={200} height={80} className="mb-4" />
- )}
- {selectedUnit !== "OFT/45" && (<h1 className="text-base md:text-lg font-semibold tracking-tight text-gray-700 leading-tight text-right"><span className="text-primary">Seu Oftalmologista</span> perto de você</h1>)}
- </div>
+      <div className="flex flex-col items-center p-6 md:p-10 lg:p-16 bg-gradient-to-b from-blue-100 via-white to-blue-100 min-h-screen w-full relative overflow-auto">
+        {/* Top section with logo on the right and filter on the left */}
+        <section className="w-full flex justify-between items-start mb-8">
+          {/* Left side: Logo and Subtitle */}
+          <div className="flex flex-col items-start">
+            {selectedUnit === "OFT/45" ? (
+              <Image src="/images/logo pequena.png" alt="OFT Logo" width={150} height={60} layout="intrinsic" className="mb-4" />
+            ) : (
+              <Image src="/images/image1.png" alt="Dr. Melo Logo" width={200} height={80} className="mb-4" />
+            )}
 
- {/* Right side: Filter */}
- <div className="flex flex-col items-end pt-4"> {/* Added pt-4 for top padding */}
- <h2 className="text-xl font-bold text-gray-800 ml-4"> {/* Changed mr-4 to ml-4 */}
-                Pacientes
-                {selectedUnit === 'OFT/45' ? ' por Médicos' : ' por Unidade'} <br />
- </h2>
- <Select value={filter} onValueChange={setFilter}>
- <SelectTrigger className="w-[180px]">
- <SelectValue placeholder="Selecione o Mês/Ano" />
- </SelectTrigger>
- <SelectContent className="max-h-[200px] overflow-y-auto">
-                  {anosDisponiveis.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
-                  {mesesDisponiveis.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
- </SelectContent>
- </Select>
- </div>
+          </div>
+
+          {/* Right side: Filter */}
+          <div className="flex flex-col items-end pt-4"> {/* Added pt-4 for top padding */}
+
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="Selecione o Mês/Ano" />
+              </SelectTrigger>
+              <SelectContent className="max-h-[200px] overflow-y-auto">
+                {anosDisponiveis.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
+                {mesesDisponiveis.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          </div>
         </section>
 
 
         {/* Lista + filtro */}
         <section className="w-full max-w-6xl">
           {loading && <p className="text-center">Carregando…</p>}
- {error && <p className="text-center text-red-500">{error}</p>}
+          {error && <p className="text-center text-red-500">{error}</p>}
 
           {!loading && (
             <>
- {unidades.length ? (
- <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 justify-items-center">
+              {unidades.length ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 justify-items-center">
                   {unidades.map((unit) => (
                     <Card
                       key={unit}
@@ -322,7 +319,7 @@ export default function Home() {
                   Total Pacientes: {totalPacientes} • Total: R${" "}
                   {totalValorFormat}
                 </div>
- )}</>
+              )}</>
           )}
         </section>
       </div>

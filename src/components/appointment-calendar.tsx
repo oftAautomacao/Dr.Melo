@@ -408,16 +408,9 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
         <CardContent className="flex flex-col md:flex-row gap-6 h-full">
           {/* --------- COLUNA ESQUERDA — UNIDADES --------- */}
           <aside className="w-full md:w-60 shrink-0">
-            <Card className="h-full">
-              <CardHeader className="pb-3">                <CardTitle className="text-sm">
-                {getFirebasePathBase() === 'OFT/45' ? 'Médicos' : 'Unidades'}
-              </CardTitle>
-                <CardDescription className="text-xs">
-                  Clique para filtrar
-                </CardDescription>
-              </CardHeader>
-              {/* FIX: faltava o hífen em h-[420px] */}
-              <ScrollArea className="h-[420px] px-4 pb-4">
+            <Card className="h-full flex flex-col">
+              {/* REMOVIDO O HEADER "Médicos"/"Unidades" CONFORME SOLICITADO */}
+              <ScrollArea className="flex-1 px-4 py-4">
                 <div className="space-y-2">
                   {availableUnits.length === 0 && !isLoading && (
                     <EmptyMsg msg="Nenhuma unidade" />
@@ -487,8 +480,10 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             </div>
 
             {/* --------- DETALHES / LISTA DO DIA --------- */}
-            <ScrollArea className="h-[420px] p-3 border rounded-md flex-1">
-              <div className="flex justify-between items-center mb-2">
+            {/* Alterado para flex-col para ter o header fixo acima do ScrollArea */}
+            <div className="h-[420px] border rounded-md flex flex-col">
+              {/* Header Fixo */}
+              <div className="flex justify-between items-center p-3 border-b bg-background rounded-t-md shrink-0 z-10">
                 <h3 className="text-lg font-semibold">
                   {selectedDate && dateFnsIsValid(selectedDate)
                     ? `${format(selectedDate, "dd 'de' MMMM 'de' yyyy", {
@@ -505,152 +500,155 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 )}
               </div>
 
-              {(isLoading || isLoadingHolidays) && <p>Carregando…</p>}
+              {/* Área Rolável */}
+              <ScrollArea className="flex-1 p-3">
+                {(isLoading || isLoadingHolidays) && <p>Carregando…</p>}
 
-              {!isLoading &&
-                !isLoadingHolidays &&
-                selectedDate &&
-                dateFnsIsValid(selectedDate) && (
-                  <>
-                    {selectedDateHolidayInfo ? (
-                      <Card className="mb-3 bg-destructive/10 border-destructive">
-                        <CardHeader className="pb-2 pt-3">
-                          <CardTitle className="text-md text-destructive flex items-center">
-                            <BellRing className="mr-2 h-5 w-5" /> Feriado Nacional
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="text-sm space-y-1 text-destructive/90">
-                          <p>
-                            <strong>{selectedDateHolidayInfo.name}</strong>
-                          </p>
-                          <p className="text-xs italic">
-                            Agendamentos não são permitidos neste dia.
-                          </p>
-                        </CardContent>
-                      </Card>
-                    ) : getDay(selectedDate) === 0 ? (
-                      <Card className="mb-3 bg-blue-50 border-blue-200">
-                        <CardHeader className="pb-2 pt-3">
-                          <CardTitle className="text-md text-blue-700 flex items-center">
-                            <CalendarIcon className="mr-2 h-5 w-5" /> Domingo
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="text-sm space-y-1 text-blue-700/90">
-                          <p>Este é um domingo. Agendamentos não são realizados.</p>
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      <>
-                        {selectedUnit &&
-                          appointmentsForSelectedDate.length === 0 && (
-                            <EmptyMsg msg="Nenhum agendamento para esta data." />
-                          )}
+                {!isLoading &&
+                  !isLoadingHolidays &&
+                  selectedDate &&
+                  dateFnsIsValid(selectedDate) && (
+                    <>
+                      {selectedDateHolidayInfo ? (
+                        <Card className="mb-3 bg-destructive/10 border-destructive">
+                          <CardHeader className="pb-2 pt-3">
+                            <CardTitle className="text-md text-destructive flex items-center">
+                              <BellRing className="mr-2 h-5 w-5" /> Feriado Nacional
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="text-sm space-y-1 text-destructive/90">
+                            <p>
+                              <strong>{selectedDateHolidayInfo.name}</strong>
+                            </p>
+                            <p className="text-xs italic">
+                              Agendamentos não são permitidos neste dia.
+                            </p>
+                          </CardContent>
+                        </Card>
+                      ) : getDay(selectedDate) === 0 ? (
+                        <Card className="mb-3 bg-blue-50 border-blue-200">
+                          <CardHeader className="pb-2 pt-3">
+                            <CardTitle className="text-md text-blue-700 flex items-center">
+                              <CalendarIcon className="mr-2 h-5 w-5" /> Domingo
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="text-sm space-y-1 text-blue-700/90">
+                            <p>Este é um domingo. Agendamentos não são realizados.</p>
+                          </CardContent>
+                        </Card>
+                      ) : (
+                        <>
+                          {selectedUnit &&
+                            appointmentsForSelectedDate.length === 0 && (
+                              <EmptyMsg msg="Nenhum agendamento para esta data." />
+                            )}
 
-                        {selectedUnit &&
-                          appointmentsForSelectedDate.map((app, idx) => {
-                            const age = calculateAge(app.nascimento);
-                            const formattedUnit = app.unidade
-                              .replace(/([A-Z])/g, " $1")
-                              .trim();
+                          {selectedUnit &&
+                            appointmentsForSelectedDate.map((app, idx) => {
+                              const age = calculateAge(app.nascimento);
+                              const formattedUnit = app.unidade
+                                .replace(/([A-Z])/g, " $1")
+                                .trim();
 
-                            return (
-                              <div key={app.id}>
-                                <Card className="mb-3 bg-secondary/30 shadow-sm">
-                                  <CardHeader className="pb-2 pt-3">
-                                    <CardTitle className="text-md text-secondary-foreground">
-                                      {app.nomePaciente}
-                                      {age !== null && ` (${age} anos)`}
-                                    </CardTitle>
-                                    <CardDescription className="text-xs">
-                                      {app.motivacao}
-                                    </CardDescription>
-                                  </CardHeader>
-                                  <CardContent className="text-sm space-y-1">
-                                    <p>
-                                      <strong>Horário:</strong> {app.horario}
-                                    </p>
-                                    <p className="flex items-center">
-                                      <strong>Telefone:</strong>
-                                      <a
-                                        href={`https://wa.me/${app.telefone.replace(/\D/g, '')}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="ml-2 flex items-center text-primary hover:underline"
-                                      >
-                                        {app.telefone}
-                                        <WhatsAppIcon className="ml-1 h-4 w-4" />
-                                      </a>
-                                      <Link
-                                        href={`/enviar-mensagem?telefone=${app.telefone.replace(/\D/g, '')}&unidade=${selectedUnit}&data=${selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}`}
-                                        className="ml-2 flex items-center text-primary hover:underline"
-                                      >
-                                        <InternalChatIcon className="h-5 w-5" />
-                                      </Link>
-                                    </p>
-                                    <p>
-                                      <strong>Convênio:</strong> {app.convenio}
-                                    </p>
-                                    <p>
-                                      <strong>Exames:</strong>{" "}
-                                      {app.exames.join(", ")}
-                                    </p>
-                                    <p>
-                                      <strong>
-                                        {getFirebasePathBase() === 'OFT/45' ? 'Médico:' : 'Unidade:'}
-                                      </strong> {formattedUnit}
-                                    </p>
-                                    {app.Observacoes && (
+                              return (
+                                <div key={app.id}>
+                                  <Card className="mb-3 bg-secondary/30 shadow-sm">
+                                    <CardHeader className="pb-2 pt-3">
+                                      <CardTitle className="text-md text-secondary-foreground">
+                                        {app.nomePaciente}
+                                        {age !== null && ` (${age} anos)`}
+                                      </CardTitle>
+                                      <CardDescription className="text-xs">
+                                        {app.motivacao}
+                                      </CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="text-sm space-y-1">
                                       <p>
-                                        <strong>Obs.:</strong> {app.Observacoes}
+                                        <strong>Horário:</strong> {app.horario}
                                       </p>
+                                      <p className="flex items-center">
+                                        <strong>Telefone:</strong>
+                                        <a
+                                          href={`https://wa.me/${app.telefone.replace(/\D/g, '')}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="ml-2 flex items-center text-primary hover:underline"
+                                        >
+                                          {app.telefone}
+                                          <WhatsAppIcon className="ml-1 h-4 w-4" />
+                                        </a>
+                                        <Link
+                                          href={`/enviar-mensagem?telefone=${app.telefone.replace(/\D/g, '')}&unidade=${selectedUnit}&data=${selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}`}
+                                          className="ml-2 flex items-center text-primary hover:underline"
+                                        >
+                                          <InternalChatIcon className="h-5 w-5" />
+                                        </Link>
+                                      </p>
+                                      <p>
+                                        <strong>Convênio:</strong> {app.convenio}
+                                      </p>
+                                      <p>
+                                        <strong>Exames:</strong>{" "}
+                                        {app.exames.join(", ")}
+                                      </p>
+                                      <p>
+                                        <strong>
+                                          {getFirebasePathBase() === 'OFT/45' ? 'Médico:' : 'Unidade:'}
+                                        </strong> {formattedUnit}
+                                      </p>
+                                      {app.Observacoes && (
+                                        <p>
+                                          <strong>Obs.:</strong> {app.Observacoes}
+                                        </p>
+                                      )}
+                                    </CardContent>
+
+                                    <div className="p-4 pt-0 flex gap-2">
+                                      <Button
+                                        className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-yellow-800"
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() => {
+                                          setAppointmentToReschedule(app);
+                                          console.log("DEBUG REAGENDA: 'Reagendar' button clicked. Appointment data:", app);
+                                          setIsRescheduleFormOpen(true);
+                                        }}
+                                      >
+                                        Reagendar
+                                      </Button>
+
+                                      <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={() => {
+                                          setAppointmentToCancel(app);
+                                          setIsConfirmCancelDialogOpen(true);
+                                        }}
+                                      >
+                                        Cancelar
+                                      </Button>
+                                    </div>
+                                  </Card>
+
+                                  {idx <
+                                    appointmentsForSelectedDate.length - 1 && (
+                                      <Separator className="my-3" />
                                     )}
-                                  </CardContent>
+                                </div>
+                              );
+                            })}
+                        </>
+                      )}
+                    </>
+                  )}
 
-                                  <div className="p-4 pt-0 flex gap-2">
-                                    <Button
-                                      className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-yellow-800"
-                                      variant="secondary"
-                                      size="sm"
-                                      onClick={() => {
-                                        setAppointmentToReschedule(app);
-                                        console.log("DEBUG REAGENDA: 'Reagendar' button clicked. Appointment data:", app);
-                                        setIsRescheduleFormOpen(true);
-                                      }}
-                                    >
-                                      Reagendar
-                                    </Button>
-
-                                    <Button
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => {
-                                        setAppointmentToCancel(app);
-                                        setIsConfirmCancelDialogOpen(true);
-                                      }}
-                                    >
-                                      Cancelar
-                                    </Button>
-                                  </div>
-                                </Card>
-
-                                {idx <
-                                  appointmentsForSelectedDate.length - 1 && (
-                                    <Separator className="my-3" />
-                                  )}
-                              </div>
-                            );
-                          })}
-                      </>
-                    )}
-                  </>
-                )}
-
-              {!isLoading &&
-                !isLoadingHolidays &&
-                (!selectedDate || !dateFnsIsValid(selectedDate)) && (
-                  <EmptyMsg msg="Selecione uma data no calendário." />
-                )}
-            </ScrollArea>
+                {!isLoading &&
+                  !isLoadingHolidays &&
+                  (!selectedDate || !dateFnsIsValid(selectedDate)) && (
+                    <EmptyMsg msg="Selecione uma data no calendário." />
+                  )}
+              </ScrollArea>
+            </div>
           </div>
         </CardContent>
       </Card>

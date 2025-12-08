@@ -859,10 +859,10 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             <PatientForm
               key={autoFillKey}
               defaultValues={
-                formDefaults ?? {
+                formDefaults ?? useMemo(() => ({
                   dataAgendamento: selectedDate,
                   ...(selectedUnit && { local: selectedUnit }),
-                }
+                }), [selectedDate, selectedUnit])
               }
               onAppointmentSaved={() => {
                 setIsNewAppointmentDialogOpen(false);

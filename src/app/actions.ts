@@ -1,7 +1,7 @@
 // use server
 import { ENVIRONMENT } from "../../ambiente";
 
-import { ref, update } from "firebase/database";
+import { ref, update, get } from "firebase/database";
 import { database } from "@/lib/firebase";
 import type {
   PatientFormData,
@@ -69,13 +69,49 @@ function ensureOFTMedicoOnRecord(
 }
 
 /* =============================================================
+   CHECK AVAILABILITY: verifica se já existe agendamento
+   ============================================================= */
+export async function checkAppointmentAvailabilityAction(
+  firebaseBase: string,
+  date: string,   // yyyy-MM-dd
+  time: string,   // HH:mm
+  unitOrMedic: string
+): Promise<{ available: boolean; message?: string }> {
+  try {
+    const idxNode = getIdxNode(firebaseBase); // "unidades" | "medicos"
+    // Caminho: /<base>/agendamentoWhatsApp/operacional/consultasAgendadas/<medicos|unidades>/<nome>/<data>/<hora>
+    const path = `/${firebaseBase}/agendamentoWhatsApp/operacional/consultasAgendadas/${idxNode}/${unitOrMedic}/${date}/${time}`;
+
+    console.log("CHECK_AVAILABILITY path:", path);
+    const snapshot = await get(ref(database, path));
+
+    if (snapshot.exists()) {
+      return {
+        available: false,
+        message: `Já existe um agendamento para ${time} em ${unitOrMedic}.`
+      };
+    }
+
+    return { available: true };
+  } catch (error) {
+    console.error("Error checking availability:", error);
+    // Em caso de erro de leitura (ex: permissão), bloqueamos por segurança ou permitimos?
+    // Melhor permitir e deixar o save falhar se for o caso, ou bloquear? 
+    // Vamos retornar falso para forçar verificação manual se der erro de rede grave, 
+    // mas pode ser irritante. Vamos lançar msg.
+    return { available: false, message: "Erro ao verificar disponibilidade." };
+  }
+}
+
+/* =============================================================
    SAVE: grava em consultasAgendadas (por setor e por telefone)
    ============================================================= */
 export async function saveAppointmentAction(
   firebaseBase: string,
   formData: PatientFormData,
   aiCategorizationResult?: AICategorization,
-  enviarMsgSecretaria?: boolean
+  enviarMsgSecretaria?: boolean,
+  checkConflict: boolean = true
 ): Promise<SaveAppointmentResult> {
   console.log("SAVE_ACTION - firebaseBase:", firebaseBase);
   console.log("SAVE_ACTION - formData:", formData); // Adicionado log para depuração
@@ -113,10 +149,10 @@ export async function saveAppointmentAction(
       telefone: v.telefone,
       ...(firebaseBase === 'OFT/45' ? { medico: v.local } : {}), // Adicionar campo medico para OFT/45
       ...(aiCategorizationResult &&
-      aiCategorizationResult.category &&
-      !["unknown", "desconhecido", "n/a"].includes(
-        aiCategorizationResult.category.toLowerCase().trim()
-      )
+        aiCategorizationResult.category &&
+        !["unknown", "desconhecido", "n/a"].includes(
+          aiCategorizationResult.category.toLowerCase().trim()
+        )
         ? { aiCategorization: aiCategorizationResult }
         : {}),
     };
@@ -130,6 +166,17 @@ export async function saveAppointmentAction(
     const datePath = formatDateFn(v.dataAgendamento, "yyyy-MM-dd");
     const timePath = v.horario; // HH:mm
     const phone = String(v.telefone);
+
+    // --- CHECK CONFLICT (Server-side safety) ---
+    if (checkConflict) {
+      const availability = await checkAppointmentAvailabilityAction(firebaseBase, datePath, timePath, setor);
+      if (!availability.available) {
+        return {
+          success: false,
+          message: availability.message || "Horário indisponível.",
+        };
+      }
+    }
 
     const pathBase = `/${firebaseBase}/agendamentoWhatsApp/operacional`;
     const agBase = `${pathBase}/consultasAgendadas`;

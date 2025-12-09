@@ -251,6 +251,17 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
       }
     }
 
+    // Normalizar "Particular" se necessário
+    if (vals.convenio === "Particular" && conveniosList.length > 0) {
+      const particularItem = conveniosList.find(c =>
+        c.id.toLowerCase() === "particular" ||
+        c.nome.toLowerCase() === "particular"
+      );
+      if (particularItem) {
+        vals.convenio = particularItem.id;
+      }
+    }
+
     // Só dá reset quando já temos unidades (se precisar delas)
     if (!vals.local || unidadesList.length > 0) {
       // Check if values are actually different to avoid unnecessary resets
@@ -258,15 +269,16 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
 
       // Helper to format date for comparison
       const formatDate = (d: any) => d instanceof Date && dateFnsIsValid(d) ? d.toISOString().split('T')[0] : '';
+      const normalizeStr = (s: any) => String(s || '').trim();
 
       const isDifferent =
-        vals.nomePaciente !== currentValues.nomePaciente ||
-        vals.telefone !== currentValues.telefone ||
-        vals.horario !== currentValues.horario ||
-        vals.convenio !== currentValues.convenio ||
-        vals.motivacao !== currentValues.motivacao ||
-        vals.local !== currentValues.local ||
-        vals.observacoes !== currentValues.observacoes ||
+        normalizeStr(vals.nomePaciente) !== normalizeStr(currentValues.nomePaciente) ||
+        normalizeStr(vals.telefone) !== normalizeStr(currentValues.telefone) ||
+        normalizeStr(vals.horario) !== normalizeStr(currentValues.horario) ||
+        normalizeStr(vals.convenio) !== normalizeStr(currentValues.convenio) ||
+        normalizeStr(vals.motivacao) !== normalizeStr(currentValues.motivacao) ||
+        normalizeStr(vals.local) !== normalizeStr(currentValues.local) ||
+        normalizeStr(vals.observacoes) !== normalizeStr(currentValues.observacoes) ||
         formatDate(vals.dataAgendamento) !== formatDate(currentValues.dataAgendamento) ||
         formatDate(vals.dataNascimento) !== formatDate(currentValues.dataNascimento) ||
         // Cheap check for arrays (exames) - length different or first item different (simplification)
@@ -280,7 +292,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     } else {
       // console.log("Defaults têm 'local', mas unidades não carregaram. Aguardando…");
     }
-  }, [defaultValues, initialData, reset, unidadesList]);
+  }, [defaultValues, initialData, reset, unidadesList, conveniosList]);
 
 
   const selectedPatientPhoneNumber = form.watch("telefone"); // Watching the phone field for auto-fill button
@@ -395,7 +407,10 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
 
   useEffect(() => { // Removed unidadesList from dependencies
     setIsLoadingConvenios(true);
-    const conveniosRefPath = '/DRM/agendamentoWhatsApp/configuracoes/convenios';
+    setIsLoadingConvenios(true);
+    const base = getFirebasePathBase();
+    // Usa path dinâmico para OFT e DRM
+    const conveniosRefPath = `/${base}/agendamentoWhatsApp/configuracoes/convenios`;
     console.log("PATIENT_FORM: Tentando buscar convênios de:", conveniosRefPath);
     const conveniosRef = ref(database, conveniosRefPath);
 
@@ -457,7 +472,9 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
 
   useEffect(() => {
     setIsLoadingExames(true);
-    const examesRefPath = '/DRM/agendamentoWhatsApp/configuracoes/exames';
+    setIsLoadingExames(true);
+    const base = getFirebasePathBase();
+    const examesRefPath = `/${base}/agendamentoWhatsApp/configuracoes/exames`;
     console.log("PATIENT_FORM: Tentando buscar exames de:", examesRefPath);
     const examesRef = ref(database, examesRefPath);
 
@@ -644,7 +661,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         firebaseBase || getFirebasePathBase(),
         data,
         aiResult || undefined,
-        isReschedule ? !dontSendSecretaryMessageOnCreate : undefined,
+        !dontSendSecretaryMessageOnCreate, // Pass the flag directly for both new and reschedule
         shouldCheckConflictInSave
       );
 
@@ -1046,6 +1063,25 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                   >
                     Não enviar mensagem para secretária sobre o <strong>cancelamento</strong>
+                  </Label>
+                </div>
+              </div>
+            )}
+            {!isReschedule && (
+              <div className="my-4 p-4 border rounded-md space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="new-appointment-send-secretary-message"
+                    checked={dontSendSecretaryMessageOnCreate}
+                    onCheckedChange={(checked) =>
+                      setDontSendSecretaryMessageOnCreate(Boolean(checked))
+                    }
+                  />
+                  <Label
+                    htmlFor="new-appointment-send-secretary-message"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Não enviar mensagem para secretária sobre este agendamento
                   </Label>
                 </div>
               </div>

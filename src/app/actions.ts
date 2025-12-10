@@ -139,7 +139,7 @@ export async function saveAppointmentAction(
     // Corrigido o nome do campo para 'medico' e atualizado o tipo
     const appointmentRecord: Partial<AppointmentFirebaseRecord & { medico?: string }> = {
       nomePaciente: v.nomePaciente,
-      cpf: v.cpf,
+      ...(v.cpf ? { cpf: v.cpf } : {}),
       nascimento: formatDateFn(v.dataNascimento, "dd/MM/yyyy"),
       dataAgendamento: formatDateFn(v.dataAgendamento, "dd/MM/yyyy"),
       horaAgendamento: v.horario, // HH:mm

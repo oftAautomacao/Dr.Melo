@@ -1023,20 +1023,35 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
               />
 
 
-              <FormField
-                control={form.control}
-                name="observacoes"
+              <div className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="cpf"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />CPF (Opcional)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="000.000.000-00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><FileEdit className="mr-2 h-4 w-4" />Observações</FormLabel>
-                    <FormControl>
-                      <Textarea placeholder="Digite as observações sobre o paciente..." {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                <FormField
+                  control={form.control}
+                  name="observacoes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><FileEdit className="mr-2 h-4 w-4" />Observações</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Digite as observações sobre o paciente..." {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             </div>
             {isReschedule && (
               <div className="my-4 p-4 border rounded-md space-y-4">

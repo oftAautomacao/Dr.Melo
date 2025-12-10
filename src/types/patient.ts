@@ -5,6 +5,7 @@ import { startOfDay as dateFnsStartOfDay, parse as dateFnsParse, isValid as date
 
 export const PatientFormSchema = z.object({
   nomePaciente: z.string().min(3, { message: "Nome do paciente deve ter pelo menos 3 caracteres." }),
+  cpf: z.string().optional(),
   dataNascimento: z.coerce.date({
     required_error: "Data de Nascimento é obrigatória.",
     invalid_type_error: "Data de Nascimento inválida. Use o seletor de data.",
@@ -67,6 +68,7 @@ export interface AICategorization {
 
 export interface AppointmentFirebaseRecord {
   nomePaciente: string;
+  cpf?: string;
   nascimento: string;
   dataAgendamento: string;
   horaAgendamento: string;
@@ -84,6 +86,7 @@ export interface AppointmentFirebaseRecord {
 export interface PatientData extends Omit<PatientFormData, 'dataNascimento' | 'dataAgendamento' | 'exames' | 'observacoes' | 'local' | 'horario'> {
   id: string;
   nomePaciente: string;
+  cpf?: string;
   dataNascimento: string;
   dataAgendamento: string;
   horario: string;

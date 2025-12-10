@@ -414,7 +414,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                   Feriados nacionais
                 </p>
                 <p className="flex items-center">
-                  <Badge className="mr-2 w-4 h-4 rounded-full bg-blue-100 text-blue-700" />
+                  <Badge className="mr-2 w-4 h-4 rounded-full bg-red-100 text-red-700" />
                   Domingos (sem agendamentos)
                 </p>
                 <p className="flex items-center">
@@ -464,13 +464,13 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                           </CardContent>
                         </Card>
                       ) : getDay(selectedDate) === 0 ? (
-                        <Card className="mb-3 bg-blue-50 border-blue-200">
+                        <Card className="mb-3 bg-red-50 border-red-200">
                           <CardHeader className="pb-2 pt-3">
-                            <CardTitle className="text-md text-blue-700 flex items-center">
+                            <CardTitle className="text-md text-red-700 flex items-center">
                               <CalendarIcon className="mr-2 h-5 w-5" /> Domingo
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="text-sm space-y-1 text-blue-700/90">
+                          <CardContent className="text-sm space-y-1 text-red-700/90">
                             <p>Este é um domingo. Agendamentos não são realizados.</p>
                           </CardContent>
                         </Card>
@@ -490,12 +490,15 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
 
                               return (
                                 <div key={app.id}>
-                                  <Card className="mb-3 bg-secondary/30 shadow-sm">
+                                  <Card className="mb-3 bg-white border-l-4 border-l-red-500 shadow-sm">
                                     <CardHeader className="pb-2 pt-3">
-                                      <CardTitle className="text-md text-secondary-foreground">
-                                        {app.nomePaciente}
-                                        {age !== null && ` (${age} anos)`}
-                                      </CardTitle>
+                                      <div className="flex items-center justify-between">
+                                        <CardTitle className="text-md text-secondary-foreground">
+                                          {app.nomePaciente}
+                                          {age !== null && ` (${age} anos)`}
+                                        </CardTitle>
+                                        <Badge variant="destructive" className="ml-2">Cancelado</Badge>
+                                      </div>
                                       <CardDescription className="text-xs">
                                         {app.motivacao}
                                       </CardDescription>
@@ -537,6 +540,11 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                       {app.Observacoes && (
                                         <p>
                                           <strong>Obs.:</strong> {app.Observacoes}
+                                        </p>
+                                      )}
+                                      {(app as any).motivoCancelamento && (
+                                        <p className="text-red-700 text-sm italic mt-2">
+                                          <strong>Motivo do cancelamento:</strong> {(app as any).motivoCancelamento}
                                         </p>
                                       )}
                                     </CardContent>

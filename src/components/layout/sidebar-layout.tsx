@@ -1,7 +1,7 @@
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
 
-import { Home, CalendarDays, PlusCircle } from "lucide-react"; // Importando ícones
+import { Home, CalendarDays, PlusCircle, CalendarX } from "lucide-react"; // Importando ícones
 import { MessageSquareText, Settings } from "lucide-react"; // Importando ícone de mensagem e configurações
 import WhatsAppIcon from '@/components/ui/whatsapp-icon';
 interface SidebarLayoutProps {
@@ -30,6 +30,10 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit }) => {
           <Link href="/visualizar-agendamentos" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <CalendarDays className="mr-3 h-5 w-5" /> {/* Ícone */}
             Agendamentos
+          </Link>
+          <Link href="/cancelamentos" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
+            <CalendarX className="mr-3 h-5 w-5" /> {/* Ícone */}
+            Cancelamentos
           </Link>
           <Link href="/enviar-mensagem" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <MessageSquareText className="mr-3 h-5 w-5" /> {/* Ícone de Mensagem */}

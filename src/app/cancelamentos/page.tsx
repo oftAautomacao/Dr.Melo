@@ -13,7 +13,7 @@ export default function CancelamentosPage() {
     }, []);
 
     return (
-        <SidebarLayout unit={selectedUnit}>
+        <SidebarLayout unit={selectedUnit} bgColor="bg-red-50">
             <div className="container mx-auto py-6">
                 <CancellationCalendar />
             </div>

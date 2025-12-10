@@ -7,9 +7,10 @@ import WhatsAppIcon from '@/components/ui/whatsapp-icon';
 interface SidebarLayoutProps {
   children: ReactNode;
   unit: 'DRM' | 'OFT/45' | null; // Adiciona a prop unit
+  bgColor?: string; // Optional background color class
 }
 
-const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit }) => {
+const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }) => {
   console.log("SidebarLayout received unit prop:", unit);
   return (
     <div className="flex min-h-screen">
@@ -51,7 +52,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit }) => {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-6 bg-gray-100">
+      <div className={`flex-1 p-6 ${bgColor || 'bg-gray-100'}`}>
         {children}
       </div>
     </div>

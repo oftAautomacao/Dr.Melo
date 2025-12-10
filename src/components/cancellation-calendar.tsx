@@ -192,6 +192,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
   const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false);
   const [appointmentToRestore, setAppointmentToRestore] =
     useState<CalendarAppointment | undefined>(undefined);
+  const [dontSendSecretaryMessage, setDontSendSecretaryMessage] = useState(true);
 
 
 
@@ -598,6 +599,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
           setIsRestoreDialogOpen(isOpen);
           if (!isOpen) {
             setAppointmentToRestore(undefined);
+            setDontSendSecretaryMessage(true);
           }
         }}
       >
@@ -613,6 +615,24 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
               </span>
             </DialogDescription>
           </DialogHeader>
+
+          <div className="grid gap-4 py-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="dont-send-secretary-message"
+                checked={dontSendSecretaryMessage}
+                onCheckedChange={(checked) =>
+                  setDontSendSecretaryMessage(Boolean(checked))
+                }
+              />
+              <Label
+                htmlFor="dont-send-secretary-message"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+              >
+                Não enviar mensagem para secretária
+              </Label>
+            </div>
+          </div>
 
           <DialogFooter>
             <DialogClose asChild>

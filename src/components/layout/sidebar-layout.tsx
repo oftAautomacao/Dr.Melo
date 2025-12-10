@@ -20,18 +20,18 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit }) => {
         </div>
         <nav className="flex flex-col p-4 space-y-2">
           <Link href="/" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
- <Home className="mr-3 h-5 w-5" /> {/* Ícone */}
+            <Home className="mr-3 h-5 w-5" /> {/* Ícone */}
             Início
           </Link>
           <Link href="/novo-agendamento" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
- <PlusCircle className="mr-3 h-5 w-5" /> {/* Ícone */}
+            <PlusCircle className="mr-3 h-5 w-5" /> {/* Ícone */}
             Novo Agendamento
           </Link>
           <Link href="/visualizar-agendamentos" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
- <CalendarDays className="mr-3 h-5 w-5" /> {/* Ícone */}
-            Visualizar Agendamentos
+            <CalendarDays className="mr-3 h-5 w-5" /> {/* Ícone */}
+            Agendamentos
           </Link>
-           <Link href="/enviar-mensagem" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
+          <Link href="/enviar-mensagem" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <MessageSquareText className="mr-3 h-5 w-5" /> {/* Ícone de Mensagem */}
             Enviar Mensagem Paciente
           </Link>

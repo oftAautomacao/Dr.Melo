@@ -385,12 +385,6 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       .sort((a, b) => a.horario.localeCompare(b.horario));
   }, [selectedDate, currentUnitAppointments, selectedDateHolidayInfo]);
 
-  /* ------------------- MEMO DEFAULT VALUES ------------------- */
-  const computedDefaultValues = useMemo(() => ({
-    dataAgendamento: selectedDate,
-    ...(selectedUnit && { local: selectedUnit }),
-  }), [selectedDate, selectedUnit]);
-
   /* ---------------------------- RENDER ------------------------------- */
   return (
     <>
@@ -401,11 +395,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             <div>
               <CardTitle className="text-2xl font-semibold text-primary flex items-center">
                 <CalendarCheck2 className="mr-2 h-6 w-6" />
-                Visualizar Agendamentos
+                Agendamentos
               </CardTitle>
-              <CardDescription>
-                Calendário de consultas, feriados e domingos.
-              </CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -865,7 +856,10 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             <PatientForm
               key={autoFillKey}
               defaultValues={
-                formDefaults ?? computedDefaultValues
+                formDefaults ?? useMemo(() => ({
+                  dataAgendamento: selectedDate,
+                  ...(selectedUnit && { local: selectedUnit }),
+                }), [selectedDate, selectedUnit])
               }
               onAppointmentSaved={() => {
                 setIsNewAppointmentDialogOpen(false);

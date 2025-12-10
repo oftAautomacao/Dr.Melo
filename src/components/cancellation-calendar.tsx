@@ -51,6 +51,7 @@ import {
   PlusCircle,
   Sparkle,
   Eraser,
+  Undo2,
 } from "lucide-react";
 import WhatsAppIcon from "@/components/ui/whatsapp-icon";
 import InternalChatIcon from "@/components/ui/internal-chat-icon";
@@ -72,7 +73,7 @@ import {
   DialogClose,
 } from "@/components/ui/dialog";
 import { PatientForm } from "@/components/patient-form";
-import { cancelAppointment } from "@/app/actions";
+import { cancelAppointment, restoreAppointment } from "@/app/actions";
 
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 
@@ -187,59 +188,6 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
   const [holidaysForCalendar, setHolidaysForCalendar] = useState<Date[]>([]);
   const [selectedDateHolidayInfo, setSelectedDateHolidayInfo] =
     useState<Holiday | undefined>();
-
-  const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] =
-    useState(false);
-
-  const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
-  const [isNewAppointmentDialogOpen, setIsNewAppointmentDialogOpen] =
-    useState(false);
-
-  const [appointmentToCancel, setAppointmentToCancel] =
-    useState<CalendarAppointment | undefined>(undefined);
-
-  const [appointmentToReschedule, setAppointmentToReschedule] =
-    useState<CalendarAppointment | undefined>(undefined);
-
-  const [cancelReason, setCancelReason] = useState("Não compareceu à consulta");
-  const [dontSendSecretaryMessage, setDontSendSecretaryMessage] =
-    useState(true);
-
-  /* -- estados para autopreencher/limpar -- */
-  const [autoFillKey, setAutoFillKey] = useState(0);
-  const [defaults, setDefaults] = useState<Record<string, any>>();
-  const formDefaults = useMemo(() => defaults, [defaults]);
-
-  /* ------------------- Autopreenchimento ------------------- */
-  const handleAutoFill = () => {
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-
-    setDefaults({
-      nomePaciente: "Alexandre Lobo - Teste do Sistema",
-      dataNascimento: "1900-01-01",
-      telefone: "5521984934862",
-      dataAgendamento: selectedDate ? format(selectedDate, "yyyy-MM-dd") : format(tomorrow, "yyyy-MM-dd"),
-      horario: format(now, "HH:mm"),
-      convenio: "Particular",
-      motivacao: "Revisão de Grau",
-      local: selectedUnit || (getFirebasePathBase() === "OFT/45" ? "WilsonBarros" : "OftalmoDayTijuca"),
-      exames: ["Consulta"],
-      observacoes: `Teste de Autopreenchimento ${format(
-        now,
-        "HH:mm dd/MM/yyyy"
-      )}`,
-    });
-
-    setAutoFillKey((k) => k + 1);
-  };
-
-  /* ------------------- Limpar formulário ------------------- */
-  const handleClearForm = () => {
-    setDefaults(undefined);
-    setAutoFillKey((k) => k + 1);
-  };
 
 
 
@@ -488,13 +436,6 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                     })}`
                     : "Selecione uma data"}
                 </h3>
-
-                {/* Botão de Adicionar Agendamento */}
-                {selectedDate && dateFnsIsValid(selectedDate) && !selectedDateHolidayInfo && getDay(selectedDate) !== 0 && (
-                  <Button variant="ghost" size="icon" className="hover:bg-blue-100" onClick={() => setIsNewAppointmentDialogOpen(true)}>
-                    <PlusCircle className="h-8 w-8 text-primary" />
-                  </Button>
-                )}
               </div>
 
               {/* Área Rolável */}
@@ -600,31 +541,58 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                       )}
                                     </CardContent>
 
-                                    <div className="p-4 pt-0 flex gap-2">
-                                      <Button
-                                        className="bg-yellow-100 text-yellow-800 hover:bg-yellow-200 border border-yellow-800"
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() => {
-                                          setAppointmentToReschedule(app);
-                                          console.log("DEBUG REAGENDA: 'Reagendar' button clicked. Appointment data:", app);
-                                          setIsRescheduleFormOpen(true);
-                                        }}
-                                      >
-                                        Reagendar
-                                      </Button>
 
-                                      <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={() => {
-                                          setAppointmentToCancel(app);
-                                          setIsConfirmCancelDialogOpen(true);
-                                        }}
-                                      >
-                                        Cancelar
-                                      </Button>
-                                    </div>
+                                    <Button
+                                      className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-800 w-full"
+                                      variant="secondary"
+                                      size="sm"
+                                      onClick={async () => {
+                                        if (confirm(`Deseja restaurar o agendamento de ${app.nomePaciente}?`)) {
+                                          try {
+                                            const appointmentRecord: AppointmentFirebaseRecord = {
+                                              nomePaciente: app.nomePaciente,
+                                              nascimento: app.nascimento,
+                                              dataAgendamento: app.dataAgendamento,
+                                              horaAgendamento: app.horario as any,
+                                              convenio: app.convenio,
+                                              exames: app.exames,
+                                              motivacao: app.motivacao,
+                                              unidade: app.unidade,
+                                              telefone: app.telefone,
+                                              Observacoes: app.Observacoes || "",
+                                              ...(app.aiCategorization && {
+                                                aiCategorization: app.aiCategorization,
+                                              }),
+                                            };
+
+                                            const result = await restoreAppointment(getFirebasePathBase(), appointmentRecord);
+
+                                            if (result.success) {
+                                              toast({
+                                                title: "Sucesso",
+                                                description: "Agendamento restaurado com sucesso!",
+                                              });
+                                            } else {
+                                              toast({
+                                                variant: "destructive",
+                                                title: "Erro ao Restaurar",
+                                                description: result.message,
+                                              });
+                                            }
+                                          } catch (error) {
+                                            console.error("Erro ao restaurar:", error);
+                                            toast({
+                                              variant: "destructive",
+                                              title: "Erro",
+                                              description: "Falha ao processar restauração.",
+                                            });
+                                          }
+                                        }
+                                      }}
+                                    >
+                                      <Undo2 className="mr-2 h-4 w-4" />
+                                      Restaurar
+                                    </Button>
                                   </Card>
 
                                   {idx <
@@ -649,226 +617,6 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
           </div>
         </CardContent>
       </Card>
-
-      {/* ---------------- CONFIRMAR CANCELAMENTO ---------------- */}
-      <Dialog
-        open={isConfirmCancelDialogOpen}
-        onOpenChange={(isOpen) => {
-          setIsConfirmCancelDialogOpen(isOpen);
-          if (!isOpen) {
-            setCancelReason("Não compareceu à consulta");
-            setDontSendSecretaryMessage(true);
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmar Cancelamento</DialogTitle>
-            <DialogDescription>
-              Tem certeza que deseja cancelar este agendamento de{" "}
-              {appointmentToCancel?.nomePaciente}?
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label className="text-sm">Motivo</Label>
-              <Select onValueChange={setCancelReason} defaultValue="Não compareceu à consulta">
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o motivo" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  <SelectItem value="Convênio não aceito na unidade">
-                    Convênio não aceito na unidade
-                  </SelectItem>
-                  <SelectItem value="Consulta reagendada">
-                    Consulta reagendada
-                  </SelectItem>
-                  <SelectItem value="Consulta de Retorno">
-                    Consulta de Retorno
-                  </SelectItem>
-                  <SelectItem value="Não compareceu à consulta">
-                    Não compareceu à consulta
-                  </SelectItem>
-                  <SelectItem value="Cancelado pelo paciente">
-                    Cancelado pelo paciente
-                  </SelectItem>
-                  <SelectItem value="Cancelado pela secretária">
-                    Cancelado pela secretária
-                  </SelectItem>
-                  <SelectItem value="Exame não aceito pela unidade">
-                    Exame não aceito pela unidade
-                  </SelectItem>
-                  <SelectItem value="Paciente Reagendado">
-                    Paciente Reagendado
-                  </SelectItem>
-                  <SelectItem value="Preço da consulta">
-                    Preço da consulta
-                  </SelectItem>
-                  <SelectItem value="Erro do sistema">
-                    Erro do sistema
-                  </SelectItem>
-                  <SelectItem value="Teste do sistema">
-                    Teste do sistema
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="send-secretary-message"
-                checked={dontSendSecretaryMessage}
-                onCheckedChange={(checked) =>
-                  setDontSendSecretaryMessage(Boolean(checked))
-                }
-              />
-              <Label
-                htmlFor="send-secretary-message"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Não enviar mensagem para secretária
-              </Label>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancelar</Button>
-            </DialogClose>
-            <Button
-              variant="destructive"
-              disabled={!cancelReason || !appointmentToCancel}
-              onClick={async () => {
-                if (!appointmentToCancel) return;
-
-                try {
-                  const appointmentData: AppointmentFirebaseRecord = {
-                    nomePaciente: appointmentToCancel.nomePaciente,
-                    nascimento: appointmentToCancel.nascimento,
-                    dataAgendamento: appointmentToCancel.dataAgendamento,
-                    horaAgendamento: appointmentToCancel.horario as any,
-                    convenio: appointmentToCancel.convenio,
-                    exames: appointmentToCancel.exames,
-                    motivacao: appointmentToCancel.motivacao,
-                    unidade: appointmentToCancel.unidade,
-                    telefone: appointmentToCancel.telefone,
-                    Observacoes: appointmentToCancel.Observacoes || "",
-                    ...(appointmentToCancel.aiCategorization && {
-                      aiCategorization: appointmentToCancel.aiCategorization,
-                    }),
-                  };
-
-                  const result = await cancelAppointment(getFirebasePathBase(), {
-                    telefone: appointmentToCancel.telefone,
-                    unidade: appointmentToCancel.unidade,
-                    data: appointmentToCancel.dataAgendamento,
-                    hora: appointmentToCancel.horario,
-                    appointmentData: appointmentData,
-                    cancelReason,
-                    enviarMsgSecretaria: !dontSendSecretaryMessage,
-                  });
-
-                  if (result && !result.success) {
-                    toast({
-                      variant: "destructive",
-                      title: "Erro ao Cancelar",
-                      description: result.message,
-                    });
-                  } else {
-                    toast({
-                      title: "Sucesso",
-                      description: "Agendamento cancelado com sucesso.",
-                    });
-                    setIsConfirmCancelDialogOpen(false);
-                    setAppointmentToCancel(undefined);
-                  }
-                } catch (error) {
-                  console.error("Falha ao executar cancelamento:", error);
-                  toast({
-                    variant: "destructive",
-                    title: "Erro Inesperado",
-                    description: "Ocorreu um erro de comunicação. Tente novamente.",
-                  });
-                }
-              }}
-            >
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ---------------- REAGENDAR AGENDAMENTO ---------------- */}
-      <Dialog open={isRescheduleFormOpen} onOpenChange={setIsRescheduleFormOpen}>
-        <DialogContent className="sm:max-w-[425px] md:max-w-2xl lg:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Reagendar Agendamento</DialogTitle>
-            <DialogDescription>
-              Edite os dados e salve para criar um novo agendamento. O antigo
-              será cancelado com o motivo “Consulta reagendada”.
-            </DialogDescription>
-          </DialogHeader>
-
-          <ScrollArea className="h-[calc(100vh-200px)]">
-            {appointmentToReschedule && (
-              <PatientForm
-                initialData={appointmentToReschedule}
-                onRescheduleComplete={() => {
-                  setIsRescheduleFormOpen(false);
-                  setAppointmentToReschedule(undefined);
-                }}
-                firebaseBase={getFirebasePathBase()}
-              />
-            )}
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-
-      {/* ---------------- NOVO AGENDAMENTO PARA O DIA ---------------- */}
-      <Dialog open={isNewAppointmentDialogOpen} onOpenChange={setIsNewAppointmentDialogOpen}>
-        <DialogContent className="sm:max-w-[425px] md:max-w-2xl lg:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Novo Agendamento</DialogTitle>
-            <DialogDescription>
-              Novo agendamento para o dia {selectedDate ? format(selectedDate, "dd/MM/yyyy") : ""} na unidade {selectedUnit?.replace(/([A-Z])/g, " $1").trim()}.
-            </DialogDescription>
-            <div className="flex justify-end gap-2 pt-4">
-              <Button
-                variant="ghost"
-                onClick={handleAutoFill}
-                className="text-sm px-4 py-2 h-auto flex items-center gap-2 border border-blue-500"
-              >
-                <Sparkle className="h-4 w-4 mr-2 text-blue-600" />
-                Autopreencher
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={handleClearForm}
-                className="text-sm px-4 py-2 h-auto flex items-center gap-2 border border-gray-300"
-              >
-                <Eraser className="h-4 w-4 mr-2" />
-                Limpar
-              </Button>
-            </div>
-          </DialogHeader>
-          <ScrollArea className="h-[calc(100vh-200px)]">
-            <PatientForm
-              key={autoFillKey}
-              defaultValues={
-                formDefaults ?? useMemo(() => ({
-                  dataAgendamento: selectedDate,
-                  ...(selectedUnit && { local: selectedUnit }),
-                }), [selectedDate, selectedUnit])
-              }
-              onAppointmentSaved={() => {
-                setIsNewAppointmentDialogOpen(false);
-              }}
-              firebaseBase={getFirebasePathBase()}
-            />
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
     </>
   );
 };

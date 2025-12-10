@@ -1,4 +1,4 @@
-// use server
+"use server";
 import { ENVIRONMENT } from "../../ambiente";
 
 import { ref, update, get } from "firebase/database";
@@ -298,4 +298,72 @@ export async function cancelAppointment(
   }
 }
 
+
+interface RestoreAppointmentResult {
+  success: boolean;
+  message: string;
+}
+
+export async function restoreAppointment(
+  firebaseBase: string,
+  appointmentData: AppointmentFirebaseRecord
+): Promise<RestoreAppointmentResult> {
+  try {
+    const { telefone, unidade, dataAgendamento, horaAgendamento } = appointmentData;
+
+    if (!telefone || !unidade || !dataAgendamento || !horaAgendamento) {
+      return {
+        success: false,
+        message: "Dados incompletos para restaurar o agendamento.",
+      };
+    }
+
+    const phone = telefone.replace(/\D/g, "");
+    const data = dataAgendamento;
+    const hora = horaAgendamento;
+    const setor = unidade;
+
+    const idxNode = getIdxNode(firebaseBase);
+    const agBase = `${firebaseBase}/agendamentoWhatsApp/operacional/consultasAgendadas`;
+    const cancelBase = `${firebaseBase}/agendamentoWhatsApp/operacional/consultasCanceladas`;
+
+    // Verificar se o horário já está ocupado
+    const checkPath = `${agBase}/${idxNode}/${setor}/${data}/${hora}`;
+    const snapshot = await get(ref(database, checkPath));
+
+    if (snapshot.exists()) {
+      return {
+        success: false,
+        message: "Este horário já está ocupado. Não é possível restaurar.",
+      };
+    }
+
+    // Preparar dados para restauração
+    const appointmentRecord: AppointmentFirebaseRecord = {
+      ...appointmentData,
+      telefone: phone,
+    };
+
+    const updates: Record<string, any> = {};
+
+    // Adicionar de volta em consultasAgendadas
+    updates[`${agBase}/telefones/${phone}/${data}/${hora}`] = appointmentRecord;
+    updates[`${agBase}/${idxNode}/${setor}/${data}/${hora}`] = appointmentRecord;
+
+    // Remover de consultasCanceladas
+    updates[`${cancelBase}/telefones/${phone}/${data}/${hora}`] = null;
+    updates[`${cancelBase}/${idxNode}/${setor}/${data}/${hora}`] = null;
+
+    await update(ref(database), updates);
+
+    return {
+      success: true,
+      message: "Agendamento restaurado com sucesso!",
+    };
+  } catch (error) {
+    console.error("Error restoring appointment:", error);
+    const msg = error instanceof Error ? error.message : "Erro desconhecido";
+    return { success: false, message: `Erro ao restaurar agendamento: ${msg}` };
+  }
+}
 

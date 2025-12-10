@@ -792,7 +792,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                       <Input type="tel" placeholder="Ex: 5521998252849" {...field} />
                     </FormControl>
                     <FormMessage />
-                    {field.value && !/^55\d{10,11}$/.test(field.value) && (
+                    {field.value && field.value.length >= 10 && !/^55\d{10,11}$/.test(field.value) && (
                       <p className="text-xs text-amber-600 mt-1">
                         Número fora do padrão (55 + DDD...).
                       </p>

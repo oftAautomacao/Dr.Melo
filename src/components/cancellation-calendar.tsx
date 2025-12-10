@@ -189,6 +189,10 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
   const [selectedDateHolidayInfo, setSelectedDateHolidayInfo] =
     useState<Holiday | undefined>();
 
+  const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false);
+  const [appointmentToRestore, setAppointmentToRestore] =
+    useState<CalendarAppointment | undefined>(undefined);
+
 
 
   /* ---------------------- CARREGA FERIADOS --------------------------- */
@@ -554,48 +558,9 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                       className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-800 w-full"
                                       variant="secondary"
                                       size="sm"
-                                      onClick={async () => {
-                                        if (confirm(`Deseja restaurar o agendamento de ${app.nomePaciente}?`)) {
-                                          try {
-                                            const appointmentRecord: AppointmentFirebaseRecord = {
-                                              nomePaciente: app.nomePaciente,
-                                              nascimento: app.nascimento,
-                                              dataAgendamento: app.dataAgendamento,
-                                              horaAgendamento: app.horario as any,
-                                              convenio: app.convenio,
-                                              exames: app.exames,
-                                              motivacao: app.motivacao,
-                                              unidade: app.unidade,
-                                              telefone: app.telefone,
-                                              Observacoes: app.Observacoes || "",
-                                              ...(app.aiCategorization && {
-                                                aiCategorization: app.aiCategorization,
-                                              }),
-                                            };
-
-                                            const result = await restoreAppointment(getFirebasePathBase(), appointmentRecord);
-
-                                            if (result.success) {
-                                              toast({
-                                                title: "Sucesso",
-                                                description: "Agendamento restaurado com sucesso!",
-                                              });
-                                            } else {
-                                              toast({
-                                                variant: "destructive",
-                                                title: "Erro ao Restaurar",
-                                                description: result.message,
-                                              });
-                                            }
-                                          } catch (error) {
-                                            console.error("Erro ao restaurar:", error);
-                                            toast({
-                                              variant: "destructive",
-                                              title: "Erro",
-                                              description: "Falha ao processar restauração.",
-                                            });
-                                          }
-                                        }
+                                      onClick={() => {
+                                        setAppointmentToRestore(app);
+                                        setIsRestoreDialogOpen(true);
                                       }}
                                     >
                                       <Undo2 className="mr-2 h-4 w-4" />
@@ -625,6 +590,89 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
           </div>
         </CardContent>
       </Card>
+
+      {/* ---------------- CONFIRMAR RESTAURAÇÃO ---------------- */}
+      <Dialog
+        open={isRestoreDialogOpen}
+        onOpenChange={(isOpen) => {
+          setIsRestoreDialogOpen(isOpen);
+          if (!isOpen) {
+            setAppointmentToRestore(undefined);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Restauração</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja restaurar o agendamento de{" "}
+              <strong>{appointmentToRestore?.nomePaciente}</strong>?
+              <br />
+              <span className="text-sm text-muted-foreground">
+                Data: {appointmentToRestore?.dataAgendamento && format(parseISO(appointmentToRestore.dataAgendamento), "dd/MM/yyyy", { locale: ptBR })} às {appointmentToRestore?.horario}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline">Cancelar</Button>
+            </DialogClose>
+            <Button
+              className="bg-green-600 hover:bg-green-700"
+              disabled={!appointmentToRestore}
+              onClick={async () => {
+                if (!appointmentToRestore) return;
+
+                try {
+                  const appointmentRecord: AppointmentFirebaseRecord = {
+                    nomePaciente: appointmentToRestore.nomePaciente,
+                    nascimento: appointmentToRestore.nascimento,
+                    dataAgendamento: appointmentToRestore.dataAgendamento,
+                    horaAgendamento: appointmentToRestore.horario as any,
+                    convenio: appointmentToRestore.convenio,
+                    exames: appointmentToRestore.exames,
+                    motivacao: appointmentToRestore.motivacao,
+                    unidade: appointmentToRestore.unidade,
+                    telefone: appointmentToRestore.telefone,
+                    Observacoes: appointmentToRestore.Observacoes || "",
+                    ...(appointmentToRestore.aiCategorization && {
+                      aiCategorization: appointmentToRestore.aiCategorization,
+                    }),
+                  };
+
+                  const result = await restoreAppointment(getFirebasePathBase(), appointmentRecord);
+
+                  if (result.success) {
+                    toast({
+                      title: "Sucesso",
+                      description: "Agendamento restaurado com sucesso!",
+                    });
+                    setIsRestoreDialogOpen(false);
+                    setAppointmentToRestore(undefined);
+                  } else {
+                    toast({
+                      variant: "destructive",
+                      title: "Erro ao Restaurar",
+                      description: result.message,
+                    });
+                  }
+                } catch (error) {
+                  console.error("Erro ao restaurar:", error);
+                  toast({
+                    variant: "destructive",
+                    title: "Erro",
+                    description: "Falha ao processar restauração.",
+                  });
+                }
+              }}
+            >
+              <Undo2 className="mr-2 h-4 w-4" />
+              Confirmar Restauração
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

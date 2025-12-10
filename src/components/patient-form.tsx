@@ -750,7 +750,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                   <FormItem>
                     <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" />Nome do Paciente</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: Gabriel Ferreira da Silva" {...field} />
+                      <Input tabIndex={1} placeholder="Ex: Gabriel Ferreira da Silva" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -764,6 +764,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                     <FormLabel className="flex items-center"><CalendarDays className="mr-2 h-4 w-4" />Data de Nascimento</FormLabel>
                     <FormControl>
                       <Input
+                        tabIndex={2}
                         type="date"
                         {...field}
                         value={field.value instanceof Date && dateFnsIsValid(field.value) ? dateFnsFormat(field.value, 'yyyy-MM-dd') : (typeof field.value === 'string' ? field.value : '')}
@@ -789,7 +790,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                   <FormItem>
                     <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" />Telefone do Paciente</FormLabel>
                     <FormControl>
-                      <Input type="tel" placeholder="Ex: 5521998252849" {...field} />
+                      <Input tabIndex={3} type="tel" placeholder="Ex: 5521998252849" {...field} />
                     </FormControl>
                     <FormMessage />
                     {field.value && field.value.length >= 10 && !/^55\d{10,11}$/.test(field.value) && (
@@ -809,6 +810,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                     <FormLabel className="flex items-center"><CalendarDays className="mr-2 h-4 w-4" />Data Agendada</FormLabel>
                     <FormControl>
                       <Input
+                        tabIndex={4}
                         type="date"
                         {...field}
                         value={field.value instanceof Date && dateFnsIsValid(field.value) ? dateFnsFormat(field.value, 'yyyy-MM-dd') : (typeof field.value === 'string' ? field.value : '')}
@@ -842,7 +844,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                   <FormItem>
                     <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" />Horário</FormLabel>
                     <FormControl>
-                      <Input type="time" placeholder="Ex: 11:00" {...field} />
+                      <Input tabIndex={5} type="time" placeholder="Ex: 11:00" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -868,7 +870,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                       disabled={isLoadingUnidades || unidadesList.length === 0}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger tabIndex={6}>
                           <SelectValue
                             placeholder={
                               getFirebasePathBase() === 'OFT/45'
@@ -917,7 +919,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                       disabled={isLoadingConvenios || conveniosList.length === 0}
                     >
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger tabIndex={7}>
                           <SelectValue
                             placeholder={
                               isLoadingConvenios
@@ -960,7 +962,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                   <FormItem>
                     <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" />Motivação</FormLabel>
                     <FormControl>
-                      <Input placeholder="Ex: Consulta de rotina" {...field} />
+                      <Input tabIndex={8} placeholder="Ex: Consulta de rotina" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -994,6 +996,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                                 <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                                   <FormControl>
                                     <Checkbox
+                                      tabIndex={9}
                                       checked={examesField.value?.includes(exame.id)}
                                       onCheckedChange={(checked) => {
                                         const currentExames = examesField.value || [];
@@ -1031,7 +1034,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                     <FormItem>
                       <FormLabel className="flex items-center"><FileText className="mr-2 h-4 w-4" />CPF (Opcional)</FormLabel>
                       <FormControl>
-                        <Input placeholder="000.000.000-00" {...field} />
+                        <Input tabIndex={10} placeholder="000.000.000-00" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -1045,7 +1048,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                     <FormItem>
                       <FormLabel className="flex items-center"><FileEdit className="mr-2 h-4 w-4" />Observações</FormLabel>
                       <FormControl>
-                        <Textarea placeholder="Digite as observações sobre o paciente..." {...field} />
+                        <Textarea tabIndex={11} placeholder="Digite as observações sobre o paciente..." {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

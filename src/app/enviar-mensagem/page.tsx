@@ -8,7 +8,7 @@ import { useSearchParams } from 'next/navigation';
 import { MessagesSquare, RefreshCcw, Send, ArrowLeft } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { db } from "@/lib/firebase";
+import { getFirestoreInstance } from "@/lib/firebase";
 import { ENVIRONMENT } from "../../../ambiente";
 import { Toaster, toast } from 'sonner';
 
@@ -61,7 +61,7 @@ function EnviarMensagemComponent() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [conversationHistory]);
-  
+
   /* ---- Preenche a busca com o telefone da URL ---- */
   useEffect(() => {
     const phoneFromUrl = searchParams.get('telefone');
@@ -77,7 +77,7 @@ function EnviarMensagemComponent() {
       try {
         const historyKey =
           selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
-        const col = collection(db, historyKey);
+        const col = collection(getFirestoreInstance(ENVIRONMENT), historyKey);
         const snaps = await getDocs(col);
         setPatientList(snaps.docs.map((d) => d.id));
       } catch (err) {
@@ -95,7 +95,7 @@ function EnviarMensagemComponent() {
       const historyKey =
         selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
 
-      const ref = doc(db, historyKey, patientId);
+      const ref = doc(getFirestoreInstance(ENVIRONMENT), historyKey, patientId);
       const snap: DocumentSnapshot = await getDoc(ref);
       const data = snap.exists() ? snap.data() : null;
 
@@ -132,10 +132,10 @@ function EnviarMensagemComponent() {
       return;
     }
     if (patientList.length > 0) {
-        const match = patientList.find((p) => p.includes(searchTerm.trim()));
-        if (match && match !== selectedPatient) {
-          handlePatientSelect(match);
-        }
+      const match = patientList.find((p) => p.includes(searchTerm.trim()));
+      if (match && match !== selectedPatient) {
+        handlePatientSelect(match);
+      }
     }
   }, [searchTerm, patientList, selectedPatient, handlePatientSelect, manualSelection]);
 
@@ -193,9 +193,9 @@ function EnviarMensagemComponent() {
       if (!response.ok) {
         let errorData;
         try {
-            errorData = await response.json();
-        } catch(e) {
-            errorData = { error: 'Não foi possível ler a resposta de erro da API.' }
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { error: 'Não foi possível ler a resposta de erro da API.' }
         }
         toast.error(`Erro ao enviar mensagem: ${errorData?.error || response.statusText}`);
         console.error("Erro Z-API:", response.statusText, errorData);
@@ -208,13 +208,13 @@ function EnviarMensagemComponent() {
       const historyKey =
         selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
 
-      const refChat = doc(db, historyKey, selectedPatient);
+      const refChat = doc(getFirestoreInstance(ENVIRONMENT), historyKey, selectedPatient);
       const snap = await getDoc(refChat);
       const data = snap.exists() ? snap.data() : null;
-      
-      const currentHistory = (data && data.glbHistoricoDaConversa && Array.isArray(data.glbHistoricoDaConversa)) 
-          ? data.glbHistoricoDaConversa 
-          : [];
+
+      const currentHistory = (data && data.glbHistoricoDaConversa && Array.isArray(data.glbHistoricoDaConversa))
+        ? data.glbHistoricoDaConversa
+        : [];
 
       const updated = [...currentHistory, { content, role: "assistant" }];
       await updateDoc(refChat, { glbHistoricoDaConversa: updated });
@@ -270,11 +270,10 @@ function EnviarMensagemComponent() {
                     handlePatientSelect(phone);
                     setManualSelection(true);
                   }}
-                  className={`flex items-center px-3 py-1.5 rounded cursor-pointer transition-colors ${
-                    selectedPatient === phone
-                      ? "bg-blue-200"
-                      : "hover:bg-blue-100"
-                  }`}
+                  className={`flex items-center px-3 py-1.5 rounded cursor-pointer transition-colors ${selectedPatient === phone
+                    ? "bg-blue-200"
+                    : "hover:bg-blue-100"
+                    }`}
                 >
                   <Image
                     src={AVATARS[idx % AVATARS.length]}
@@ -310,16 +309,14 @@ function EnviarMensagemComponent() {
               {conversationHistory.map((m, i) => (
                 <div
                   key={i}
-                  className={`flex ${
-                    m.role === "user" ? "justify-start" : "justify-end"
-                  }`}
+                  className={`flex ${m.role === "user" ? "justify-start" : "justify-end"
+                    }`}
                 >
                   <div
-                    className={`max-w-[60%] px-3 py-1.5 rounded-2xl text-sm leading-relaxed ${
-                      m.role === "user"
-                        ? "bg-white text-gray-800"
-                        : "bg-blue-600 text-white"
-                    }`}
+                    className={`max-w-[60%] px-3 py-1.5 rounded-2xl text-sm leading-relaxed ${m.role === "user"
+                      ? "bg-white text-gray-800"
+                      : "bg-blue-600 text-white"
+                      }`}
                   >
                     {m.content}
                   </div>
@@ -364,9 +361,9 @@ function EnviarMensagemComponent() {
 
 
 export default function EnviarMensagemPage() {
-    return (
-        <Suspense fallback={<div>Carregando conversa...</div>}>
-            <EnviarMensagemComponent />
-        </Suspense>
-    )
+  return (
+    <Suspense fallback={<div>Carregando conversa...</div>}>
+      <EnviarMensagemComponent />
+    </Suspense>
+  )
 }

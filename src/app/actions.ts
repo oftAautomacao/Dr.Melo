@@ -1,8 +1,7 @@
 "use server";
-import { ENVIRONMENT } from "../../ambiente";
 
 import { ref, update, get } from "firebase/database";
-import { database } from "@/lib/firebase";
+import { getDatabaseInstance } from "@/lib/firebase";
 import type {
   PatientFormData,
   AICategorization,
@@ -75,15 +74,17 @@ export async function checkAppointmentAvailabilityAction(
   firebaseBase: string,
   date: string,   // yyyy-MM-dd
   time: string,   // HH:mm
-  unitOrMedic: string
+  unitOrMedic: string,
+  environment: "teste" | "producao" // NEW PARAM
 ): Promise<{ available: boolean; message?: string }> {
   try {
     const idxNode = getIdxNode(firebaseBase); // "unidades" | "medicos"
     // Caminho: /<base>/agendamentoWhatsApp/operacional/consultasAgendadas/<medicos|unidades>/<nome>/<data>/<hora>
     const path = `/${firebaseBase}/agendamentoWhatsApp/operacional/consultasAgendadas/${idxNode}/${unitOrMedic}/${date}/${time}`;
 
-    console.log("CHECK_AVAILABILITY path:", path);
-    const snapshot = await get(ref(database, path));
+    console.log("CHECK_AVAILABILITY path:", path, "ENV:", environment);
+    const dbInstance = getDatabaseInstance(environment);
+    const snapshot = await get(ref(dbInstance, path));
 
     if (snapshot.exists()) {
       return {
@@ -106,16 +107,18 @@ export async function checkAppointmentAvailabilityAction(
 /* =============================================================
    SAVE: grava em consultasAgendadas (por setor e por telefone)
    ============================================================= */
+
 export async function saveAppointmentAction(
   firebaseBase: string,
   formData: PatientFormData,
+  environment: "teste" | "producao", // NEW PARAM
   aiCategorizationResult?: AICategorization,
   enviarMsgSecretaria?: boolean,
   checkConflict: boolean = true
 ): Promise<SaveAppointmentResult> {
   console.log("SAVE_ACTION - firebaseBase:", firebaseBase);
   console.log("SAVE_ACTION - formData:", formData); // Adicionado log para depuração
-  console.log("SAVE_ACTION - ENVIRONMENT:", ENVIRONMENT);
+  console.log("SAVE_ACTION - ENVIRONMENT:", environment);
 
   try {
     const validation = PatientFormSchema.safeParse(formData);
@@ -170,7 +173,7 @@ export async function saveAppointmentAction(
 
     // --- CHECK CONFLICT (Server-side safety) ---
     if (checkConflict) {
-      const availability = await checkAppointmentAvailabilityAction(firebaseBase, datePath, timePath, setor);
+      const availability = await checkAppointmentAvailabilityAction(firebaseBase, datePath, timePath, setor, environment);
       if (!availability.available) {
         return {
           success: false,
@@ -198,7 +201,8 @@ export async function saveAppointmentAction(
 
     console.log("FIREBASE_SAVE_PATHS:", updates);
 
-    await update(ref(database), updates);
+    const dbInstance = getDatabaseInstance(environment);
+    await update(ref(dbInstance), updates);
 
     return {
       success: true,
@@ -227,7 +231,8 @@ export async function cancelAppointment(
     appointmentData,
     cancelReason,
     enviarMsgSecretaria,
-  }: CancelAppointmentParams
+  }: CancelAppointmentParams,
+  environment: "teste" | "producao" // NEW PARAM
 ): Promise<CancelAppointmentResult> {
   try {
     const idxNode = getIdxNode(firebaseBase); // "unidades" | "medicos"
@@ -275,6 +280,26 @@ export async function cancelAppointment(
     // ⚠️ NÃO criar raiz por ID em canceladas (removido):
     // updates[`${cancelBase}/${id}`] = dataToSave;
 
+    // --- CHECK EXISTENCE for Debugging ---
+    const checkPath = `${agBase}/${idxNode}/${setor}/${data}/${hora}`;
+    const dbInstance = getDatabaseInstance(environment);
+    const snapshot = await get(ref(dbInstance, checkPath));
+    if (!snapshot.exists()) {
+      console.warn(`CANCEL_FAIL: Appointment not found at ${checkPath}`);
+      // Opcional: tentar buscar por telefone se por setor falhar, ou apenas lançar erro
+      // Vamos lançar erro para o usuário saber que falhou
+      // Mas antes, verifique telefone
+      const phoneCheckPath = `${agBase}/telefones/${phone}/${data}/${hora}`;
+      const phoneSnapshot = await get(ref(dbInstance, phoneCheckPath));
+
+      if (!phoneSnapshot.exists()) {
+        throw new Error(`Agendamento não encontrado no banco de dados. Caminho: ${checkPath}`);
+      } else {
+        console.warn(`CANCEL_WARN: Found by phone but not by sector/unit? Mismatch? Path: ${phoneCheckPath}`);
+      }
+    }
+    // -------------------------------------
+
     // 1) índices de canceladas: telefones e unidades/medicos
     updates[`${cancelBase}/telefones/${phone}/${data}/${hora}`] = dataToSave;
     updates[`${cancelBase}/${idxNode}/${setor}/${data}/${hora}`] = dataToSave; // <- "medicos" no OFT, "unidades" no DRM
@@ -283,7 +308,9 @@ export async function cancelAppointment(
     updates[`${agBase}/telefones/${phone}/${data}/${hora}`] = null;
     updates[`${agBase}/${idxNode}/${setor}/${data}/${hora}`] = null;
 
-    await update(ref(database), updates);
+    console.log("CANCEL_DEBUG: updates object:", JSON.stringify(updates, null, 2));
+
+    await update(ref(dbInstance), updates);
 
     return {
       success: true,
@@ -306,7 +333,8 @@ interface RestoreAppointmentResult {
 
 export async function restoreAppointment(
   firebaseBase: string,
-  appointmentData: AppointmentFirebaseRecord
+  appointmentData: AppointmentFirebaseRecord,
+  environment: "teste" | "producao" // NEW PARAM
 ): Promise<RestoreAppointmentResult> {
   try {
     const { telefone, unidade, dataAgendamento, horaAgendamento } = appointmentData;
@@ -329,7 +357,8 @@ export async function restoreAppointment(
 
     // Verificar se o horário já está ocupado
     const checkPath = `${agBase}/${idxNode}/${setor}/${data}/${hora}`;
-    const snapshot = await get(ref(database, checkPath));
+    const dbInstance = getDatabaseInstance(environment);
+    const snapshot = await get(ref(dbInstance, checkPath));
 
     if (snapshot.exists()) {
       return {
@@ -354,7 +383,7 @@ export async function restoreAppointment(
     updates[`${cancelBase}/telefones/${phone}/${data}/${hora}`] = null;
     updates[`${cancelBase}/${idxNode}/${setor}/${data}/${hora}`] = null;
 
-    await update(ref(database), updates);
+    await update(ref(dbInstance), updates);
 
     return {
       success: true,

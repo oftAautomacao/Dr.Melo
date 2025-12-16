@@ -76,6 +76,7 @@ import { PatientForm } from "@/components/patient-form";
 import { cancelAppointment, restoreAppointment } from "@/app/actions";
 
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
+import { ENVIRONMENT } from "../../ambiente";
 
 const MESES = [
   "Janeiro",
@@ -661,7 +662,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                     }),
                   };
 
-                  const result = await restoreAppointment(getFirebasePathBase(), appointmentRecord);
+                  const result = await restoreAppointment(getFirebasePathBase(), appointmentRecord, ENVIRONMENT);
 
                   if (result.success) {
                     toast({

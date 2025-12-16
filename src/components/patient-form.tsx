@@ -115,6 +115,8 @@ function formatExameName(exameId: string, exameDetails: any): string {
 }
 
 
+import { ENVIRONMENT } from "../../ambiente";
+
 export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, defaultValues, initialData, firebaseBase, onRescheduleComplete }) => {
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -566,7 +568,8 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
             firebaseBase || getFirebasePathBase(),
             newDate,
             newTime,
-            newUnit
+            newUnit,
+            ENVIRONMENT
           );
 
           if (!availability.available) {
@@ -604,7 +607,8 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
               },
               cancelReason: "Consulta reagendada",
               enviarMsgSecretaria: !dontSendSecretaryMessage,
-            }
+            },
+            ENVIRONMENT
           );
 
           if (!cancelResult.success) {
@@ -643,7 +647,8 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
           firebaseBase || getFirebasePathBase(),
           dateFnsFormat(data.dataAgendamento, "yyyy-MM-dd"),
           data.horario,
-          data.local
+          data.local,
+          ENVIRONMENT
         );
         if (!availability.available) {
           toast({
@@ -660,6 +665,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
       const result = await saveAppointmentAction(
         firebaseBase || getFirebasePathBase(),
         data,
+        ENVIRONMENT,
         aiResult || undefined,
         !dontSendSecretaryMessageOnCreate, // Pass the flag directly for both new and reschedule
         shouldCheckConflictInSave

@@ -75,6 +75,7 @@ import { PatientForm } from "@/components/patient-form";
 import { cancelAppointment } from "@/app/actions";
 
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
+import { ENVIRONMENT } from "../../ambiente";
 
 const MESES = [
   "Janeiro",
@@ -766,7 +767,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                     appointmentData: appointmentData,
                     cancelReason,
                     enviarMsgSecretaria: !dontSendSecretaryMessage,
-                  });
+                  }, ENVIRONMENT);
 
                   if (result && !result.success) {
                     toast({

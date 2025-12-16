@@ -26,7 +26,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { database } from "@/lib/firebase";
+import { getDatabaseInstance } from "@/lib/firebase";
 import { ref, onValue, type DataSnapshot } from "firebase/database";
 import type {
   AppointmentFirebaseRecord,
@@ -282,7 +282,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     const basePath = `${base}/agendamentoWhatsApp/operacional/consultasAgendadas/${base === "OFT/45" ? "medicos" : "unidades"}`;
 
     const unsub = onValue(
-      ref(database, basePath),
+      ref(getDatabaseInstance(ENVIRONMENT), basePath),
       (snap: DataSnapshot) => {
         const data = snap.val() as any;
         const byUnit: AppointmentsByUnit = {};

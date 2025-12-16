@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ref, onValue, type DataSnapshot } from "firebase/database";
-import { database } from "@/lib/firebase";
+import { getDatabaseInstance } from "@/lib/firebase";
 import { parse as dateFnsParse, format as dateFnsFormat, isValid as dateFnsIsValid } from 'date-fns';
 
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
@@ -358,7 +358,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     setIsLoadingUnidades(true);
     const unidadesRefPath = `/${getFirebasePathBase()}/agendamentoWhatsApp/configuracoes/${getFirebasePathBase() === 'OFT/45' ? 'medicos' : 'unidades'}`;
     console.log("PATIENT_FORM: Tentando buscar unidades de:", unidadesRefPath);
-    const unidadesRef = ref(database, unidadesRefPath);
+    const unidadesRef = ref(getDatabaseInstance(ENVIRONMENT), unidadesRefPath);
 
     const unsubscribe = onValue(unidadesRef, (snapshot: DataSnapshot) => {
       const data = snapshot.val();
@@ -414,7 +414,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     // Usa path dinâmico para OFT e DRM
     const conveniosRefPath = `/${base}/agendamentoWhatsApp/configuracoes/convenios`;
     console.log("PATIENT_FORM: Tentando buscar convênios de:", conveniosRefPath);
-    const conveniosRef = ref(database, conveniosRefPath);
+    const conveniosRef = ref(getDatabaseInstance(ENVIRONMENT), conveniosRefPath);
 
     const unsubscribe = onValue(conveniosRef, (snapshot: DataSnapshot) => {
       const data = snapshot.val();
@@ -478,7 +478,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     const base = getFirebasePathBase();
     const examesRefPath = `/${base}/agendamentoWhatsApp/configuracoes/exames`;
     console.log("PATIENT_FORM: Tentando buscar exames de:", examesRefPath);
-    const examesRef = ref(database, examesRefPath);
+    const examesRef = ref(getDatabaseInstance(ENVIRONMENT), examesRefPath);
 
     const unsubscribe = onValue(examesRef, (snapshot: DataSnapshot) => {
       const data = snapshot.val();

@@ -3,7 +3,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Label } from "@/components/ui/label";
 import { ref, onValue, type DataSnapshot } from "firebase/database";
-import { database } from "@/lib/firebase";
+import { getDatabaseInstance } from "@/lib/firebase";
+import { ENVIRONMENT } from "../../ambiente";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 
 interface PatientSelectWithSearchProps {
@@ -23,7 +24,7 @@ const PatientSelectWithSearch: React.FC<PatientSelectWithSearchProps> = ({
   useEffect(() => {
     const dbPath = `/${getFirebasePathBase()}/agendamentoWhatsApp/operacional/conversas`;
     const unsub = onValue(
-      ref(database, dbPath),
+      ref(getDatabaseInstance(ENVIRONMENT), dbPath),
       (snap: DataSnapshot) => {
         const data = snap.val();
         setPatientPhones(
@@ -86,11 +87,10 @@ const PatientSelectWithSearch: React.FC<PatientSelectWithSearchProps> = ({
             <div
               key={phone}
               onClick={() => handleClick(phone)}
-              className={`px-2 py-1 cursor-pointer rounded ${
-                selectedPatient === phone
-                  ? "bg-blue-200 font-medium"
-                  : "hover:bg-gray-100"
-              }`}
+              className={`px-2 py-1 cursor-pointer rounded ${selectedPatient === phone
+                ? "bg-blue-200 font-medium"
+                : "hover:bg-gray-100"
+                }`}
             >
               {phone}
             </div>

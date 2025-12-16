@@ -27,7 +27,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ref, onValue } from "firebase/database";
-import { database } from "@/lib/firebase";
+import { getDatabaseInstance } from "@/lib/firebase";
+import { ENVIRONMENT } from "../../ambiente";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import { FinancialSheetContent } from "@/components/financial-sheet-content";
 
@@ -90,7 +91,7 @@ export default function Home() {
   /* ---------- RTDB listeners ---------- */
   useEffect(() => {
     const agRef = ref(
-      database,
+      getDatabaseInstance(ENVIRONMENT),
       `/${getFirebasePathBase()}/agendamentoWhatsApp/operacional/consultasAgendadas/${getFirebasePathBase() === 'OFT/45' ? 'medicos' : 'unidades'}`
     );
     const off = onValue(
@@ -110,7 +111,7 @@ export default function Home() {
 
   useEffect(() => {
     const cfgRef = ref(
-      database,
+      getDatabaseInstance(ENVIRONMENT),
       `/${getFirebasePathBase()}/agendamentoWhatsApp/configuracoes/${getFirebasePathBase() === 'OFT/45' ? 'medicos' : 'unidades'}`
     );
     const off = onValue(cfgRef, snap => {

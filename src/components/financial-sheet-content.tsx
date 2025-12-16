@@ -9,7 +9,6 @@ import { User, Calendar, Phone, Shield, FlaskConical } from "lucide-react";
 import { Toaster, toast } from 'sonner';
 import { ENVIRONMENT } from "../../ambiente";
 import Link from 'next/link';
-import { database } from "@/lib/firebase";
 import { ref, onValue, type DataSnapshot } from "firebase/database";
 import type {
   AppointmentFirebaseRecord,
@@ -145,20 +144,20 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
   const handleGenerateReport = async () => {
     if (!selectedUnit) {
-        toast.error("Unidade não identificada. Não é possível enviar a mensagem.");
-        return;
+      toast.error("Unidade não identificada. Não é possível enviar a mensagem.");
+      return;
     }
 
     const unitName = unitConfig?.[unit]?.empresa ?? unit;
 
     const patientListString = appointmentsForMonth.map(app => {
-        const name = app.nomePaciente || "Paciente sem nome";
-        const cpf = (app as any).cpf ? `, CPF: ${(app as any).cpf}` : "";
-        const date = new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-        const time = app.horario;
-        const convenio = app.convenio || "Não informado";
+      const name = app.nomePaciente || "Paciente sem nome";
+      const cpf = (app as any).cpf ? `, CPF: ${(app as any).cpf}` : "";
+      const date = new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+      const time = app.horario;
+      const convenio = app.convenio || "Não informado";
 
-        return `* ${name}${cpf}, ${date} às ${time}, ${convenio}`;
+      return `* ${name}${cpf}, ${date} às ${time}, ${convenio}`;
     }).join('\n');
 
     const message = `Olá, tudo bem?\n\nVocê poderia verificar quais desses pacientes vindos do Dr. Melo foram realmente atendidos na ${unitName}?\n\n🧾 Pacientes agendados:\n\n${patientListString}`;
@@ -208,9 +207,9 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       if (!response.ok) {
         let errorData;
         try {
-            errorData = await response.json();
-        } catch(e) {
-            errorData = { error: 'Não foi possível ler a resposta de erro da API.' }
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { error: 'Não foi possível ler a resposta de erro da API.' }
         }
         toast.error(`Erro ao enviar mensagem: ${errorData?.error || response.statusText}`);
         console.error("Erro Z-API:", response.statusText, errorData);
@@ -236,11 +235,11 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       }
     }
     return Array.from(months).sort((a, b) => {
-        const [mA, yA] = a.split(" de ");
-        const [mB, yB] = b.split(" de ");
-        const idxA = MESES.indexOf(mA);
-        const idxB = MESES.indexOf(mB);
-        return Number(yA) === Number(yB) ? idxA - idxB : Number(yA) - Number(yB);
+      const [mA, yA] = a.split(" de ");
+      const [mB, yB] = b.split(" de ");
+      const idxA = MESES.indexOf(mA);
+      const idxB = MESES.indexOf(mB);
+      return Number(yA) === Number(yB) ? idxA - idxB : Number(yA) - Number(yB);
     });
   }, [patientData, unit]);
 
@@ -286,18 +285,18 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
                           <span>{new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} às {app.horario}</span>
                         </div>
                         <div className="flex items-center">
-                            <Phone className="mr-2 h-4 w-4 text-gray-500" />
-                            <span>{app.telefone}</span>
+                          <Phone className="mr-2 h-4 w-4 text-gray-500" />
+                          <span>{app.telefone}</span>
                         </div>
                         <div className="flex items-center">
-                            <Shield className="mr-2 h-4 w-4 text-gray-500" />
-                            <span>{app.convenio}</span>
+                          <Shield className="mr-2 h-4 w-4 text-gray-500" />
+                          <span>{app.convenio}</span>
                         </div>
                         {app.exames && app.exames.length > 0 && (
-                            <div className="flex items-center">
-                                <FlaskConical className="mr-2 h-4 w-4 text-gray-500" />
-                                <span>{app.exames.join(', ')}</span>
-                            </div>
+                          <div className="flex items-center">
+                            <FlaskConical className="mr-2 h-4 w-4 text-gray-500" />
+                            <span>{app.exames.join(', ')}</span>
+                          </div>
                         )}
                       </CardContent>
                       <div className="p-4 pt-0 flex flex-col gap-2">
@@ -425,7 +424,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
                   appointmentData: appointmentData,
                   cancelReason,
                   enviarMsgSecretaria: true, // Adicionado para consistência
-                });
+                }, ENVIRONMENT);
                 setIsConfirmCancelDialogOpen(false);
                 setAppointmentToCancel(undefined);
               }}

@@ -359,7 +359,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
         <CardContent className="flex flex-col md:flex-row gap-6 h-full">
           {/* --------- COLUNA ESQUERDA — UNIDADES --------- */}
           <aside className="w-full md:w-60 shrink-0">
-            <Card className="h-full flex flex-col">
+            <Card className="h-[420px] flex flex-col">
               {/* REMOVIDO O HEADER "Médicos"/"Unidades" CONFORME SOLICITADO */}
               <ScrollArea className="flex-1 px-4 py-4">
                 <div className="space-y-2">

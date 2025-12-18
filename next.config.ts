@@ -1,4 +1,4 @@
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   /* config options here */
@@ -19,9 +19,7 @@ const nextConfig: NextConfig = {
     ],
   },
   experimental: {
-    allowedDevOrigins: [
- 'regex:^https?://\\d+-[a-z0-9-]+\\.cloudworkstations\\.dev(:\\d+)?$',
-    ],
+    // allowedDevOrigins removed as it is unrecognized in this Next.js version and not needed for local Windows dev
   },
   async headers() {
     return [

@@ -334,7 +334,8 @@ interface RestoreAppointmentResult {
 export async function restoreAppointment(
   firebaseBase: string,
   appointmentData: AppointmentFirebaseRecord,
-  environment: "teste" | "producao" // NEW PARAM
+  environment: "teste" | "producao", // NEW PARAM
+  enviarMsgSecretaria?: boolean
 ): Promise<RestoreAppointmentResult> {
   try {
     const { telefone, unidade, dataAgendamento, horaAgendamento } = appointmentData;
@@ -371,6 +372,7 @@ export async function restoreAppointment(
     const appointmentRecord: AppointmentFirebaseRecord = {
       ...appointmentData,
       telefone: phone,
+      enviarMsgSecretaria: enviarMsgSecretaria,
     };
 
     const updates: Record<string, any> = {};

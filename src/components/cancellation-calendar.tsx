@@ -662,7 +662,8 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                     }),
                   };
 
-                  const result = await restoreAppointment(getFirebasePathBase(), appointmentRecord, ENVIRONMENT);
+                  const shouldSendMsg = !dontSendSecretaryMessage;
+                  const result = await restoreAppointment(getFirebasePathBase(), appointmentRecord, ENVIRONMENT, shouldSendMsg);
 
                   if (result.success) {
                     toast({

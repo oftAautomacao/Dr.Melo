@@ -43,8 +43,8 @@ function Calendar({
         ) + " hover:bg-transparent hover:text-black", // Added hover:bg-transparent and hover:text-black
         day_range_end: "day-range-end",
         day_selected:
-          "bg-red-100 text-red-900 hover:bg-red-200 hover:text-red-900 focus:bg-red-100 focus:text-red-900",
-        day_today: "bg-red-200 text-red-900 font-semibold",
+          "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+        day_today: "bg-accent text-accent-foreground",
         day_outside:
           "day-outside text-muted-foreground aria-selected:bg-accent/50 aria-selected:text-muted-foreground",
         day_disabled: "text-muted-foreground opacity-50",

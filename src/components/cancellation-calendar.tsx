@@ -408,6 +408,10 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                     "bg-amber-100 text-amber-900 rounded-full font-semibold border border-amber-400",
                   sunday: "bg-blue-100 text-blue-700 rounded-full",
                 }}
+                classNames={{
+                  day_selected: "bg-red-100 text-red-900 hover:bg-red-200 hover:text-red-900 focus:bg-red-100 focus:text-red-900",
+                  day_today: "bg-red-200 text-red-900 font-semibold",
+                }}
               />
 
               {/* legenda */}

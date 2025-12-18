@@ -209,7 +209,18 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   /* -- estados para autopreencher/limpar -- */
   const [autoFillKey, setAutoFillKey] = useState(0);
   const [defaults, setDefaults] = useState<Record<string, any>>();
-  const formDefaults = useMemo(() => defaults, [defaults]);
+
+  // Compute default form values at the top level (not conditionally in JSX)
+  const formDefaults = useMemo(() => {
+    if (defaults) {
+      return defaults;
+    }
+    // Fallback defaults when no autopreencher data is set
+    return {
+      dataAgendamento: selectedDate,
+      ...(selectedUnit && { local: selectedUnit }),
+    };
+  }, [defaults, selectedDate, selectedUnit]);
 
   /* ------------------- Autopreenchimento ------------------- */
   const handleAutoFill = () => {
@@ -856,12 +867,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           <ScrollArea className="h-[calc(100vh-200px)]">
             <PatientForm
               key={autoFillKey}
-              defaultValues={
-                formDefaults ?? useMemo(() => ({
-                  dataAgendamento: selectedDate,
-                  ...(selectedUnit && { local: selectedUnit }),
-                }), [selectedDate, selectedUnit])
-              }
+              defaultValues={formDefaults}
               onAppointmentSaved={() => {
                 setIsNewAppointmentDialogOpen(false);
               }}

@@ -347,7 +347,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
         <CardHeader>
           <div className="flex flex-col gap-4">
             <div>
-              <CardTitle className="text-2xl font-semibold text-primary flex items-center">
+              <CardTitle className="text-2xl font-semibold text-red-600 flex items-center">
                 <CalendarCheck2 className="mr-2 h-6 w-6" />
                 Cancelamentos
               </CardTitle>
@@ -373,7 +373,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                       <Button
                         key={unit}
                         variant={isActive ? "default" : "outline"}
-                        className="w-full justify-start"
+                        className={`w-full justify-start ${isActive ? 'bg-red-600 hover:bg-red-700' : 'hover:bg-red-200 hover:text-black'}`}
                         size="sm"
                         onClick={() => setSelectedUnit(unit)}
                       >
@@ -403,9 +403,9 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                   sunday: (d: Date) => getDay(d) === 0,
                 }}
                 modifiersClassNames={{
-                  booked: "border border-yellow-500 rounded-full",
+                  booked: "border border-red-400 rounded-full",
                   holiday:
-                    "text-destructive bg-destructive/20 rounded-full font-semibold border-destructive",
+                    "bg-amber-100 text-amber-900 rounded-full font-semibold border border-amber-400",
                   sunday: "bg-blue-100 text-blue-700 rounded-full",
                 }}
               />
@@ -414,8 +414,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
               <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                 <p className="flex items-center">
                   <Badge
-                    variant="destructive"
-                    className="mr-2 w-4 h-4 rounded-full bg-destructive/20 text-destructive border border-destructive"
+                    className="mr-2 w-4 h-4 rounded-full bg-amber-100 text-amber-900 border border-amber-400"
                   />
                   Feriados nacionais
                 </p>
@@ -424,8 +423,8 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                   Domingos (sem agendamentos)
                 </p>
                 <p className="flex items-center">
-                  <Badge className="mr-2 w-4 h-4 rounded-full border border-yellow-500 bg-white" />
-                  Dias com agendamentos
+                  <Badge className="mr-2 w-4 h-4 rounded-full border border-red-400 bg-white" />
+                  Dias com cancelamentos
                 </p>
               </div>
             </div>
@@ -435,7 +434,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
             <div className="h-[420px] border rounded-md flex flex-col">
               {/* Header Fixo */}
               <div className="flex justify-between items-center p-3 border-b bg-background rounded-t-md shrink-0 z-10">
-                <h3 className="text-lg font-semibold">
+                <h3 className="text-lg font-semibold text-red-700">
                   {selectedDate && dateFnsIsValid(selectedDate)
                     ? `${format(selectedDate, "dd 'de' MMMM 'de' yyyy", {
                       locale: ptBR,
@@ -454,13 +453,13 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                   dateFnsIsValid(selectedDate) && (
                     <>
                       {selectedDateHolidayInfo ? (
-                        <Card className="mb-3 bg-destructive/10 border-destructive">
+                        <Card className="mb-3 bg-amber-50 border-amber-300">
                           <CardHeader className="pb-2 pt-3">
-                            <CardTitle className="text-md text-destructive flex items-center">
-                              <BellRing className="mr-2 h-5 w-5" /> Feriado Nacional
+                            <CardTitle className="text-md text-amber-900 flex items-center">
+                              <BellRing className="mr-2 h-5 w-5 text-amber-600" /> Feriado Nacional
                             </CardTitle>
                           </CardHeader>
-                          <CardContent className="text-sm space-y-1 text-destructive/90">
+                          <CardContent className="text-sm space-y-1 text-amber-900/90">
                             <p>
                               <strong>{selectedDateHolidayInfo.name}</strong>
                             </p>

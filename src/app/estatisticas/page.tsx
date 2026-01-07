@@ -181,15 +181,24 @@ export default function StatisticsPage() {
         return Array.from(set).sort((a, b) => Number(b) - Number(a));
     }, [patientData]);
 
-    /* Default Filter */
+    /* Default Filter & Mode Validations */
     useEffect(() => {
+        // Validation 1: If switching to 'historico', ensure filter is just a year
+        if (statType === 'historico' && filter.includes(' de ')) {
+            const justYear = filter.split(' de ')[1];
+            if (justYear) setFilter(justYear);
+            return;
+        }
+
         if (filter) return;
+
+        // Initial Default
         const hoje = new Date();
         const mesAtual = `${MESES[hoje.getMonth()]} de ${hoje.getFullYear()}`;
         if (mesesDisponiveis.includes(mesAtual)) setFilter(mesAtual);
         else if (mesesDisponiveis.length) setFilter(mesesDisponiveis.at(-1)!);
         else if (anosDisponiveis.length) setFilter(anosDisponiveis[0]);
-    }, [filter, mesesDisponiveis, anosDisponiveis]);
+    }, [filter, mesesDisponiveis, anosDisponiveis, statType]);
 
     /* ---------- Data Processing ---------- */
     const displayData = useMemo<CardData[]>(() => {
@@ -280,6 +289,7 @@ export default function StatisticsPage() {
                     title: name.split(" de ")[0], // Show only Month Name
                     subtitle: name.split(" de ")[1], // Show Year as subtitle
                     count,
+                    value: count * 30, // Estimativa R$ 30
                     icon: <BarChart3 className="h-5 w-5 text-indigo-500" />
                 }));
         }
@@ -507,7 +517,7 @@ export default function StatisticsPage() {
                                     </SelectTrigger>
                                     <SelectContent className="max-h-[250px]">
                                         {anosDisponiveis.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
-                                        {mesesDisponiveis.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
+                                        {statType !== 'historico' && mesesDisponiveis.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -584,9 +594,7 @@ export default function StatisticsPage() {
                                                     <td className="px-6 py-4 text-center text-lg text-blue-700">{totalPacientes}</td>
                                                     <td className="px-6 py-4"></td>
                                                     <td className="px-6 py-4 text-right text-green-700">
-                                                        {viewMode === 'table' && statType === 'unidades' && ( // Only show total value if it matches known logic
-                                                            `R$ ${(totalPacientes * 30).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-                                                        )}
+                                                        {(statType === 'unidades' || statType === 'historico') && `R$ ${(totalPacientes * 30).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
                                                     </td>
                                                 </tr>
                                             </tfoot>
@@ -647,8 +655,24 @@ export default function StatisticsPage() {
                                     </div>
 
                                     {/* Footer no modo Cards */}
-                                    <div className="mt-8 text-center text-gray-400 text-sm">
-                                        Totalizando <span className="font-bold text-gray-700">{totalPacientes}</span> registros filtrados.
+                                    {/* Footer no modo Cards */}
+                                    <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-6 sm:gap-12 p-4 bg-gray-50/50 rounded-lg border border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total de Pacientes:</span>
+                                            <span className="text-base font-bold text-blue-900">{totalPacientes}</span>
+                                        </div>
+
+                                        {(statType === 'unidades' || statType === 'historico') && (
+                                            <>
+                                                <div className="hidden sm:block w-px h-4 bg-gray-300"></div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Valor Estimado:</span>
+                                                    <span className="text-base font-bold text-green-600">
+                                                        {`R$ ${(totalPacientes * 30).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+                                                    </span>
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
                                 </>
                             )}

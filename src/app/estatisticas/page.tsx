@@ -488,7 +488,10 @@ export default function StatisticsPage() {
                                                 <>
                                                     <SelectItem value="all">Todas</SelectItem>
                                                     {unitsAvailable.map((u) => (
-                                                        <SelectItem key={u} value={u}>{unitConfig?.[u]?.empresa ?? u}</SelectItem>
+                                                        <SelectItem key={u} value={u}>
+                                                            {unitConfig?.[u]?.empresa ?? u}
+                                                            {unitConfig?.[u]?.bairro ? ` - ${unitConfig?.[u]?.bairro}` : ''}
+                                                        </SelectItem>
                                                     ))}
                                                 </>
                                             )}

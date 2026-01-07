@@ -55,8 +55,13 @@ export default function StatisticsPage() {
 
     // Filters
     const [filter, setFilter] = useState<string>("");
-    const [statType, setStatType] = useState<StatType>("convenios");
-    const [selectedUnitFilter, setSelectedUnitFilter] = useState<string>("all"); // "all" or specific unit key
+    const [statType, setStatType] = useState<StatType>("unidades");
+
+    // Dynamic Filter (Pivot Slicers)
+    const [filterCategory, setFilterCategory] = useState<"none" | "unidade" | "convenio" | "faixaEtaria" | "exame">("unidade");
+    const [filterValue, setFilterValue] = useState<string>("all");
+
+    // View Toggle
     const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
 
     // Configs & Env
@@ -105,10 +110,51 @@ export default function StatisticsPage() {
         };
     }, []);
 
+    // Reset filter value when category changes
+    useEffect(() => {
+        if (filterCategory === 'unidade') {
+            setFilterValue("all");
+        } else {
+            setFilterValue("");
+        }
+    }, [filterCategory]);
+
     /* ---------- Available Options ---------- */
     const unitsAvailable = useMemo(() => {
         return Object.keys(patientData).sort();
     }, [patientData]);
+
+    const conveniosAvailable = useMemo(() => {
+        const set = new Set<string>();
+        for (const unit in patientData) {
+            for (const date in patientData[unit]) {
+                const hours = patientData[unit][date];
+                for (const time in hours) {
+                    const c = hours[time]?.convenio;
+                    if (c) set.add(c);
+                }
+            }
+        }
+        return Array.from(set).sort();
+    }, [patientData]);
+
+    const examesAvailable = useMemo(() => {
+        const set = new Set<string>();
+        for (const unit in patientData) {
+            for (const date in patientData[unit]) {
+                const hours = patientData[unit][date];
+                for (const time in hours) {
+                    const examList = hours[time]?.exames;
+                    if (Array.isArray(examList)) {
+                        examList.forEach(ex => set.add(ex));
+                    }
+                }
+            }
+        }
+        return Array.from(set).sort();
+    }, [patientData]);
+
+    const faixasEtariasAvailable = ["Criança", "Adolescente", "Adulto", "Idoso"];
 
     const mesesDisponiveis = useMemo(() => {
         const set = new Set<string>();
@@ -155,8 +201,8 @@ export default function StatisticsPage() {
 
         // 1. Extract & Filter by Unit and Date
         for (const unit in patientData) {
-            // Filter by Unit Dropdown
-            if (selectedUnitFilter !== 'all' && unit !== selectedUnitFilter) continue;
+            // Filter by Unit Category
+            if (filterCategory === 'unidade' && filterValue && filterValue !== 'all' && unit !== filterValue) continue;
 
             for (const date in patientData[unit]) {
                 const apptYear = obterAno(date);
@@ -181,7 +227,31 @@ export default function StatisticsPage() {
                 if (include) {
                     const hours = patientData[unit][date];
                     for (const time in hours) {
-                        appointments.push({ ...hours[time], _unit: unit, _date: date });
+                        const app = { ...hours[time], _unit: unit, _date: date };
+
+                        // --- Dynamic Filters ---
+                        if (filterCategory === 'convenio' && filterValue && app.convenio !== filterValue) continue;
+
+                        if (filterCategory === 'exame' && filterValue) {
+                            if (!Array.isArray(app.exames) || !app.exames.includes(filterValue)) continue;
+                        }
+
+                        if (filterCategory === 'faixaEtaria' && filterValue) {
+                            let bucket = "Desconhecido";
+                            if (app.nascimento) {
+                                try {
+                                    const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
+                                    const age = differenceInYears(new Date(), birthDate);
+                                    if (age <= 12) bucket = "Criança";
+                                    else if (age <= 18) bucket = "Adolescente";
+                                    else if (age <= 59) bucket = "Adulto";
+                                    else bucket = "Idoso";
+                                } catch { /* ignore */ }
+                            }
+                            if (bucket !== filterValue) continue;
+                        }
+
+                        appointments.push(app);
                     }
                 }
             }
@@ -305,7 +375,7 @@ export default function StatisticsPage() {
         }
 
         return [];
-    }, [patientData, filter, statType, unitConfig, selectedUnitFilter]);
+    }, [patientData, filter, statType, unitConfig, filterCategory, filterValue]);
 
     const totalPacientes = displayData.reduce((acc, item) => acc + item.count, 0);
     // Valor total only makes sense if all items have values (like Unidades) or if we estimate globally?
@@ -366,36 +436,67 @@ export default function StatisticsPage() {
                                         <SelectItem value="unidades">Unidades</SelectItem>
                                         <SelectItem value="convenios">Convênios</SelectItem>
                                         <SelectItem value="faixaEtaria">Faixa Etária</SelectItem>
-                                        <SelectItem value="exames">EXAMES</SelectItem>
+                                        <SelectItem value="exames">Exames</SelectItem>
                                         <SelectItem value="historico">Evolução Mensal</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
 
-                            {/* Control 2: Filter Scope */}
+                            {/* Control 2: Filter Category (Filter By) */}
                             <div className="flex flex-col gap-1.5 w-full sm:w-auto">
                                 <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">
-                                    Filtrar Unidade
+                                    Filtrar por
                                 </label>
-                                <Select value={selectedUnitFilter} onValueChange={setSelectedUnitFilter}>
-                                    <SelectTrigger className="w-full sm:w-[200px] bg-white border-blue-200 shadow-sm">
-                                        <div className="flex items-center gap-2">
-                                            <MapPin className="w-4 h-4 text-blue-500" />
-                                            <SelectValue placeholder="Todas" />
-                                        </div>
+                                <Select value={filterCategory} onValueChange={(v: any) => setFilterCategory(v)}>
+                                    <SelectTrigger className="w-full sm:w-[150px] bg-white border-blue-200 shadow-sm">
+                                        <SelectValue placeholder="Nenhum" />
                                     </SelectTrigger>
-                                    <SelectContent className="max-h-[250px]">
-                                        <SelectItem value="all">Todas as unidades</SelectItem>
-                                        {unitsAvailable.map((u) => (
-                                            <SelectItem key={u} value={u}>
-                                                {unitConfig?.[u]?.empresa ?? u}
-                                            </SelectItem>
-                                        ))}
+                                    <SelectContent>
+                                        <SelectItem value="none">Todas as Unidades</SelectItem>
+                                        <SelectItem value="unidade">Unidade Específica</SelectItem>
+                                        <SelectItem value="convenio">Convênio</SelectItem>
+                                        <SelectItem value="faixaEtaria">Faixa Etária</SelectItem>
+                                        <SelectItem value="exame">Exame/Proced.</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
 
-                            {/* Control 3: Period */}
+                            {/* Control 3: Filter Value (Dynamic Select) */}
+                            {filterCategory !== 'none' && (
+                                <div className="flex flex-col gap-1.5 w-full sm:w-auto animate-in fade-in slide-in-from-left-2 duration-300">
+                                    <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">
+                                        Selecione
+                                    </label>
+                                    <Select value={filterValue} onValueChange={setFilterValue}>
+                                        <SelectTrigger className="w-full sm:w-[200px] bg-white border-blue-200 shadow-sm">
+                                            <div className="flex items-center gap-2">
+                                                <SelectValue placeholder="Selecione..." />
+                                            </div>
+                                        </SelectTrigger>
+                                        <SelectContent className="max-h-[250px]">
+                                            {filterCategory === 'unidade' && (
+                                                <>
+                                                    <SelectItem value="all">Todas</SelectItem>
+                                                    {unitsAvailable.map((u) => (
+                                                        <SelectItem key={u} value={u}>{unitConfig?.[u]?.empresa ?? u}</SelectItem>
+                                                    ))}
+                                                </>
+                                            )}
+                                            {filterCategory !== 'unidade' && filterCategory === 'convenio' && conveniosAvailable.map((c) => (
+                                                <SelectItem key={c} value={c}>{c}</SelectItem>
+                                            ))}
+                                            {filterCategory === 'faixaEtaria' && faixasEtariasAvailable.map((f) => (
+                                                <SelectItem key={f} value={f}>{f}</SelectItem>
+                                            ))}
+                                            {filterCategory === 'exame' && examesAvailable.map((e) => (
+                                                <SelectItem key={e} value={e}>{e}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
+                            {/* Control 4: Period */}
                             <div className="flex flex-col gap-1.5 w-full sm:w-auto">
                                 <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">
                                     Período

@@ -83,6 +83,8 @@ export default function Home() {
   const [filterCategory, setFilterCategory] = useState<"unidade" | "convenio" | "faixaEtaria" | "exame">("unidade");
   const [filterValue, setFilterValue] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [sortColumn, setSortColumn] = useState<"title" | "count" | "percentage" | "value" | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
 
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
 
@@ -136,6 +138,24 @@ export default function Home() {
       setViewMode('cards');
     }
   }, [dashboardMode]);
+
+  /* ---------- Sync Filter Category with Stat Type ---------- */
+  useEffect(() => {
+    // Map statType to corresponding filterCategory
+    const mapping: Record<StatType, "unidade" | "convenio" | "faixaEtaria" | "exame"> = {
+      "unidades": "unidade",
+      "convenios": "convenio",
+      "faixaEtaria": "faixaEtaria",
+      "exames": "exame",
+      "historico": "unidade" // Default to unidade for historico
+    };
+
+    const newFilterCategory = mapping[statType];
+    if (newFilterCategory) {
+      setFilterCategory(newFilterCategory);
+      setFilterValue("all"); // Always set to "all" when changing statType
+    }
+  }, [statType]);
 
   useEffect(() => {
     if (filterCategory === 'unidade' || filterCategory === 'convenio' || filterCategory === 'faixaEtaria' || filterCategory === 'exame') {
@@ -225,7 +245,7 @@ export default function Home() {
     if (!filter) return [];
 
     let appointments: any[] = [];
-    const filterYear = filter.includes(" de ") ? filter.split(" de ")[1] : filter;
+    const filterYear = filter === 'all' ? null : (filter.includes(" de ") ? filter.split(" de ")[1] : filter);
     const filterMonthStr = filter.includes(" de ") ? filter : null;
 
     // 1. Traverse Data
@@ -238,7 +258,7 @@ export default function Home() {
         let include = false;
 
         if (statType === 'historico') {
-          if (apptYear === filterYear) include = true;
+          if (filterYear === null || apptYear === filterYear) include = true;
         } else {
           if (filterMonthStr) {
             if (apptMonthStr === filterMonthStr) include = true;
@@ -903,6 +923,52 @@ export default function Home() {
 
   const totalPacientes = displayData.reduce((acc, item) => acc + item.count, 0);
 
+  // Apply sorting to displayData
+  const sortedDisplayData = useMemo(() => {
+    if (!sortColumn) return displayData;
+
+    return [...displayData].sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortColumn) {
+        case "title":
+          aVal = a.title.toLowerCase();
+          bVal = b.title.toLowerCase();
+          break;
+        case "count":
+          aVal = a.count;
+          bVal = b.count;
+          break;
+        case "percentage":
+          aVal = (a.count / totalPacientes) * 100;
+          bVal = (b.count / totalPacientes) * 100;
+          break;
+        case "value":
+          aVal = a.value || 0;
+          bVal = b.value || 0;
+          break;
+        default:
+          return 0;
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [displayData, sortColumn, sortDirection, totalPacientes]);
+
+  const handleSort = (column: "title" | "count" | "percentage" | "value") => {
+    if (sortColumn === column) {
+      // Toggle direction if same column
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc");
+    } else {
+      // New column, default to descending
+      setSortColumn(column);
+      setSortDirection("desc");
+    }
+  };
+
   /* ---------- UI ---------- */
   return (
     <SidebarLayout unit={selectedUnit}>
@@ -997,6 +1063,7 @@ export default function Home() {
                 <Select value={filter} onValueChange={setFilter}>
                   <SelectTrigger className="w-full sm:w-[160px] bg-white"><SelectValue placeholder="Mês/Ano" /></SelectTrigger>
                   <SelectContent className="max-h-[250px]">
+                    {statType === 'historico' && <SelectItem value="all">Todos os Anos</SelectItem>}
                     {anosDisponiveis.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
                     {statType !== 'historico' && mesesDisponiveis.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
                   </SelectContent>
@@ -1046,15 +1113,55 @@ export default function Home() {
                     <table className="w-full text-sm text-left">
                       <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-100">
                         <tr>
-                          <th className="px-6 py-4 font-bold text-blue-900">Grupo</th>
+                          <th
+                            className="px-6 py-4 font-bold text-blue-900 cursor-pointer hover:bg-blue-100 transition-colors select-none"
+                            onClick={() => handleSort("title")}
+                          >
+                            <div className="flex items-center gap-1">
+                              Grupo
+                              {sortColumn === "title" && (
+                                <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                              )}
+                            </div>
+                          </th>
                           <th className="px-6 py-4 font-bold text-blue-900">Detalhe</th>
-                          <th className="px-6 py-4 text-center font-bold text-blue-900">Qtd.</th>
-                          <th className="px-6 py-4 text-center font-bold text-blue-900">%</th>
-                          <th className="px-6 py-4 text-right font-bold text-blue-900">Valor Estimado</th>
+                          <th
+                            className="px-6 py-4 text-center font-bold text-blue-900 cursor-pointer hover:bg-blue-100 transition-colors select-none"
+                            onClick={() => handleSort("count")}
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              Qtd.
+                              {sortColumn === "count" && (
+                                <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th
+                            className="px-6 py-4 text-center font-bold text-blue-900 cursor-pointer hover:bg-blue-100 transition-colors select-none"
+                            onClick={() => handleSort("percentage")}
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              %
+                              {sortColumn === "percentage" && (
+                                <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                              )}
+                            </div>
+                          </th>
+                          <th
+                            className="px-6 py-4 text-right font-bold text-blue-900 cursor-pointer hover:bg-blue-100 transition-colors select-none"
+                            onClick={() => handleSort("value")}
+                          >
+                            <div className="flex items-center justify-end gap-1">
+                              Valor Estimado
+                              {sortColumn === "value" && (
+                                <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                              )}
+                            </div>
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {displayData.map((item) => (
+                        {sortedDisplayData.map((item) => (
                           <tr key={item.id} className="hover:bg-blue-50/50 transition-colors">
                             <td className="px-6 py-4 font-medium text-gray-900 flex items-center gap-2">{item.icon && <span className="text-gray-400 scale-75">{item.icon}</span>}{item.title}</td>
                             <td className="px-6 py-4 text-gray-500">{item.subtitle}</td>

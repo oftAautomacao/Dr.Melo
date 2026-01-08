@@ -252,7 +252,7 @@ export default function StatisticsPage() {
                                     const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
                                     const age = differenceInYears(new Date(), birthDate);
                                     if (age <= 12) bucket = "Criança";
-                                    else if (age <= 18) bucket = "Adolescente";
+                                    else if (age <= 17) bucket = "Adolescente";
                                     else if (age <= 59) bucket = "Adulto";
                                     else bucket = "Idoso";
                                 } catch { /* ignore */ }
@@ -337,8 +337,8 @@ export default function StatisticsPage() {
             };
             const ranges = {
                 "Criança": "0-12 anos",
-                "Adolescente": "13-18 anos",
-                "Adulto": "19-59 anos",
+                "Adolescente": "13-17 anos",
+                "Adulto": "18-59 anos",
                 "Idoso": "60+ anos"
             };
 
@@ -348,7 +348,7 @@ export default function StatisticsPage() {
                         const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
                         const age = differenceInYears(new Date(), birthDate);
                         if (age <= 12) buckets["Criança"]++;
-                        else if (age <= 18) buckets["Adolescente"]++;
+                        else if (age <= 17) buckets["Adolescente"]++;
                         else if (age <= 59) buckets["Adulto"]++;
                         else buckets["Idoso"]++;
                     } catch { /* ignore */ }
@@ -609,11 +609,11 @@ export default function StatisticsPage() {
                             {/* Visualização: CARDS */}
                             {viewMode === "cards" && (
                                 <>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 justify-items-center animate-in fade-in zoom-in-95 duration-300">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 justify-items-center animate-in fade-in zoom-in-95 duration-300">
                                         {displayData.map((item) => (
                                             <Card
                                                 key={item.id}
-                                                className="w-full max-w-sm rounded-2xl shadow-lg bg-white p-4 transition-transform duration-200 hover:scale-105 relative border border-blue-50"
+                                                className="w-full max-w-sm rounded-2xl shadow-lg bg-white p-3 transition-transform duration-200 hover:scale-105 relative"
                                             >
                                                 <div className="relative z-10 flex flex-col h-full">
                                                     {/* Header */}

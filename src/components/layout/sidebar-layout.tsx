@@ -36,10 +36,6 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }
             <CalendarX className="mr-3 h-5 w-5" /> {/* Ícone */}
             Cancelamentos
           </Link>
-          <Link href="/estatisticas" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <BarChart className="mr-3 h-5 w-5" /> {/* Ícone */}
-            Estatísticas
-          </Link>
           <Link href="/enviar-mensagem" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <MessageSquareText className="mr-3 h-5 w-5" /> {/* Ícone de Mensagem */}
             Enviar Mensagem Paciente

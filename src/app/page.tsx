@@ -60,6 +60,7 @@ interface CardData {
   topConvenios?: { name: string; count: number; value: number }[]; // For detailed breakdown
   topFaixas?: { name: string; count: number; value: number }[]; // For age breakdown
   topExames?: { name: string; count: number; value: number }[]; // For exam breakdown
+  topUnidades?: { name: string; count: number; value: number }[]; // For unit breakdown
 }
 
 /* =============================================================
@@ -436,6 +437,128 @@ export default function Home() {
     }
 
     if (statType === "convenios") {
+      // Logic for "Convenios" + "Unidade" + "All" => Show Top 3 Units per Convenio
+      if (filterCategory === 'unidade' && filterValue === 'all') {
+        const convenioUnidades: Record<string, Record<string, number>> = {};
+        const convenioCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          const c = app.convenio || "Não informado";
+          const u = app._unit;
+
+          convenioCounts[c] = (convenioCounts[c] || 0) + 1;
+
+          if (!convenioUnidades[c]) convenioUnidades[c] = {};
+          convenioUnidades[c][u] = (convenioUnidades[c][u] || 0) + 1;
+        });
+
+        return Object.keys(convenioCounts)
+          .sort((a, b) => convenioCounts[b] - convenioCounts[a])
+          .map(convenio => {
+            const breakdown = convenioUnidades[convenio] || {};
+            const top3 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([name, count]) => ({
+                name: unitConfig?.[name]?.empresa ?? name,
+                count,
+                value: count * 30
+              }));
+
+            return {
+              id: convenio,
+              title: convenio,
+              subtitle: "Convênio Médico",
+              count: convenioCounts[convenio],
+              icon: <FileText className="h-5 w-5 text-green-600" />,
+              topUnidades: top3
+            };
+          });
+      }
+
+      // Logic for "Convenios" + "Faixa Etaria" + "All" => Show Top 3 Age Groups per Convenio
+      if (filterCategory === 'faixaEtaria' && filterValue === 'all') {
+        const convenioFaixas: Record<string, Record<string, number>> = {};
+        const convenioCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          const c = app.convenio || "Não informado";
+          let bucket = "Desconhecido";
+          if (app.nascimento) {
+            try {
+              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
+              const age = differenceInYears(new Date(), birthDate);
+              if (age <= 12) bucket = "Criança";
+              else if (age <= 17) bucket = "Adolescente";
+              else if (age <= 59) bucket = "Adulto";
+              else bucket = "Idoso";
+            } catch { }
+          }
+
+          convenioCounts[c] = (convenioCounts[c] || 0) + 1;
+
+          if (!convenioFaixas[c]) convenioFaixas[c] = {};
+          convenioFaixas[c][bucket] = (convenioFaixas[c][bucket] || 0) + 1;
+        });
+
+        return Object.keys(convenioCounts)
+          .sort((a, b) => convenioCounts[b] - convenioCounts[a])
+          .map(convenio => {
+            const breakdown = convenioFaixas[convenio] || {};
+            const top3 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([name, count]) => ({ name, count, value: count * 30 }));
+
+            return {
+              id: convenio,
+              title: convenio,
+              subtitle: "Convênio Médico",
+              count: convenioCounts[convenio],
+              icon: <FileText className="h-5 w-5 text-green-600" />,
+              topFaixas: top3
+            };
+          });
+      }
+
+      // Logic for "Convenios" + "Exame" + "All" => Show Top 3 Exams per Convenio
+      if (filterCategory === 'exame' && filterValue === 'all') {
+        const convenioExames: Record<string, Record<string, number>> = {};
+        const convenioCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          const c = app.convenio || "Não informado";
+          convenioCounts[c] = (convenioCounts[c] || 0) + 1;
+
+          if (!convenioExames[c]) convenioExames[c] = {};
+          if (Array.isArray(app.exames)) {
+            app.exames.forEach((ex: string) => {
+              convenioExames[c][ex] = (convenioExames[c][ex] || 0) + 1;
+            });
+          }
+        });
+
+        return Object.keys(convenioCounts)
+          .sort((a, b) => convenioCounts[b] - convenioCounts[a])
+          .map(convenio => {
+            const breakdown = convenioExames[convenio] || {};
+            const top3 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([name, count]) => ({ name, count, value: count * 30 }));
+
+            return {
+              id: convenio,
+              title: convenio,
+              subtitle: "Convênio Médico",
+              count: convenioCounts[convenio],
+              icon: <FileText className="h-5 w-5 text-green-600" />,
+              topExames: top3
+            };
+          });
+      }
+
+      // Default Logic
       const counts: Record<string, number> = {};
       appointments.forEach(app => {
         const conv = app.convenio || "Não informado";
@@ -454,6 +577,152 @@ export default function Home() {
     }
 
     if (statType === "faixaEtaria") {
+      // Logic for "Faixa Etaria" + "Unidade" + "All" => Show Top 3 Units per Age Group
+      if (filterCategory === 'unidade' && filterValue === 'all') {
+        const faixaUnidades: Record<string, Record<string, number>> = {};
+        const faixaCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          let bucket = "Desconhecido";
+          if (app.nascimento) {
+            try {
+              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
+              const age = differenceInYears(new Date(), birthDate);
+              if (age <= 12) bucket = "Criança";
+              else if (age <= 17) bucket = "Adolescente";
+              else if (age <= 59) bucket = "Adulto";
+              else bucket = "Idoso";
+            } catch { }
+          }
+          const u = app._unit;
+
+          faixaCounts[bucket] = (faixaCounts[bucket] || 0) + 1;
+
+          if (!faixaUnidades[bucket]) faixaUnidades[bucket] = {};
+          faixaUnidades[bucket][u] = (faixaUnidades[bucket][u] || 0) + 1;
+        });
+
+        const ranges = { "Criança": "0-12 anos", "Adolescente": "13-17 anos", "Adulto": "18-59 anos", "Idoso": "60+ anos" };
+        return Object.keys(faixaCounts)
+          .sort((a, b) => faixaCounts[b] - faixaCounts[a])
+          .map(faixa => {
+            const breakdown = faixaUnidades[faixa] || {};
+            const top3 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([name, count]) => ({
+                name: unitConfig?.[name]?.empresa ?? name,
+                count,
+                value: count * 30
+              }));
+
+            return {
+              id: faixa,
+              title: faixa,
+              subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Etária",
+              count: faixaCounts[faixa],
+              icon: <Users className="h-5 w-5 text-purple-500" />,
+              topUnidades: top3
+            };
+          });
+      }
+
+      // Logic for "Faixa Etaria" + "Convenio" + "All" => Show Top 3 Convenios per Age Group
+      if (filterCategory === 'convenio' && filterValue === 'all') {
+        const faixaConvenios: Record<string, Record<string, number>> = {};
+        const faixaCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          let bucket = "Desconhecido";
+          if (app.nascimento) {
+            try {
+              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
+              const age = differenceInYears(new Date(), birthDate);
+              if (age <= 12) bucket = "Criança";
+              else if (age <= 17) bucket = "Adolescente";
+              else if (age <= 59) bucket = "Adulto";
+              else bucket = "Idoso";
+            } catch { }
+          }
+          const c = app.convenio || "Não informado";
+
+          faixaCounts[bucket] = (faixaCounts[bucket] || 0) + 1;
+
+          if (!faixaConvenios[bucket]) faixaConvenios[bucket] = {};
+          faixaConvenios[bucket][c] = (faixaConvenios[bucket][c] || 0) + 1;
+        });
+
+        const ranges = { "Criança": "0-12 anos", "Adolescente": "13-17 anos", "Adulto": "18-59 anos", "Idoso": "60+ anos" };
+        return Object.keys(faixaCounts)
+          .sort((a, b) => faixaCounts[b] - faixaCounts[a])
+          .map(faixa => {
+            const breakdown = faixaConvenios[faixa] || {};
+            const top3 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([name, count]) => ({ name, count, value: count * 30 }));
+
+            return {
+              id: faixa,
+              title: faixa,
+              subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Etária",
+              count: faixaCounts[faixa],
+              icon: <Users className="h-5 w-5 text-purple-500" />,
+              topConvenios: top3
+            };
+          });
+      }
+
+      // Logic for "Faixa Etaria" + "Exame" + "All" => Show Top 3 Exams per Age Group
+      if (filterCategory === 'exame' && filterValue === 'all') {
+        const faixaExames: Record<string, Record<string, number>> = {};
+        const faixaCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          let bucket = "Desconhecido";
+          if (app.nascimento) {
+            try {
+              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
+              const age = differenceInYears(new Date(), birthDate);
+              if (age <= 12) bucket = "Criança";
+              else if (age <= 17) bucket = "Adolescente";
+              else if (age <= 59) bucket = "Adulto";
+              else bucket = "Idoso";
+            } catch { }
+          }
+
+          faixaCounts[bucket] = (faixaCounts[bucket] || 0) + 1;
+
+          if (!faixaExames[bucket]) faixaExames[bucket] = {};
+          if (Array.isArray(app.exames)) {
+            app.exames.forEach((ex: string) => {
+              faixaExames[bucket][ex] = (faixaExames[bucket][ex] || 0) + 1;
+            });
+          }
+        });
+
+        const ranges = { "Criança": "0-12 anos", "Adolescente": "13-17 anos", "Adulto": "18-59 anos", "Idoso": "60+ anos" };
+        return Object.keys(faixaCounts)
+          .sort((a, b) => faixaCounts[b] - faixaCounts[a])
+          .map(faixa => {
+            const breakdown = faixaExames[faixa] || {};
+            const top3 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([name, count]) => ({ name, count, value: count * 30 }));
+
+            return {
+              id: faixa,
+              title: faixa,
+              subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Etária",
+              count: faixaCounts[faixa],
+              icon: <Users className="h-5 w-5 text-purple-500" />,
+              topExames: top3
+            };
+          });
+      }
+
+      // Default Logic
       const buckets = { "Criança": 0, "Adolescente": 0, "Adulto": 0, "Idoso": 0 };
       const ranges = { "Criança": "0-12 anos", "Adolescente": "13-17 anos", "Adulto": "18-59 anos", "Idoso": "60+ anos" };
       appointments.forEach(app => {
@@ -480,6 +749,136 @@ export default function Home() {
     }
 
     if (statType === "exames") {
+      // Logic for "Exames" + "Unidade" + "All" => Show Top 3 Units per Exam
+      if (filterCategory === 'unidade' && filterValue === 'all') {
+        const exameUnidades: Record<string, Record<string, number>> = {};
+        const exameCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          const u = app._unit;
+          if (Array.isArray(app.exames)) {
+            app.exames.forEach((ex: string) => {
+              exameCounts[ex] = (exameCounts[ex] || 0) + 1;
+
+              if (!exameUnidades[ex]) exameUnidades[ex] = {};
+              exameUnidades[ex][u] = (exameUnidades[ex][u] || 0) + 1;
+            });
+          }
+        });
+
+        return Object.keys(exameCounts)
+          .sort((a, b) => exameCounts[b] - exameCounts[a])
+          .slice(0, 10)
+          .map(exame => {
+            const breakdown = exameUnidades[exame] || {};
+            const top3 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([name, count]) => ({
+                name: unitConfig?.[name]?.empresa ?? name,
+                count,
+                value: count * 30
+              }));
+
+            return {
+              id: exame,
+              title: exame,
+              subtitle: "Procedimento",
+              count: exameCounts[exame],
+              icon: <Activity className="h-5 w-5 text-orange-500" />,
+              topUnidades: top3
+            };
+          });
+      }
+
+      // Logic for "Exames" + "Convenio" + "All" => Show Top 3 Convenios per Exam
+      if (filterCategory === 'convenio' && filterValue === 'all') {
+        const exameConvenios: Record<string, Record<string, number>> = {};
+        const exameCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          const c = app.convenio || "Não informado";
+          if (Array.isArray(app.exames)) {
+            app.exames.forEach((ex: string) => {
+              exameCounts[ex] = (exameCounts[ex] || 0) + 1;
+
+              if (!exameConvenios[ex]) exameConvenios[ex] = {};
+              exameConvenios[ex][c] = (exameConvenios[ex][c] || 0) + 1;
+            });
+          }
+        });
+
+        return Object.keys(exameCounts)
+          .sort((a, b) => exameCounts[b] - exameCounts[a])
+          .slice(0, 10)
+          .map(exame => {
+            const breakdown = exameConvenios[exame] || {};
+            const top3 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([name, count]) => ({ name, count, value: count * 30 }));
+
+            return {
+              id: exame,
+              title: exame,
+              subtitle: "Procedimento",
+              count: exameCounts[exame],
+              icon: <Activity className="h-5 w-5 text-orange-500" />,
+              topConvenios: top3
+            };
+          });
+      }
+
+      // Logic for "Exames" + "Faixa Etaria" + "All" => Show Top 3 Age Groups per Exam
+      if (filterCategory === 'faixaEtaria' && filterValue === 'all') {
+        const exameFaixas: Record<string, Record<string, number>> = {};
+        const exameCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          let bucket = "Desconhecido";
+          if (app.nascimento) {
+            try {
+              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
+              const age = differenceInYears(new Date(), birthDate);
+              if (age <= 12) bucket = "Criança";
+              else if (age <= 17) bucket = "Adolescente";
+              else if (age <= 59) bucket = "Adulto";
+              else bucket = "Idoso";
+            } catch { }
+          }
+
+          if (Array.isArray(app.exames)) {
+            app.exames.forEach((ex: string) => {
+              exameCounts[ex] = (exameCounts[ex] || 0) + 1;
+
+              if (!exameFaixas[ex]) exameFaixas[ex] = {};
+              exameFaixas[ex][bucket] = (exameFaixas[ex][bucket] || 0) + 1;
+            });
+          }
+        });
+
+        return Object.keys(exameCounts)
+          .sort((a, b) => exameCounts[b] - exameCounts[a])
+          .slice(0, 10)
+          .map(exame => {
+            const breakdown = exameFaixas[exame] || {};
+            const top3 = Object.entries(breakdown)
+              .sort(([, a], [, b]) => b - a)
+              .slice(0, 3)
+              .map(([name, count]) => ({ name, count, value: count * 30 }));
+
+            return {
+              id: exame,
+              title: exame,
+              subtitle: "Procedimento",
+              count: exameCounts[exame],
+              icon: <Activity className="h-5 w-5 text-orange-500" />,
+              topFaixas: top3
+            };
+          });
+      }
+
+      // Default Logic
       const counts: Record<string, number> = {};
       appointments.forEach(app => {
         if (Array.isArray(app.exames)) {
@@ -731,7 +1130,19 @@ export default function Home() {
                         </CardHeader>
 
                         <CardContent className="p-0 text-center flex-grow flex flex-col justify-center mt-1">
-                          {item.topConvenios ? (
+                          {item.topUnidades ? (
+                            <div className="flex flex-col gap-1 w-full px-1">
+                              {item.topUnidades.map((u, i) => (
+                                <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                  <span className="truncate font-medium text-gray-700 max-w-[80px]" title={u.name}>{u.name}</span>
+                                  <div className="flex gap-1.5">
+                                    <span className="font-bold text-gray-900">{u.count}</span>
+                                    <span className="font-mono text-green-600">R${u.value}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : item.topConvenios ? (
                             <div className="flex flex-col gap-1 w-full px-1">
                               {item.topConvenios.map((c, i) => (
                                 <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">

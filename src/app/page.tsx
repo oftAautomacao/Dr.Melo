@@ -59,6 +59,7 @@ interface CardData {
   icon?: React.ReactNode;
   topConvenios?: { name: string; count: number; value: number }[]; // For detailed breakdown
   topFaixas?: { name: string; count: number; value: number }[]; // For age breakdown
+  topExames?: { name: string; count: number; value: number }[]; // For exam breakdown
 }
 
 /* =============================================================
@@ -136,7 +137,7 @@ export default function Home() {
   }, [dashboardMode]);
 
   useEffect(() => {
-    if (filterCategory === 'unidade' || filterCategory === 'convenio' || filterCategory === 'faixaEtaria') {
+    if (filterCategory === 'unidade' || filterCategory === 'convenio' || filterCategory === 'faixaEtaria' || filterCategory === 'exame') {
       setFilterValue("all");
     } else {
       setFilterValue("");
@@ -251,7 +252,7 @@ export default function Home() {
             const app = { ...hours[time], _unit: unit, _date: date };
 
             if (filterCategory === 'convenio' && filterValue && filterValue !== 'all' && app.convenio !== filterValue) continue;
-            if (filterCategory === 'exame' && filterValue) {
+            if (filterCategory === 'exame' && filterValue && filterValue !== 'all') {
               if (!Array.isArray(app.exames) || !app.exames.includes(filterValue)) continue;
             }
             if (filterCategory === 'faixaEtaria' && filterValue && filterValue !== 'all') {
@@ -361,11 +362,11 @@ export default function Home() {
 
         return Object.keys(unitCounts).sort().map(unit => {
           const breakdown = unitFaixas[unit] || {};
-          // Order: Criança, Adolescente, Adulto, Idoso (as requested "idade")
-          const order = ["Criança", "Adolescente", "Adulto", "Idoso", "Desconhecido"];
-          const faixas = order
-            .filter(key => breakdown[key] > 0)
-            .map(key => ({ name: key, count: breakdown[key], value: breakdown[key] * 30 }));
+          // Show Top 3 Age Groups by count
+          const faixas = Object.entries(breakdown)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3)
+            .map(([name, count]) => ({ name, count, value: count * 30 }));
 
           return {
             id: unit,
@@ -375,6 +376,42 @@ export default function Home() {
             value: unitCounts[unit] * 30,
             icon: <MapPin className="h-5 w-5 text-blue-500" />,
             topFaixas: faixas
+          };
+        });
+      }
+
+      // Logic for "Unidades" + "Exame" + "All" => Show Top 3 Exams per Unit
+      if (filterCategory === 'exame' && filterValue === 'all') {
+        const unitExames: Record<string, Record<string, number>> = {};
+        const unitCounts: Record<string, number> = {};
+
+        appointments.forEach(app => {
+          const u = app._unit;
+          unitCounts[u] = (unitCounts[u] || 0) + 1;
+
+          if (!unitExames[u]) unitExames[u] = {};
+          if (Array.isArray(app.exames)) {
+            app.exames.forEach((ex: string) => {
+              unitExames[u][ex] = (unitExames[u][ex] || 0) + 1;
+            });
+          }
+        });
+
+        return Object.keys(unitCounts).sort().map(unit => {
+          const breakdown = unitExames[unit] || {};
+          const top3 = Object.entries(breakdown)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 3)
+            .map(([name, count]) => ({ name, count, value: count * 30 }));
+
+          return {
+            id: unit,
+            title: unitConfig?.[unit]?.empresa ?? unit,
+            subtitle: unitConfig?.[unit]?.bairro ?? "Unidade",
+            count: unitCounts[unit],
+            value: unitCounts[unit] * 30,
+            icon: <MapPin className="h-5 w-5 text-blue-500" />,
+            topExames: top3
           };
         });
       }
@@ -546,7 +583,12 @@ export default function Home() {
                         {faixasEtariasAvailable.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                       </>
                     )}
-                    {filterCategory === 'exame' && examesAvailable.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                    {filterCategory === 'exame' && (
+                      <>
+                        <SelectItem value="all">Todas</SelectItem>
+                        {examesAvailable.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -709,6 +751,18 @@ export default function Home() {
                                   <div className="flex gap-1.5">
                                     <span className="font-bold text-gray-900">{f.count}</span>
                                     <span className="font-mono text-green-600">R${f.value}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          ) : item.topExames ? (
+                            <div className="flex flex-col gap-1 w-full px-1">
+                              {item.topExames.map((e, i) => (
+                                <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                  <span className="truncate font-medium text-gray-700 max-w-[80px]" title={e.name}>{e.name}</span>
+                                  <div className="flex gap-1.5">
+                                    <span className="font-bold text-gray-900">{e.count}</span>
+                                    <span className="font-mono text-green-600">R${e.value}</span>
                                   </div>
                                 </div>
                               ))}

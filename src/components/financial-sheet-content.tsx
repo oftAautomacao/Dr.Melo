@@ -160,7 +160,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       return `* ${name}${cpf}, ${date} às ${time}, ${convenio}`;
     }).join('\n');
 
-    const message = `Olá, tudo bem?\n\nVocê poderia verificar quais desses pacientes vindos do Dr. Melo foram realmente atendidos na ${unitName}?\n\n🧾 Pacientes agendados:\n\n${patientListString}`;
+    const message = `Olá, tudo bem?\n\nEsses são os pacientes vindos do Dr. Melo que foram realmente atendidos na ${unitName}:\n\n${patientListString}`;
 
     let apiCredentials: { id: string; token: string; };
     let phoneNumber: string;

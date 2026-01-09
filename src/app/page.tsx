@@ -48,6 +48,23 @@ const obterNomeMes = (dataStr: string) => {
 
 const obterAno = (dataStr: string) => dataStr.substring(0, 4);
 
+const calculateAge = (nascimento: string) => {
+  if (!nascimento) return 0;
+  try {
+    const birthDate = parse(nascimento, 'dd/MM/yyyy', new Date());
+    return differenceInYears(new Date(), birthDate);
+  } catch {
+    return 0;
+  }
+};
+
+const getAgeBucket = (nascimento: string) => {
+  const age = calculateAge(nascimento);
+  if (age <= 13) return "Criança";
+  if (age <= 59) return "Adulto"; // Includes adolescents as requested
+  return "Idoso";
+};
+
 /* ---------- Types ---------- */
 type StatType = "unidades" | "convenios" | "faixaEtaria" | "exames" | "historico";
 type DashboardMode = "simple" | "advanced";
@@ -203,7 +220,7 @@ export default function Home() {
     return Array.from(set).sort();
   }, [patientData]);
 
-  const faixasEtariasAvailable = ["Criança", "Adolescente", "Adulto", "Idoso"];
+  const faixasEtariasAvailable = ["Criança", "Adulto", "Idoso"];
 
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
@@ -283,11 +300,7 @@ export default function Home() {
               if (!Array.isArray(app.exames) || !app.exames.includes(filterValue)) continue;
             }
             if (filterCategory === 'faixaEtaria' && filterValue && filterValue !== 'all') {
-              const age = calculateAge(app.nascimento);
-              let bucket = "Idoso";
-              if (age <= 12) bucket = "Criança";
-              else if (age <= 17) bucket = "Adolescente";
-              else if (age <= 59) bucket = "Adulto";
+              const bucket = getAgeBucket(app.nascimento);
               if (bucket !== filterValue) continue;
             }
             if (filterCategory === 'unidade' && filterValue && filterValue !== 'all' && app._unit !== filterValue) continue;
@@ -371,17 +384,7 @@ export default function Home() {
 
         appointments.forEach(app => {
           const u = app._unit;
-          let bucket = "Desconhecido";
-          if (app.nascimento) {
-            try {
-              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
-              const age = differenceInYears(new Date(), birthDate);
-              if (age <= 12) bucket = "Criança";
-              else if (age <= 17) bucket = "Adolescente";
-              else if (age <= 59) bucket = "Adulto";
-              else bucket = "Idoso";
-            } catch { }
-          }
+          const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
           unitCounts[u] = (unitCounts[u] || 0) + 1;
 
@@ -511,17 +514,7 @@ export default function Home() {
 
         appointments.forEach(app => {
           const c = app.convenio || "Não informado";
-          let bucket = "Desconhecido";
-          if (app.nascimento) {
-            try {
-              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
-              const age = differenceInYears(new Date(), birthDate);
-              if (age <= 12) bucket = "Criança";
-              else if (age <= 17) bucket = "Adolescente";
-              else if (age <= 59) bucket = "Adulto";
-              else bucket = "Idoso";
-            } catch { }
-          }
+          const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
           convenioCounts[c] = (convenioCounts[c] || 0) + 1;
 
@@ -611,17 +604,7 @@ export default function Home() {
         const faixaCounts: Record<string, number> = {};
 
         appointments.forEach(app => {
-          let bucket = "Desconhecido";
-          if (app.nascimento) {
-            try {
-              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
-              const age = differenceInYears(new Date(), birthDate);
-              if (age <= 12) bucket = "Criança";
-              else if (age <= 17) bucket = "Adolescente";
-              else if (age <= 59) bucket = "Adulto";
-              else bucket = "Idoso";
-            } catch { }
-          }
+          const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
           const u = app._unit;
 
           faixaCounts[bucket] = (faixaCounts[bucket] || 0) + 1;
@@ -630,9 +613,11 @@ export default function Home() {
           faixaUnidades[bucket][u] = (faixaUnidades[bucket][u] || 0) + 1;
         });
 
-        const ranges = { "Criança": "0-12 anos", "Adolescente": "13-17 anos", "Adulto": "18-59 anos", "Idoso": "60+ anos" };
-        return Object.keys(faixaCounts)
-          .sort((a, b) => faixaCounts[b] - faixaCounts[a])
+        const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
+        const order = ["Criança", "Adulto", "Idoso"];
+
+        return order
+          .filter(f => faixaCounts[f] > 0)
           .map(faixa => {
             const breakdown = faixaUnidades[faixa] || {};
             const top3 = Object.entries(breakdown)
@@ -661,17 +646,7 @@ export default function Home() {
         const faixaCounts: Record<string, number> = {};
 
         appointments.forEach(app => {
-          let bucket = "Desconhecido";
-          if (app.nascimento) {
-            try {
-              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
-              const age = differenceInYears(new Date(), birthDate);
-              if (age <= 12) bucket = "Criança";
-              else if (age <= 17) bucket = "Adolescente";
-              else if (age <= 59) bucket = "Adulto";
-              else bucket = "Idoso";
-            } catch { }
-          }
+          const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
           const c = app.convenio || "Não informado";
 
           faixaCounts[bucket] = (faixaCounts[bucket] || 0) + 1;
@@ -680,9 +655,11 @@ export default function Home() {
           faixaConvenios[bucket][c] = (faixaConvenios[bucket][c] || 0) + 1;
         });
 
-        const ranges = { "Criança": "0-12 anos", "Adolescente": "13-17 anos", "Adulto": "18-59 anos", "Idoso": "60+ anos" };
-        return Object.keys(faixaCounts)
-          .sort((a, b) => faixaCounts[b] - faixaCounts[a])
+        const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
+        const order = ["Criança", "Adulto", "Idoso"];
+
+        return order
+          .filter(f => faixaCounts[f] > 0)
           .map(faixa => {
             const breakdown = faixaConvenios[faixa] || {};
             const top3 = Object.entries(breakdown)
@@ -707,17 +684,7 @@ export default function Home() {
         const faixaCounts: Record<string, number> = {};
 
         appointments.forEach(app => {
-          let bucket = "Desconhecido";
-          if (app.nascimento) {
-            try {
-              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
-              const age = differenceInYears(new Date(), birthDate);
-              if (age <= 12) bucket = "Criança";
-              else if (age <= 17) bucket = "Adolescente";
-              else if (age <= 59) bucket = "Adulto";
-              else bucket = "Idoso";
-            } catch { }
-          }
+          const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
           faixaCounts[bucket] = (faixaCounts[bucket] || 0) + 1;
 
@@ -729,10 +696,11 @@ export default function Home() {
           }
         });
 
-        const ranges = { "Criança": "0-12 anos", "Adolescente": "13-17 anos", "Adulto": "18-59 anos", "Idoso": "60+ anos" };
-        return Object.keys(faixaCounts)
-          .sort((a, b) => faixaCounts[b] - faixaCounts[a])
-          .slice(0, 10)
+        const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
+        const order = ["Criança", "Adulto", "Idoso"];
+
+        return order
+          .filter(f => faixaCounts[f] > 0)
           .map(faixa => {
             const breakdown = faixaExames[faixa] || {};
             const top3 = Object.entries(breakdown)
@@ -752,29 +720,24 @@ export default function Home() {
       }
 
       // Default Logic
-      const buckets = { "Criança": 0, "Adolescente": 0, "Adulto": 0, "Idoso": 0 };
-      const ranges = { "Criança": "0-12 anos", "Adolescente": "13-17 anos", "Adulto": "18-59 anos", "Idoso": "60+ anos" };
+      const buckets: Record<string, number> = { "Criança": 0, "Adulto": 0, "Idoso": 0 };
+      const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
       appointments.forEach(app => {
-        if (app.nascimento) {
-          try {
-            const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
-            const age = differenceInYears(new Date(), birthDate);
-            if (age <= 12) buckets["Criança"]++;
-            else if (age <= 17) buckets["Adolescente"]++;
-            else if (age <= 59) buckets["Adulto"]++;
-            else buckets["Idoso"]++;
-          } catch { }
+        const bucket = getAgeBucket(app.nascimento);
+        if (buckets[bucket] !== undefined) {
+          buckets[bucket]++;
         }
       });
-      return Object.entries(buckets)
-        .sort(([, a], [, b]) => b - a)
-        .map(([name, count]) => ({
+      const order = ["Criança", "Adulto", "Idoso"];
+      return order
+        .map(name => ({
           id: name,
           title: name,
           subtitle: ranges[name as keyof typeof ranges] || "Faixa Etária",
-          count,
+          count: buckets[name] || 0,
           icon: <Users className="h-5 w-5 text-purple-500" />
-        }));
+        }))
+        .filter(item => item.count > 0);
     }
 
     if (statType === "exames") {
@@ -864,17 +827,7 @@ export default function Home() {
         const exameCounts: Record<string, number> = {};
 
         appointments.forEach(app => {
-          let bucket = "Desconhecido";
-          if (app.nascimento) {
-            try {
-              const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
-              const age = differenceInYears(new Date(), birthDate);
-              if (age <= 12) bucket = "Criança";
-              else if (age <= 17) bucket = "Adolescente";
-              else if (age <= 59) bucket = "Adulto";
-              else bucket = "Idoso";
-            } catch { }
-          }
+          const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
           if (Array.isArray(app.exames)) {
             app.exames.forEach((ex: string) => {
@@ -978,23 +931,7 @@ export default function Home() {
     }
   };
 
-  const calculateAge = (nascimento: string) => {
-    if (!nascimento) return 0;
-    try {
-      const birthDate = parse(nascimento, 'dd/MM/yyyy', new Date());
-      return differenceInYears(new Date(), birthDate);
-    } catch {
-      return 0;
-    }
-  };
 
-  const getAgeBucket = (nascimento: string) => {
-    const age = calculateAge(nascimento);
-    if (age <= 12) return "Criança";
-    if (age <= 17) return "Adolescente";
-    if (age <= 59) return "Adulto";
-    return "Idoso";
-  };
 
   // Function to handle card click for detailed records
   const handleCardDrillDown = (item: CardData) => {
@@ -1272,7 +1209,7 @@ export default function Home() {
               )}
 
               {viewMode === "cards" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 justify-items-center animate-in fade-in zoom-in-95 duration-300">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 justify-items-center animate-in fade-in zoom-in-95 duration-300">
                   {displayData.map((item) => {
                     const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
                     const isClickable = dashboardMode === 'simple' || !hasBreakdown;
@@ -1280,12 +1217,12 @@ export default function Home() {
                     return (
                       <Card
                         key={item.id}
-                        className={`w-full max-w-sm rounded-xl shadow-lg bg-white p-2.5 transition-transform duration-200 relative 
+                        className={`w-full max-w-sm rounded-xl shadow-lg bg-white p-2 transition-transform duration-200 relative 
                             ${isClickable ? "cursor-pointer hover:scale-105" : ""}`}
                         onClick={() => handleCardDrillDown(item)}
                       >
                         <div className="relative z-10 flex flex-col h-full">
-                          <CardHeader className="p-0 pb-2 flex flex-row items-start justify-between space-y-0 w-full">
+                          <CardHeader className="p-0 pb-1 flex flex-row items-start justify-between space-y-0 w-full">
                             <div className="flex flex-col truncate pr-2">
                               <span className="text-sm font-semibold text-blue-700 truncate" title={item.title}>{item.title}</span>
                               <span className="text-[10px] text-gray-500 truncate">{item.subtitle}</span>
@@ -1293,7 +1230,7 @@ export default function Home() {
 
                             {/* Default Home Actions: Render ONLY if Unidades + Simple */}
                             {statType === "unidades" && dashboardMode === 'simple' && (
-                              <div className="flex flex-col items-center space-y-2 relative z-20" onClick={(e) => e.stopPropagation()}>
+                              <div className="flex flex-row items-center gap-2 relative z-20" onClick={(e) => e.stopPropagation()}>
                                 <Link
                                   href={`/novo-agendamento?unidade=${encodeURIComponent(item.id)}`}
                                   className="shrink-0 p-1.5 bg-green-50/50 hover:bg-green-100/80 hover:scale-110 shadow-sm border border-green-100 rounded-full transition-all duration-200 group/btn"
@@ -1331,11 +1268,11 @@ export default function Home() {
                             )}
                           </CardHeader>
 
-                          <CardContent className="p-0 text-center flex-grow flex flex-col justify-center mt-1">
+                          <CardContent className="p-0 text-center flex-grow flex flex-col justify-center mt-0.5">
                             {item.topUnidades ? (
                               <div className="flex flex-col gap-1 w-full px-1">
                                 {item.topUnidades.map((u, i) => (
-                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100">
                                     <span className="truncate font-medium text-gray-700 max-w-[80px]" title={u.name}>{u.name}</span>
                                     <div className="flex gap-1.5">
                                       <span className="font-bold text-gray-900">{u.count}</span>
@@ -1347,7 +1284,7 @@ export default function Home() {
                             ) : item.topConvenios ? (
                               <div className="flex flex-col gap-1 w-full px-1">
                                 {item.topConvenios.map((c, i) => (
-                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100">
                                     <span className="truncate font-medium text-gray-700 max-w-[80px]" title={c.name}>{c.name}</span>
                                     <div className="flex gap-1.5">
                                       <span className="font-bold text-gray-900">{c.count}</span>
@@ -1359,7 +1296,7 @@ export default function Home() {
                             ) : item.topFaixas ? (
                               <div className="flex flex-col gap-1 w-full px-1">
                                 {item.topFaixas.map((f, i) => (
-                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100">
                                     <span className="truncate font-medium text-gray-700 max-w-[80px]" title={f.name}>{f.name}</span>
                                     <div className="flex gap-1.5">
                                       <span className="font-bold text-gray-900">{f.count}</span>
@@ -1371,7 +1308,7 @@ export default function Home() {
                             ) : item.topExames ? (
                               <div className="flex flex-col gap-1 w-full px-1">
                                 {item.topExames.map((e, i) => (
-                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100">
                                     <span className="truncate font-medium text-gray-700 max-w-[80px]" title={e.name}>{e.name}</span>
                                     <div className="flex gap-1.5">
                                       <span className="font-bold text-gray-900">{e.count}</span>

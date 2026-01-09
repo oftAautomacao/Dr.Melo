@@ -31,6 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { differenceInYears, parse } from "date-fns";
+import { PatientDetailsSheet, AppointmentDetail } from "@/components/PatientDetailsSheet";
 
 /* ---------- helpers ---------- */
 const MESES = [
@@ -85,6 +86,10 @@ export default function Home() {
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [sortColumn, setSortColumn] = useState<"title" | "count" | "percentage" | "value" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+  // Drill-down states
+  const [drillDownOpen, setDrillDownOpen] = useState(false);
+  const [activeDrillDown, setActiveDrillDown] = useState<{ title: string; patients: AppointmentDetail[] } | null>(null);
 
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
 
@@ -241,7 +246,7 @@ export default function Home() {
 
 
   /* ---------- Data Processing Logic (Unified) ---------- */
-  const displayData = useMemo<CardData[]>(() => {
+  const filteredAppointments = useMemo(() => {
     if (!filter) return [];
 
     let appointments: any[] = [];
@@ -250,51 +255,52 @@ export default function Home() {
 
     // 1. Traverse Data
     for (const unit in patientData) {
-      if (filterCategory === 'unidade' && filterValue && filterValue !== 'all' && unit !== filterValue) continue;
-
       for (const date in patientData[unit]) {
-        const apptYear = obterAno(date);
         const apptMonthStr = obterNomeMes(date);
-        let include = false;
+        const apptYear = obterAno(date);
 
-        if (statType === 'historico') {
-          if (filterYear === null || apptYear === filterYear) include = true;
-        } else {
-          if (filterMonthStr) {
-            if (apptMonthStr === filterMonthStr) include = true;
+        const hours = patientData[unit][date];
+        for (const time in hours) {
+          let include = false;
+
+          if (statType === 'historico') {
+            if (filterYear === null || apptYear === filterYear) include = true;
           } else {
-            if (apptYear === filterYear) include = true;
+            if (filterMonthStr) {
+              if (apptMonthStr === filterMonthStr) include = true;
+            } else if (filterYear) {
+              if (apptYear === filterYear) include = true;
+            }
           }
-        }
 
-        if (include) {
-          const hours = patientData[unit][date];
-          for (const time in hours) {
-            const app = { ...hours[time], _unit: unit, _date: date };
+          if (include) {
+            const app = { ...hours[time], _unit: unit, _date: date, _time: time };
 
             if (filterCategory === 'convenio' && filterValue && filterValue !== 'all' && app.convenio !== filterValue) continue;
             if (filterCategory === 'exame' && filterValue && filterValue !== 'all') {
               if (!Array.isArray(app.exames) || !app.exames.includes(filterValue)) continue;
             }
             if (filterCategory === 'faixaEtaria' && filterValue && filterValue !== 'all') {
-              let bucket = "Desconhecido";
-              if (app.nascimento) {
-                try {
-                  const birthDate = parse(app.nascimento, 'dd/MM/yyyy', new Date());
-                  const age = differenceInYears(new Date(), birthDate);
-                  if (age <= 12) bucket = "Criança";
-                  else if (age <= 17) bucket = "Adolescente";
-                  else if (age <= 59) bucket = "Adulto";
-                  else bucket = "Idoso";
-                } catch { }
-              }
+              const age = calculateAge(app.nascimento);
+              let bucket = "Idoso";
+              if (age <= 12) bucket = "Criança";
+              else if (age <= 17) bucket = "Adolescente";
+              else if (age <= 59) bucket = "Adulto";
               if (bucket !== filterValue) continue;
             }
+            if (filterCategory === 'unidade' && filterValue && filterValue !== 'all' && app._unit !== filterValue) continue;
+
             appointments.push(app);
           }
         }
       }
     }
+    return appointments;
+  }, [patientData, filter, statType, filterCategory, filterValue]);
+
+  const displayData = useMemo<CardData[]>(() => {
+    const appointments = filteredAppointments;
+    if (appointments.length === 0) return [];
 
     // 2. Aggregate
     if (statType === "historico") {
@@ -724,6 +730,7 @@ export default function Home() {
         const ranges = { "Criança": "0-12 anos", "Adolescente": "13-17 anos", "Adulto": "18-59 anos", "Idoso": "60+ anos" };
         return Object.keys(faixaCounts)
           .sort((a, b) => faixaCounts[b] - faixaCounts[a])
+          .slice(0, 10)
           .map(faixa => {
             const breakdown = faixaExames[faixa] || {};
             const top3 = Object.entries(breakdown)
@@ -919,7 +926,7 @@ export default function Home() {
         }));
     }
     return [];
-  }, [patientData, filter, statType, unitConfig, filterCategory, filterValue]);
+  }, [filteredAppointments, statType, unitConfig, filterCategory, filterValue]);
 
   const totalPacientes = displayData.reduce((acc, item) => acc + item.count, 0);
 
@@ -969,10 +976,75 @@ export default function Home() {
     }
   };
 
+  const calculateAge = (nascimento: string) => {
+    if (!nascimento) return 0;
+    try {
+      const birthDate = parse(nascimento, 'dd/MM/yyyy', new Date());
+      return differenceInYears(new Date(), birthDate);
+    } catch {
+      return 0;
+    }
+  };
+
+  const getAgeBucket = (nascimento: string) => {
+    const age = calculateAge(nascimento);
+    if (age <= 12) return "Criança";
+    if (age <= 17) return "Adolescente";
+    if (age <= 59) return "Adulto";
+    return "Idoso";
+  };
+
+  // Function to handle card click for detailed records
+  const handleCardDrillDown = (item: CardData) => {
+    // Only drill down if it's a simple card (no breakdown)
+    const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
+    if (hasBreakdown) return;
+
+    // Filter appointments for this item from filteredAppointments
+    let matches: any[] = [];
+    if (statType === "unidades") {
+      matches = filteredAppointments.filter((app: any) => app._unit === item.id);
+    } else if (statType === "convenios") {
+      matches = filteredAppointments.filter((app: any) => (app.convenio || "Não informado") === item.id);
+    } else if (statType === "faixaEtaria") {
+      matches = filteredAppointments.filter((app: any) => getAgeBucket(app.nascimento) === item.id);
+    } else if (statType === "exames") {
+      matches = filteredAppointments.filter((app: any) => Array.isArray(app.exames) && app.exames.includes(item.id));
+    } else if (statType === "historico") {
+      matches = filteredAppointments.filter((app: any) => obterNomeMes(app._date) === item.id);
+    }
+
+    const details: AppointmentDetail[] = matches.map((app: any) => ({
+      nome: app.nomePaciente || app.nome || "Não informado",
+      nascimento: app.nascimento || "-",
+      idade: calculateAge(app.nascimento),
+      convenio: app.convenio || "Não informado",
+      unidade: app._unit,
+      unidadeName: unitConfig?.[app._unit]?.empresa ?? app._unit,
+      dataConsulta: app._date.split("-").reverse().join("/"),
+      horario: app._time || "-",
+      exames: Array.isArray(app.exames) ? app.exames : [],
+      telefone: app.telefone || ""
+    }));
+
+    setActiveDrillDown({ title: item.title, patients: details });
+    setDrillDownOpen(true);
+  };
+
   /* ---------- UI ---------- */
   return (
     <SidebarLayout unit={selectedUnit}>
       <div className="flex flex-col items-center px-6 pb-6 pt-2 md:px-10 md:pb-10 md:pt-4 lg:px-16 lg:pb-16 lg:pt-6 bg-gradient-to-b from-blue-100 via-white to-blue-100 min-h-screen w-full relative overflow-auto">
+
+        {/* Patient Details Sheet (Drill-down) */}
+        {activeDrillDown && (
+          <PatientDetailsSheet
+            isOpen={drillDownOpen}
+            onClose={() => setDrillDownOpen(false)}
+            title={activeDrillDown.title}
+            patients={activeDrillDown.patients}
+          />
+        )}
 
         {/* Top section: Header, Logo, and Mode Toggle */}
         <section className="w-full flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-6">
@@ -1194,7 +1266,9 @@ export default function Home() {
                   {displayData.map((item) => (
                     <Card
                       key={item.id}
-                      className="w-full max-w-sm rounded-xl shadow-lg bg-white p-2.5 transition-transform duration-200 hover:scale-105 relative"
+                      className={`w-full max-w-sm rounded-xl shadow-lg bg-white p-2.5 transition-transform duration-200 relative 
+                        ${!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades) ? "cursor-pointer hover:scale-105" : ""}`}
+                      onClick={() => handleCardDrillDown(item)}
                     >
                       <div className="relative z-10 flex flex-col h-full">
                         <CardHeader className="p-0 pb-2 flex flex-row items-start justify-between space-y-0 w-full">

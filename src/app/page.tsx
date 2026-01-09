@@ -3,6 +3,7 @@
 import SidebarLayout from "@/components/layout/sidebar-layout";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { DollarSign, Plus, Landmark, Users, FileText, Activity, MapPin, BarChart3, LayoutGrid, List } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue } from "firebase/database";
@@ -68,6 +69,7 @@ interface CardData {
    PÁGINA INICIAL MERGED (HOME + STATISTICS)
    ============================================================= */
 export default function Home() {
+  const router = useRouter();
   /* ---------- state ---------- */
   const [patientData, setPatientData] = useState<Record<string, Record<string, any>>>({});
   const [unitConfig, setUnitConfig] = useState<Record<string, { bairro?: string; empresa?: string }>>({});
@@ -996,7 +998,15 @@ export default function Home() {
 
   // Function to handle card click for detailed records
   const handleCardDrillDown = (item: CardData) => {
-    // Only drill down if it's a simple card (no breakdown)
+    // If NOT in analytic mode, navigate to unit calendar if it's a unit card
+    if (dashboardMode === 'simple') {
+      if (statType === 'unidades') {
+        router.push(`/visualizar-agendamentos?unidade=${encodeURIComponent(item.id)}&filtro=${encodeURIComponent(filter)}`);
+      }
+      return;
+    }
+
+    // In Analytic Mode: Only drill down if there's no breakdown
     const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
     if (hasBreakdown) return;
 
@@ -1263,126 +1273,129 @@ export default function Home() {
 
               {viewMode === "cards" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 justify-items-center animate-in fade-in zoom-in-95 duration-300">
-                  {displayData.map((item) => (
-                    <Card
-                      key={item.id}
-                      className={`w-full max-w-sm rounded-xl shadow-lg bg-white p-2.5 transition-transform duration-200 relative 
-                        ${!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades) ? "cursor-pointer hover:scale-105" : ""}`}
-                      onClick={() => handleCardDrillDown(item)}
-                    >
-                      <div className="relative z-10 flex flex-col h-full">
-                        <CardHeader className="p-0 pb-2 flex flex-row items-start justify-between space-y-0 w-full">
-                          <div className="flex flex-col truncate pr-2">
-                            <span className="text-sm font-semibold text-blue-700 truncate" title={item.title}>{item.title}</span>
-                            <span className="text-[10px] text-gray-500 truncate">{item.subtitle}</span>
-                          </div>
+                  {displayData.map((item) => {
+                    const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
+                    const isClickable = dashboardMode === 'simple' || !hasBreakdown;
 
-                          {/* Default Home Actions: Render ONLY if Unidades + Simple */}
-                          {statType === "unidades" && dashboardMode === 'simple' && (
-                            <div className="flex flex-col items-center space-y-1">
-                              <div className="relative z-20">
-                                <Link href={`/novo-agendamento?unidade=${encodeURIComponent(item.id)}`} className="shrink-0">
-                                  <Plus className="h-4 w-4 text-green-600 hover:opacity-80 transition" />
+                    return (
+                      <Card
+                        key={item.id}
+                        className={`w-full max-w-sm rounded-xl shadow-lg bg-white p-2.5 transition-transform duration-200 relative 
+                            ${isClickable ? "cursor-pointer hover:scale-105" : ""}`}
+                        onClick={() => handleCardDrillDown(item)}
+                      >
+                        <div className="relative z-10 flex flex-col h-full">
+                          <CardHeader className="p-0 pb-2 flex flex-row items-start justify-between space-y-0 w-full">
+                            <div className="flex flex-col truncate pr-2">
+                              <span className="text-sm font-semibold text-blue-700 truncate" title={item.title}>{item.title}</span>
+                              <span className="text-[10px] text-gray-500 truncate">{item.subtitle}</span>
+                            </div>
+
+                            {/* Default Home Actions: Render ONLY if Unidades + Simple */}
+                            {statType === "unidades" && dashboardMode === 'simple' && (
+                              <div className="flex flex-col items-center space-y-2 relative z-20" onClick={(e) => e.stopPropagation()}>
+                                <Link
+                                  href={`/novo-agendamento?unidade=${encodeURIComponent(item.id)}`}
+                                  className="shrink-0 p-1.5 bg-green-50/50 hover:bg-green-100/80 hover:scale-110 shadow-sm border border-green-100 rounded-full transition-all duration-200 group/btn"
+                                  title="Novo Agendamento"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Plus className="h-4 w-4 text-green-600 group-hover/btn:text-green-700" />
                                 </Link>
+                                <Sheet>
+                                  <SheetTrigger asChild>
+                                    <button
+                                      className="shrink-0 p-1.5 bg-green-50/50 hover:bg-green-100/80 hover:scale-110 shadow-sm border border-green-100 rounded-full transition-all duration-200 group/btn"
+                                      title="Ver Financeiro"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <DollarSign className="h-4 w-4 text-green-600 group-hover/btn:text-green-700" />
+                                    </button>
+                                  </SheetTrigger>
+                                  <SheetContent className="sm:max-w-lg">
+                                    <SheetHeader>
+                                      <SheetTitle className="flex items-center text-xl font-semibold text-gray-800">
+                                        <Landmark className="mr-2 h-5 w-5 text-blue-600" />
+                                        <span>Financeiro - {item.title}</span>
+                                      </SheetTitle>
+                                    </SheetHeader>
+                                    <FinancialSheetContent unit={item.id} patientData={patientData} initialMonth={filter} unitConfig={unitConfig} />
+                                  </SheetContent>
+                                </Sheet>
                               </div>
-                              <Sheet>
-                                <SheetTrigger asChild>
-                                  <button className="shrink-0">
-                                    <DollarSign className="h-4 w-4 text-green-600 hover:opacity-80 transition" />
-                                  </button>
-                                </SheetTrigger>
-                                <SheetContent className="sm:max-w-lg">
-                                  <SheetHeader>
-                                    <SheetTitle className="flex items-center text-xl font-semibold text-gray-800">
-                                      <Landmark className="mr-2 h-5 w-5 text-blue-600" />
-                                      <span>Financeiro - {item.title}</span>
-                                    </SheetTitle>
-                                  </SheetHeader>
-                                  <FinancialSheetContent unit={item.id} patientData={patientData} initialMonth={filter} unitConfig={unitConfig} />
-                                </SheetContent>
-                              </Sheet>
-                            </div>
-                          )}
+                            )}
 
-                          {/* If NOT Unidades, show Icon */}
-                          {statType !== "unidades" && (
-                            <div className="shrink-0 opacity-80">{item.icon}</div>
-                          )}
-                        </CardHeader>
+                            {/* If NOT Unidades, show Icon */}
+                            {statType !== "unidades" && (
+                              <div className="shrink-0 opacity-80">{item.icon}</div>
+                            )}
+                          </CardHeader>
 
-                        <CardContent className="p-0 text-center flex-grow flex flex-col justify-center mt-1">
-                          {item.topUnidades ? (
-                            <div className="flex flex-col gap-1 w-full px-1">
-                              {item.topUnidades.map((u, i) => (
-                                <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
-                                  <span className="truncate font-medium text-gray-700 max-w-[80px]" title={u.name}>{u.name}</span>
-                                  <div className="flex gap-1.5">
-                                    <span className="font-bold text-gray-900">{u.count}</span>
-                                    <span className="font-mono text-green-600">R${u.value}</span>
+                          <CardContent className="p-0 text-center flex-grow flex flex-col justify-center mt-1">
+                            {item.topUnidades ? (
+                              <div className="flex flex-col gap-1 w-full px-1">
+                                {item.topUnidades.map((u, i) => (
+                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                    <span className="truncate font-medium text-gray-700 max-w-[80px]" title={u.name}>{u.name}</span>
+                                    <div className="flex gap-1.5">
+                                      <span className="font-bold text-gray-900">{u.count}</span>
+                                      <span className="font-mono text-green-600">R${u.value}</span>
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : item.topConvenios ? (
-                            <div className="flex flex-col gap-1 w-full px-1">
-                              {item.topConvenios.map((c, i) => (
-                                <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
-                                  <span className="truncate font-medium text-gray-700 max-w-[80px]" title={c.name}>{c.name}</span>
-                                  <div className="flex gap-1.5">
-                                    <span className="font-bold text-gray-900">{c.count}</span>
-                                    <span className="font-mono text-green-600">R${c.value}</span>
+                                ))}
+                              </div>
+                            ) : item.topConvenios ? (
+                              <div className="flex flex-col gap-1 w-full px-1">
+                                {item.topConvenios.map((c, i) => (
+                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                    <span className="truncate font-medium text-gray-700 max-w-[80px]" title={c.name}>{c.name}</span>
+                                    <div className="flex gap-1.5">
+                                      <span className="font-bold text-gray-900">{c.count}</span>
+                                      <span className="font-mono text-green-600">R${c.value}</span>
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : item.topFaixas ? (
-                            <div className="flex flex-col gap-1 w-full px-1">
-                              {item.topFaixas.map((f, i) => (
-                                <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
-                                  <span className="truncate font-medium text-gray-700 max-w-[80px]" title={f.name}>{f.name}</span>
-                                  <div className="flex gap-1.5">
-                                    <span className="font-bold text-gray-900">{f.count}</span>
-                                    <span className="font-mono text-green-600">R${f.value}</span>
+                                ))}
+                              </div>
+                            ) : item.topFaixas ? (
+                              <div className="flex flex-col gap-1 w-full px-1">
+                                {item.topFaixas.map((f, i) => (
+                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                    <span className="truncate font-medium text-gray-700 max-w-[80px]" title={f.name}>{f.name}</span>
+                                    <div className="flex gap-1.5">
+                                      <span className="font-bold text-gray-900">{f.count}</span>
+                                      <span className="font-mono text-green-600">R${f.value}</span>
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : item.topExames ? (
-                            <div className="flex flex-col gap-1 w-full px-1">
-                              {item.topExames.map((e, i) => (
-                                <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
-                                  <span className="truncate font-medium text-gray-700 max-w-[80px]" title={e.name}>{e.name}</span>
-                                  <div className="flex gap-1.5">
-                                    <span className="font-bold text-gray-900">{e.count}</span>
-                                    <span className="font-mono text-green-600">R${e.value}</span>
+                                ))}
+                              </div>
+                            ) : item.topExames ? (
+                              <div className="flex flex-col gap-1 w-full px-1">
+                                {item.topExames.map((e, i) => (
+                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-1 rounded border border-gray-100">
+                                    <span className="truncate font-medium text-gray-700 max-w-[80px]" title={e.name}>{e.name}</span>
+                                    <div className="flex gap-1.5">
+                                      <span className="font-bold text-gray-900">{e.count}</span>
+                                      <span className="font-mono text-green-600">R${e.value}</span>
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
-                            </div>
-                          ) : (
-                            <>
-                              <div className="text-base font-bold text-gray-800">{item.count}</div>
-                              <div className="text-[10px] text-gray-400 mb-0.5">{statType === 'exames' ? 'Solicitações' : 'Pacientes'}</div>
-                              {item.value !== undefined ? (
-                                <div className="text-xs font-semibold text-green-600">R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
-                              ) : (
-                                <div className="text-xs font-semibold text-green-600">{((item.count / totalPacientes) * 100).toFixed(1)}%</div>
-                              )}
-                            </>
-                          )}
-                        </CardContent>
-                      </div>
-
-                      {/* Background Link - Only for Unidades (Simple/Advanced) to View Appointments */}
-                      {statType === "unidades" && (
-                        <Link
-                          href={`/visualizar-agendamentos?unidade=${encodeURIComponent(item.id)}&filtro=${encodeURIComponent(filter)}`}
-                          className="absolute inset-0 z-0"
-                          aria-label={`Visualizar agendamentos para ${item.title}`}
-                        />
-                      )}
-                    </Card>
-                  ))}
+                                ))}
+                              </div>
+                            ) : (
+                              <>
+                                <div className="text-base font-bold text-gray-800">{item.count}</div>
+                                <div className="text-[10px] text-gray-400 mb-0.5">{statType === 'exames' ? 'Solicitações' : 'Pacientes'}</div>
+                                {item.value !== undefined ? (
+                                  <div className="text-xs font-semibold text-green-600">R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
+                                ) : (
+                                  <div className="text-xs font-semibold text-green-600">{((item.count / totalPacientes) * 100).toFixed(1)}%</div>
+                                )}
+                              </>
+                            )}
+                          </CardContent>
+                        </div>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </>

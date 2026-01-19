@@ -33,6 +33,118 @@ const AVATARS = [
   "/avatars/avatar8.png",
 ];
 
+import { identifyPatientSourceAction, type SourceAnalysisResult } from "@/app/actions/ai-analysis";
+import { Sparkles, Info, BrainCircuit } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+/* 
+  Componente de Botão para Análise de Origem (Header)
+  - Dispara manual
+  - Exibe em Popover
+*/
+function PatientSourceHeaderControl({
+  patientId,
+  history
+}: {
+  patientId: string | null;
+  history: { role: string; content: string }[]
+}) {
+  const [analysis, setAnalysis] = useState<SourceAnalysisResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  // Reseta análise se mudar de paciente
+  useEffect(() => {
+    setAnalysis(null);
+    setOpen(false);
+  }, [patientId]);
+
+  const handleAnalyze = async () => {
+    if (!patientId || history.length === 0) {
+      toast.warning("Não há histórico de conversa para analisar.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await identifyPatientSourceAction(history);
+      setAnalysis(result);
+    } catch (error) {
+      console.error("Falha na análise de IA:", error);
+      toast.error("Erro ao analisar conversa.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!patientId) return null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="ml-auto bg-blue-500 hover:bg-blue-400 text-white border-none shadow-none gap-2 h-8"
+          onClick={() => {
+            if (!analysis && !loading) handleAnalyze();
+          }}
+        >
+          <BrainCircuit className="h-4 w-4" />
+          <span className="hidden sm:inline">Analisar Origem</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-0 mr-4" align="end">
+        <div className="p-4 bg-gradient-to-br from-white to-blue-50/50">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="bg-blue-100 p-1.5 rounded-md">
+              <Sparkles className="h-4 w-4 text-blue-600" />
+            </div>
+            <h4 className="font-semibold text-sm text-gray-800">IA Insight</h4>
+          </div>
+
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-6 gap-2 text-blue-600">
+              <RefreshCcw className="h-5 w-5 animate-spin" />
+              <span className="text-xs">Lendo histórico...</span>
+            </div>
+          ) : analysis ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-blue-800 uppercase">
+                  {analysis.source === "Indefinido" ? "Não Identificado" : analysis.source}
+                </span>
+                {analysis.source !== "Indefinido" && (
+                  <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                    Confiança {analysis.confidence}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed bg-white/50 p-2 rounded border border-blue-100">
+                {analysis.reason}
+              </p>
+              <div className="pt-2 flex justify-end">
+                <Button variant="ghost" onClick={handleAnalyze} className="h-6 px-2 text-[10px] text-gray-400 hover:text-blue-600">
+                  <RefreshCcw className="h-3 w-3 mr-1" /> Reanalisar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-center py-4">
+              <p className="text-xs text-gray-500 mb-3">
+                Clique para identificar como este paciente conheceu a clínica.
+              </p>
+              <Button size="sm" onClick={handleAnalyze} className="w-full bg-blue-600 hover:bg-blue-700 h-8">
+                Iniciar Análise
+              </Button>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function EnviarMensagemComponent() {
   const router = useRouter();
   /* ---------- state ---------- */
@@ -300,11 +412,21 @@ function EnviarMensagemComponent() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <MessagesSquare className="mr-2 h-5 w-5" />
-            <h1 className="text-base font-medium">Conversa</h1>
+            <h1 className="text-base font-medium mr-4">Conversa</h1>
+
+            {/* AI Control in Header */}
+            <PatientSourceHeaderControl
+              patientId={selectedPatient}
+              history={conversationHistory}
+            />
           </header>
 
-          {/* histórico */}
-          <section className="flex-1 overflow-y-auto p-4 bg-blue-50">
+          {/* ========================================================================================= */}
+          {/* ÁREA DE CONVERSA */}
+          {/* ========================================================================================= */}
+          <section className="flex-1 overflow-y-auto p-4 bg-blue-50 relative"> {/* added relative for positioning if needed */}
+
+
             <div className="space-y-3">
               {conversationHistory.map((m, i) => (
                 <div

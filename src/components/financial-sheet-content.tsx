@@ -134,6 +134,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
   }, [patientData, unit, selectedMonth]);
 
   const calculateAge = (birthDate: string): number | null => {
+    if (!birthDate) return null;
     let date = parseISO(birthDate);
     if (!dateFnsIsValid(date)) {
       date = dateFnsParse(birthDate, "dd/MM/yyyy", new Date());
@@ -446,7 +447,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="h-[calc(100vh-200px)]">
+          <div className="h-[calc(100vh-200px)] overflow-y-auto p-1">
             {appointmentToReschedule && (
               <PatientForm
                 initialData={appointmentToReschedule}
@@ -457,7 +458,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
                 firebaseBase={getFirebasePathBase()}
               />
             )}
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -471,14 +472,14 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
             </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="h-[calc(100vh-200px)]">
+          <div className="h-[calc(100vh-200px)] overflow-y-auto p-1">
             <PatientForm
               onRescheduleComplete={() => {
                 setIsNewAppointmentFormOpen(false);
               }}
               firebaseBase={getFirebasePathBase()}
             />
-          </ScrollArea>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

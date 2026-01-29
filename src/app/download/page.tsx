@@ -17,6 +17,7 @@ interface DownloadOption {
     id: string;
     label: string;
     pathSuffix: string;
+    fileName: string;
 }
 
 const AVAILABLE_FILES: DownloadOption[] = [
@@ -25,16 +26,19 @@ const AVAILABLE_FILES: DownloadOption[] = [
         label: "IA - Subespecialidades",
         // Path atualizado conforme solicitado
         pathSuffix: "/agendamentoWhatsApp/configuracoes/definicoesIA/outros/agenteSubespecialidade",
+        fileName: "promptSubespecialidade"
     },
     {
         id: "agenteAtendimento",
         label: "IA - Atendimento",
         pathSuffix: "/agendamentoWhatsApp/configuracoes/definicoesIA/agenteAtendimento",
+        fileName: "promptAtendimento"
     },
     {
         id: "agenteExtracaoInfConversa",
         label: "IA - Extração",
         pathSuffix: "/agendamentoWhatsApp/configuracoes/definicoesIA/agenteExtracaoInfConversa",
+        fileName: "promptExtracao"
     },
 ];
 
@@ -174,7 +178,7 @@ export default function DownloadPage() {
             return JSON.stringify(data, null, 2);
         }
 
-        return definitions.join("\n\n--------------------------------------------------\n\n");
+        return definitions.join("\n\n");
     };
 
     const handleUnifiedDownload = async () => {
@@ -293,6 +297,23 @@ export default function DownloadPage() {
         URL.revokeObjectURL(url);
     }
 
+    const renderMessageContent = (content: any) => {
+        if (typeof content === 'string') return content;
+        if (Array.isArray(content)) {
+            return content.map((part: any) => {
+                if (typeof part === 'string') return part;
+                if (part.type === 'text') return part.text;
+                // Ignorar imagens ou outros tipos na preview para não quebrar
+                return '';
+            }).join(' ');
+        }
+        if (typeof content === 'object' && content !== null) {
+            if (content.text) return content.text;
+            return JSON.stringify(content);
+        }
+        return String(content);
+    }
+
     return (
         <SidebarLayout unit={selectedUnit}>
             <div className="flex flex-col p-6 min-h-screen w-full bg-gray-50/50">
@@ -328,12 +349,12 @@ export default function DownloadPage() {
                         >
                             {isDownloading ? (
                                 <>
-                                    <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
+                                    <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2" />
                                     Baixando...
                                 </>
                             ) : (
                                 <>
-                                    <Download className="mr-2 h-5 w-5" />
+                                    <Download className="mr-2 h-4 w-4" />
                                     {/* Texto Dinâmico */}
                                     {selectedFiles.length > 0 && includeConversation && searchStatus === "found" ? "Baixar Tudo" :
                                         selectedFiles.length > 0 ? "Baixar Selecionados" :
@@ -459,7 +480,7 @@ export default function DownloadPage() {
                                             {previewMessages.map((msg, idx) => (
                                                 <div key={idx} className={`p-2 rounded border ${msg.role === 'assistant' ? 'bg-blue-100 border-blue-200 ml-4 rounded-tr-none' : 'bg-white border-slate-200 mr-4 rounded-tl-none'}`}>
                                                     <strong className="block text-[10px] text-slate-400 mb-0.5">{msg.role === 'assistant' ? '🤖 Atendente' : '👤 Paciente'}</strong>
-                                                    <span>{msg.content}</span>
+                                                    <span>{renderMessageContent(msg.content)}</span>
                                                 </div>
                                             ))}
                                         </div>

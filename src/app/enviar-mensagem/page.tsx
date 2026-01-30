@@ -440,7 +440,23 @@ function EnviarMensagemComponent() {
                       : "bg-blue-600 text-white"
                       }`}
                   >
-                    {m.content}
+                    {(() => {
+                      const content = m.content;
+                      if (typeof content === 'string') return content;
+                      if (Array.isArray(content)) {
+                        return content.map((part: any) => {
+                          if (typeof part === 'string') return part;
+                          if (part.type === 'text') return part.text;
+                          return '';
+                        }).join(' ');
+                      }
+                      if (typeof content === 'object' && content !== null) {
+                        // @ts-ignore
+                        if (content.text) return content.text;
+                        return JSON.stringify(content);
+                      }
+                      return String(content);
+                    })()}
                   </div>
                 </div>
               ))}

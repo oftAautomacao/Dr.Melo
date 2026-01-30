@@ -368,7 +368,7 @@ export default function Home() {
           return {
             id: unit,
             title: unitConfig?.[unit]?.empresa ?? unit,
-            subtitle: unitConfig?.[unit]?.bairro ?? "Unidade",
+            subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit],
             value: unitCounts[unit] * 30,
             icon: <MapPin className="h-5 w-5 text-blue-500" />,
@@ -403,7 +403,7 @@ export default function Home() {
           return {
             id: unit,
             title: unitConfig?.[unit]?.empresa ?? unit,
-            subtitle: unitConfig?.[unit]?.bairro ?? "Unidade",
+            subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit],
             value: unitCounts[unit] * 30,
             icon: <MapPin className="h-5 w-5 text-blue-500" />,
@@ -439,7 +439,7 @@ export default function Home() {
           return {
             id: unit,
             title: unitConfig?.[unit]?.empresa ?? unit,
-            subtitle: unitConfig?.[unit]?.bairro ?? "Unidade",
+            subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit],
             value: unitCounts[unit] * 30,
             icon: <MapPin className="h-5 w-5 text-blue-500" />,
@@ -460,7 +460,7 @@ export default function Home() {
       return entries.map(unit => ({
         id: unit,
         title: unitConfig?.[unit]?.empresa ?? unit,
-        subtitle: unitConfig?.[unit]?.bairro ?? "Unidade",
+        subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
         count: counts[unit],
         value: counts[unit] * 30,
         icon: <MapPin className="h-5 w-5 text-blue-500" />
@@ -587,7 +587,6 @@ export default function Home() {
       });
       return Object.entries(counts)
         .sort(([, a], [, b]) => b - a)
-        .slice(0, 10)
         .map(([name, count]) => ({
           id: name,
           title: name,
@@ -760,7 +759,6 @@ export default function Home() {
 
         return Object.keys(exameCounts)
           .sort((a, b) => exameCounts[b] - exameCounts[a])
-          .slice(0, 10)
           .map(exame => {
             const breakdown = exameUnidades[exame] || {};
             const top3 = Object.entries(breakdown)
@@ -802,7 +800,6 @@ export default function Home() {
 
         return Object.keys(exameCounts)
           .sort((a, b) => exameCounts[b] - exameCounts[a])
-          .slice(0, 10)
           .map(exame => {
             const breakdown = exameConvenios[exame] || {};
             const top3 = Object.entries(breakdown)
@@ -841,7 +838,6 @@ export default function Home() {
 
         return Object.keys(exameCounts)
           .sort((a, b) => exameCounts[b] - exameCounts[a])
-          .slice(0, 10)
           .map(exame => {
             const breakdown = exameFaixas[exame] || {};
             const top3 = Object.entries(breakdown)
@@ -871,7 +867,6 @@ export default function Home() {
       });
       return Object.entries(counts)
         .sort(([, a], [, b]) => b - a)
-        .slice(0, 10)
         .map(([name, count]) => ({
           id: name,
           title: name,
@@ -1020,7 +1015,7 @@ export default function Home() {
                 <Select value={statType} onValueChange={(v) => setStatType(v as StatType)}>
                   <SelectTrigger className="w-full sm:w-[160px] bg-white"><SelectValue placeholder="Tipo" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unidades">Unidades</SelectItem>
+                    <SelectItem value="unidades">{selectedUnit === 'OFT/45' ? 'Médicos' : 'Unidades'}</SelectItem>
                     <SelectItem value="convenios">Convênios</SelectItem>
                     <SelectItem value="faixaEtaria">Faixa Etária</SelectItem>
                     <SelectItem value="exames">Exames</SelectItem>
@@ -1034,7 +1029,7 @@ export default function Home() {
                 <Select value={filterCategory} onValueChange={(v: any) => setFilterCategory(v)}>
                   <SelectTrigger className="w-full sm:w-[150px] bg-white"><SelectValue placeholder="Categoria" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unidade">Unidade</SelectItem>
+                    <SelectItem value="unidade">{selectedUnit === 'OFT/45' ? 'Médico' : 'Unidade'}</SelectItem>
                     <SelectItem value="convenio">Convênio</SelectItem>
                     <SelectItem value="faixaEtaria">Faixa Etária</SelectItem>
                     <SelectItem value="exame">Exame</SelectItem>
@@ -1342,7 +1337,7 @@ export default function Home() {
           {!loading && displayData.length > 0 && (
             <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-6 sm:gap-12 p-4 bg-gray-50/50 rounded-lg border border-gray-100">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total de Pacientes:</span>
+                <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">{statType === 'exames' ? 'Total de Exames:' : 'Total de Pacientes:'}</span>
                 <span className="text-base font-bold text-blue-900">{totalPacientes}</span>
               </div>
               {(statType === 'unidades' || statType === 'historico') && (

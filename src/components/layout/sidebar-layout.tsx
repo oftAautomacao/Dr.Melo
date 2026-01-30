@@ -40,10 +40,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }
             <MessageSquareText className="mr-3 h-5 w-5" /> {/* Ícone de Mensagem */}
             Enviar Mensagem Paciente
           </Link>
-          <Link href="/whastsapp" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <WhatsAppIcon className="mr-3 h-5 w-5" />
-            WhastsApp
-          </Link>
+
           <Link href="/download" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <Download className="mr-3 h-5 w-5" /> {/* Ícone de Download */}
             Download

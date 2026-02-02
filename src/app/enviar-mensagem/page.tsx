@@ -1,11 +1,10 @@
 "use client";
 
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import SidebarLayout from '@/components/layout/sidebar-layout';
 import { useState, useEffect, useRef, Suspense, useCallback } from "react";
-import { useSearchParams } from 'next/navigation';
-import { MessagesSquare, RefreshCcw, Send, ArrowLeft } from "lucide-react";
+import { MessagesSquare, RefreshCcw, Send, ArrowLeft, Sparkles, Info, BrainCircuit } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getFirestoreInstance } from "@/lib/firebase";
@@ -34,8 +33,8 @@ const AVATARS = [
 ];
 
 import { identifyPatientSourceAction, type SourceAnalysisResult } from "@/app/actions/ai-analysis";
-import { Sparkles, Info, BrainCircuit } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
 
 /* 
   Componente de Botão para Análise de Origem (Header)
@@ -162,7 +161,7 @@ function EnviarMensagemComponent() {
   const [patientList, setPatientList] = useState<string[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<
-    { content: string; role: "user" | "assistant" }[]
+    { content: any; role: "user" | "assistant" }[]
   >([]);
   const [messageContent, setMessageContent] = useState("");
   const [manualSelection, setManualSelection] = useState(false);

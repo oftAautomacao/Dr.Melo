@@ -51,6 +51,7 @@ import {
   PlusCircle,
   Sparkle,
   Eraser,
+  CalendarPlus,
 } from "lucide-react";
 import WhatsAppIcon from "@/components/ui/whatsapp-icon";
 import InternalChatIcon from "@/components/ui/internal-chat-icon";
@@ -475,7 +476,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                     variant="destructive"
                     className="mr-2 w-4 h-4 rounded-full bg-destructive/20 text-destructive border border-destructive"
                   />
-                  Feriados nacionais
+                  Feriados
                 </p>
                 <p className="flex items-center">
                   <Badge className="mr-2 w-4 h-4 rounded-full bg-blue-100 text-blue-700" />
@@ -522,7 +523,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                         <Card className="mb-3 bg-destructive/10 border-destructive">
                           <CardHeader className="pb-2 pt-3">
                             <CardTitle className="text-md text-destructive flex items-center">
-                              <BellRing className="mr-2 h-5 w-5" /> Feriado Nacional
+                              <BellRing className="mr-2 h-5 w-5" /> Feriado
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="text-sm space-y-1 text-destructive/90">
@@ -840,7 +841,10 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       <Dialog open={isNewAppointmentDialogOpen} onOpenChange={setIsNewAppointmentDialogOpen}>
         <DialogContent className="sm:max-w-[425px] md:max-w-2xl lg:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Novo Agendamento</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarPlus className="h-6 w-6 text-primary" />
+              Novo Agendamento
+            </DialogTitle>
             <DialogDescription>
               Novo agendamento para o dia {selectedDate ? format(selectedDate, "dd/MM/yyyy") : ""} na unidade {selectedUnit?.replace(/([A-Z])/g, " $1").trim()}.
             </DialogDescription>

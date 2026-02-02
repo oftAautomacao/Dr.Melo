@@ -420,7 +420,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                   <Badge
                     className="mr-2 w-4 h-4 rounded-full bg-amber-100 text-amber-900 border border-amber-400"
                   />
-                  Feriados nacionais
+                  Feriados
                 </p>
                 <p className="flex items-center">
                   <Badge className="mr-2 w-4 h-4 rounded-full bg-red-100 text-red-700" />
@@ -460,7 +460,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                         <Card className="mb-3 bg-amber-50 border-amber-300">
                           <CardHeader className="pb-2 pt-3">
                             <CardTitle className="text-md text-amber-900 flex items-center">
-                              <BellRing className="mr-2 h-5 w-5 text-amber-600" /> Feriado Nacional
+                              <BellRing className="mr-2 h-5 w-5 text-amber-600" /> Feriado
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="text-sm space-y-1 text-amber-900/90">

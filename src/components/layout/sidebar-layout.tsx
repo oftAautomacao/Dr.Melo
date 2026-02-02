@@ -24,10 +24,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }
             <Home className="mr-3 h-5 w-5" /> {/* Ícone */}
             Início
           </Link>
-          <Link href="/novo-agendamento" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <PlusCircle className="mr-3 h-5 w-5" /> {/* Ícone */}
-            Novo Agendamento
-          </Link>
+
           <Link href="/visualizar-agendamentos" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <CalendarDays className="mr-3 h-5 w-5" /> {/* Ícone */}
             Agendamentos
@@ -38,7 +35,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }
           </Link>
           <Link href="/enviar-mensagem" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <MessageSquareText className="mr-3 h-5 w-5" /> {/* Ícone de Mensagem */}
-            Enviar Mensagem Paciente
+            Conversas
           </Link>
 
           <Link href="/download" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">

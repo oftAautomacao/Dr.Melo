@@ -217,8 +217,8 @@ export default function DownloadPage() {
                         // Extrai apenas a definição e formata
                         const formattedContent = extractDefinition(rawData);
 
-                        // Nome sem data: [Unidade]_[NomeArquivo].txt
-                        const fileName = `${firebasePathBase.replace("/", "-")}_${fileOption.label.replace(/\s+/g, '_')}`;
+                        // Nome exato conforme solicitado (ignora prefixo da unidade)
+                        const fileName = fileOption.fileName;
 
                         downloadText(formattedContent, fileName);
                         successCount++;
@@ -253,9 +253,9 @@ export default function DownloadPage() {
 
                     const filtered = history.filter((m: any) => m.role === "user" || m.role === "assistant");
 
-                    // Download como JSON puro, nome sem telefone: "Conversa_Paciente" (ou só Conversa)
+                    // Download como JSON puro, nome fixo: "conversa"
                     // O usuário pediu "para conversa não deve vir o telefone"
-                    downloadJson(filtered, `Conversa_Paciente`);
+                    downloadJson(filtered, `conversa`);
                     successCount++;
                 }
             }

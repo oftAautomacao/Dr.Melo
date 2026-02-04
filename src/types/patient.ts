@@ -78,6 +78,7 @@ export interface AppointmentFirebaseRecord {
   unidade: string;
   telefone: string;
   Observacoes?: string;
+  obs?: string[]; // Fallback for legacy records
   aiCategorization?: AICategorization;
   bairro?: string;
   enviarMsgSecretaria?: boolean;

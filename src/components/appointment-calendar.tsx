@@ -105,6 +105,7 @@ const EmptyMsg: React.FC<{ msg: string }> = ({ msg }) => (
 export interface CalendarAppointment {
   id: string;
   nomePaciente: string;
+  cpf?: string;
   nascimento: string;
   dataAgendamento: string; // ISO YYYY-MM-DD
   horario: string; // HH:mm
@@ -312,6 +313,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 byUnit[unit].push({
                   id: `${unit}-${dateKey}-${timeKey}`,
                   nomePaciente: record.nomePaciente,
+                  cpf: record.cpf,
                   nascimento: record.nascimento,
                   dataAgendamento: dateKey,
                   horario: timeKey,
@@ -320,7 +322,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   motivacao: record.motivacao,
                   unidade: base === "OFT/45" ? unit : record.unidade,
                   telefone: record.telefone,
-                  Observacoes: record.Observacoes,
+                  Observacoes: record.Observacoes || (record.obs && record.obs.length > 0 ? record.obs[0] : ""),
                   aiCategorization: record.aiCategorization,
                 });
               });
@@ -576,6 +578,11 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                       <p>
                                         <strong>Horário:</strong> {app.horario}
                                       </p>
+                                      {app.cpf && (
+                                        <p>
+                                          <strong>CPF:</strong> {app.cpf}
+                                        </p>
+                                      )}
                                       <p className="flex items-center">
                                         <strong>Telefone:</strong>
                                         <a

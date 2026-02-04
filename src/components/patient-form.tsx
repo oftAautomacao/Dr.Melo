@@ -153,9 +153,11 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         local: initialData.unidade ?? "",
         telefone: initialData.telefone ?? "",
         observacoes: initialData.Observacoes ?? "",
+        cpf: initialData.cpf ?? "",
       }
       : {
         nomePaciente: "",
+        cpf: "",
         dataNascimento: undefined,
         dataAgendamento: undefined,
         horario: "",
@@ -181,6 +183,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
   const handleClearFields = () => {
     form.setValue("dataAgendamento", "" as any);
     form.setValue("nomePaciente", "");
+    form.setValue("cpf", "");
     form.setValue("dataNascimento", "" as any);
     form.setValue("telefone", "");
     form.setValue("horario", "");
@@ -220,6 +223,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         local: initialData.unidade ?? "",
         telefone: initialData.telefone ?? "",
         observacoes: initialData.Observacoes ?? "",
+        cpf: initialData.cpf ?? "",
       };
 
       // valida datas
@@ -594,6 +598,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
               hora: initialData.horario,
               appointmentData: {
                 nomePaciente: initialData.nomePaciente,
+                cpf: initialData.cpf, // Adicionado para preservar o CPF
                 nascimento: initialData.nascimento,
                 dataAgendamento: initialData.dataAgendamento,
                 horaAgendamento: initialData.horario,

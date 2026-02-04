@@ -159,6 +159,7 @@ export async function saveAppointmentAction(
         )
         ? { aiCategorization: aiCategorizationResult }
         : {}),
+      Observacoes: v.observacoes ?? "", // Ensure Observacoes is saved
     };
 
     if (enviarMsgSecretaria !== undefined) {
@@ -253,6 +254,7 @@ export async function cancelAppointment(
     const dataToSave = {
       // Campos essenciais do agendamento original com valores padrão
       nomePaciente: record.nomePaciente ?? "Não informado",
+      cpf: record.cpf ?? null, // Adicionado para preservar o CPF
       nascimento: record.nascimento ?? "Não informado",
       dataAgendamento: record.dataAgendamento ?? data,
       horaAgendamento: record.horaAgendamento ?? hora,

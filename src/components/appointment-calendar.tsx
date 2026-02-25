@@ -585,15 +585,18 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                       )}
                                       <p className="flex items-center">
                                         <strong>Telefone:</strong>
-                                        <a
-                                          href={`https://wa.me/${app.telefone.replace(/\D/g, '')}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="ml-2 flex items-center text-primary hover:underline"
+                                        <span className="ml-2">{app.telefone}</span>
+                                        <button
+                                          type="button"
+                                          title="Copiar número"
+                                          className="ml-1 flex items-center text-green-600 hover:text-green-800 cursor-pointer"
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(app.telefone.replace(/\D/g, ''));
+                                            toast({ title: "Número copiado!", description: app.telefone });
+                                          }}
                                         >
-                                          {app.telefone}
-                                          <WhatsAppIcon className="ml-1 h-4 w-4" />
-                                        </a>
+                                          <WhatsAppIcon className="h-4 w-4" />
+                                        </button>
                                         <Link
                                           href={`/enviar-mensagem?telefone=${app.telefone.replace(/\D/g, '')}&unidade=${selectedUnit}&data=${selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}`}
                                           className="ml-2 flex items-center text-primary hover:underline"

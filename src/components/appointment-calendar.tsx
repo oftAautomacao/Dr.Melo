@@ -52,8 +52,9 @@ import {
   Sparkle,
   Eraser,
   CalendarPlus,
+  Copy,
 } from "lucide-react";
-import WhatsAppIcon from "@/components/ui/whatsapp-icon";
+
 import InternalChatIcon from "@/components/ui/internal-chat-icon";
 import { Button } from "@/components/ui/button";
 import {
@@ -589,13 +590,13 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                         <button
                                           type="button"
                                           title="Copiar número"
-                                          className="ml-1 flex items-center text-green-600 hover:text-green-800 cursor-pointer"
+                                          className="ml-1 flex items-center text-muted-foreground hover:text-primary cursor-pointer"
                                           onClick={() => {
                                             navigator.clipboard.writeText(app.telefone.replace(/\D/g, ''));
                                             toast({ title: "Número copiado!", description: app.telefone });
                                           }}
                                         >
-                                          <WhatsAppIcon className="h-4 w-4" />
+                                          <Copy className="h-4 w-4" />
                                         </button>
                                         <Link
                                           href={`/enviar-mensagem?telefone=${app.telefone.replace(/\D/g, '')}&unidade=${selectedUnit}&data=${selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}`}

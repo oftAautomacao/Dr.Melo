@@ -697,7 +697,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
               <Label className="text-sm">Motivo</Label>
-              <Select onValueChange={setCancelReason} defaultValue="Não compareceu à consulta">
+              <Select onValueChange={setCancelReason} value={cancelReason}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>

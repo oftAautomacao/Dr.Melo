@@ -342,7 +342,12 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       {/* ---------------- CONFIRMAR CANCELAMENTO ---------------- */}
       <Dialog
         open={isConfirmCancelDialogOpen}
-        onOpenChange={setIsConfirmCancelDialogOpen}
+        onOpenChange={(isOpen) => {
+          setIsConfirmCancelDialogOpen(isOpen);
+          if (!isOpen) {
+            setCancelReason("");
+          }
+        }}
       >
         <DialogContent>
           <DialogHeader>
@@ -355,7 +360,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
           <div className="grid gap-4 py-4">
             <Label className="text-sm">Motivo</Label>
-            <Select onValueChange={setCancelReason} defaultValue="">
+            <Select onValueChange={setCancelReason} value={cancelReason}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione o motivo" />
               </SelectTrigger>

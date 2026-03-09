@@ -183,6 +183,35 @@ export async function saveAppointmentAction(
       }
     }
 
+    // --- BUSCAR PREÇOS DOS EXAMES SELECIONADOS ---
+    const precos: Record<string, string> = {};
+    if (v.exames && v.exames.length > 0) {
+      try {
+        const examesConfigPath = `/${firebaseBase}/agendamentoWhatsApp/configuracoes/exames`;
+        const dbInstance = getDatabaseInstance(environment);
+        const examesSnap = await get(ref(dbInstance, examesConfigPath));
+        const examesData = examesSnap.val();
+
+        if (examesData && typeof examesData === "object") {
+          for (const exameId of v.exames) {
+            const exameInfo = examesData[exameId];
+            if (exameInfo && exameInfo.preco !== undefined) {
+              const preco = exameInfo.preco;
+              if (typeof preco === "number") {
+                // Formata número como "R$ 110,00"
+                precos[exameId] = `R$ ${preco.toFixed(2).replace(".", ",")}`;
+              } else {
+                // Mantém strings como "incluso na consulta"
+                precos[exameId] = String(preco);
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("SAVE_ACTION: Não foi possível buscar preços dos exames:", err);
+      }
+    }
+
     const pathBase = `/${firebaseBase}/agendamentoWhatsApp/operacional`;
     const agBase = `${pathBase}/consultasAgendadas`;
 
@@ -192,12 +221,14 @@ export async function saveAppointmentAction(
     updates[`${agBase}/${idxNode}/${setor}/${datePath}/${timePath}`] = {
       ...appointmentRecord,
       obs: [v.observacoes || ""],
+      ...(Object.keys(precos).length > 0 ? { precos } : {}),
     };
 
     // por telefone (organizado por data/hora)
     updates[`${agBase}/telefones/${phone}/${datePath}/${timePath}`] = {
       ...appointmentRecord,
       obs: [v.observacoes || ""],
+      ...(Object.keys(precos).length > 0 ? { precos } : {}),
     };
 
     console.log("FIREBASE_SAVE_PATHS:", updates);

@@ -115,6 +115,7 @@ export interface CalendarAppointment {
   telefone: string;
   Observacoes?: string;
   aiCategorization?: AICategorization;
+  motivoCancelamento?: string;
 }
 
 type AppointmentsByUnit = Record<string, CalendarAppointment[]>;
@@ -263,6 +264,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                   telefone: record.telefone,
                   Observacoes: record.Observacoes,
                   aiCategorization: record.aiCategorization,
+                  motivoCancelamento: (record as any).motivoCancelamento,
                 });
               });
             });
@@ -410,7 +412,6 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                 }}
                 classNames={{
                   day_selected: "bg-red-100 text-red-900 hover:bg-red-200 hover:text-red-900 focus:bg-red-100 focus:text-red-900",
-                  day_today: "bg-red-200 text-red-900 font-semibold",
                 }}
               />
 
@@ -551,9 +552,9 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                           <strong>Obs.:</strong> {app.Observacoes}
                                         </p>
                                       )}
-                                      {(app as any).motivoCancelamento && (
+                                      {app.motivoCancelamento && (
                                         <p className="text-red-700 text-sm italic mt-2">
-                                          <strong>Motivo do cancelamento:</strong> {(app as any).motivoCancelamento}
+                                          <strong>Motivo do cancelamento:</strong> {app.motivoCancelamento}
                                         </p>
                                       )}
                                     </CardContent>

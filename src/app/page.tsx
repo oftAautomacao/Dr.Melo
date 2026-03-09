@@ -361,7 +361,7 @@ export default function Home() {
         return Object.keys(unitCounts).sort().map(unit => {
           const breakdown = unitConvenios[unit] || {};
           const top3 = Object.entries(breakdown)
-            .sort(([, a], [, b]) => b - a)
+            .sort((a,b) => b[1] - a[1])
             .slice(0, 3)
             .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -396,7 +396,7 @@ export default function Home() {
           const breakdown = unitFaixas[unit] || {};
           // Show Top 3 Age Groups by count
           const faixas = Object.entries(breakdown)
-            .sort(([, a], [, b]) => b - a)
+            .sort((a, b) => b[1] - a[1])
             .slice(0, 3)
             .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -432,7 +432,7 @@ export default function Home() {
         return Object.keys(unitCounts).sort().map(unit => {
           const breakdown = unitExames[unit] || {};
           const top3 = Object.entries(breakdown)
-            .sort(([, a], [, b]) => b - a)
+            .sort((a,b) => b[1] - a[1])
             .slice(0, 3)
             .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -488,7 +488,7 @@ export default function Home() {
           .map(convenio => {
             const breakdown = convenioUnidades[convenio] || {};
             const top3 = Object.entries(breakdown)
-              .sort(([, a], [, b]) => b - a)
+              .sort((a,b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
@@ -527,7 +527,7 @@ export default function Home() {
           .map(convenio => {
             const breakdown = convenioFaixas[convenio] || {};
             const top3 = Object.entries(breakdown)
-              .sort(([, a], [, b]) => b - a)
+              .sort((a,b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -564,7 +564,7 @@ export default function Home() {
           .map(convenio => {
             const breakdown = convenioExames[convenio] || {};
             const top3 = Object.entries(breakdown)
-              .sort(([, a], [, b]) => b - a)
+              .sort((a,b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -586,7 +586,7 @@ export default function Home() {
         counts[conv] = (counts[conv] || 0) + 1;
       });
       return Object.entries(counts)
-        .sort(([, a], [, b]) => b - a)
+        .sort((a,b) => b[1] - a[1])
         .map(([name, count]) => ({
           id: name,
           title: name,
@@ -620,7 +620,7 @@ export default function Home() {
           .map(faixa => {
             const breakdown = faixaUnidades[faixa] || {};
             const top3 = Object.entries(breakdown)
-              .sort(([, a], [, b]) => b - a)
+              .sort((a,b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
@@ -662,7 +662,7 @@ export default function Home() {
           .map(faixa => {
             const breakdown = faixaConvenios[faixa] || {};
             const top3 = Object.entries(breakdown)
-              .sort(([, a], [, b]) => b - a)
+              .sort((a,b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -703,7 +703,7 @@ export default function Home() {
           .map(faixa => {
             const breakdown = faixaExames[faixa] || {};
             const top3 = Object.entries(breakdown)
-              .sort(([, a], [, b]) => b - a)
+              .sort((a,b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -762,7 +762,7 @@ export default function Home() {
           .map(exame => {
             const breakdown = exameUnidades[exame] || {};
             const top3 = Object.entries(breakdown)
-              .sort(([, a], [, b]) => b - a)
+              .sort((a,b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
@@ -803,7 +803,7 @@ export default function Home() {
           .map(exame => {
             const breakdown = exameConvenios[exame] || {};
             const top3 = Object.entries(breakdown)
-              .sort(([, a], [, b]) => b - a)
+              .sort((a,b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -841,7 +841,7 @@ export default function Home() {
           .map(exame => {
             const breakdown = exameFaixas[exame] || {};
             const top3 = Object.entries(breakdown)
-              .sort(([, a], [, b]) => b - a)
+              .sort((a,b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -866,7 +866,7 @@ export default function Home() {
         }
       });
       return Object.entries(counts)
-        .sort(([, a], [, b]) => b - a)
+        .sort((a,b) => b[1] - a[1])
         .map(([name, count]) => ({
           id: name,
           title: name,
@@ -882,38 +882,48 @@ export default function Home() {
 
   // Apply sorting to displayData
   const sortedDisplayData = useMemo(() => {
-    if (!sortColumn) return displayData;
+    // If a specific sort column is active, use it (for table view)
+    if (sortColumn) {
+      return [...displayData].sort((a, b) => {
+        let aVal: any;
+        let bVal: any;
 
-    return [...displayData].sort((a, b) => {
-      let aVal: any;
-      let bVal: any;
+        switch (sortColumn) {
+          case "title":
+            aVal = a.title.toLowerCase();
+            bVal = b.title.toLowerCase();
+            break;
+          case "count":
+            aVal = a.count;
+            bVal = b.count;
+            break;
+          case "percentage":
+            aVal = (a.count / totalPacientes) * 100;
+            bVal = (b.count / totalPacientes) * 100;
+            break;
+          case "value":
+            aVal = a.value || 0;
+            bVal = b.value || 0;
+            break;
+          default:
+            return 0;
+        }
 
-      switch (sortColumn) {
-        case "title":
-          aVal = a.title.toLowerCase();
-          bVal = b.title.toLowerCase();
-          break;
-        case "count":
-          aVal = a.count;
-          bVal = b.count;
-          break;
-        case "percentage":
-          aVal = (a.count / totalPacientes) * 100;
-          bVal = (b.count / totalPacientes) * 100;
-          break;
-        case "value":
-          aVal = a.value || 0;
-          bVal = b.value || 0;
-          break;
-        default:
-          return 0;
-      }
+        if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
 
-      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
-  }, [displayData, sortColumn, sortDirection, totalPacientes]);
+    // Default sorting logic for cards (and table if no column selected)
+    // Matches the Simple Mode sorting: highest count first
+    // Except for 'historico' (months), which relies on its own chronology sorted earlier
+    if (statType !== "historico") {
+      return [...displayData].sort((a, b) => b.count - a.count);
+    }
+
+    return displayData;
+  }, [displayData, sortColumn, sortDirection, totalPacientes, statType]);
 
   const handleSort = (column: "title" | "count" | "percentage" | "value") => {
     if (sortColumn === column) {
@@ -1205,7 +1215,7 @@ export default function Home() {
 
               {viewMode === "cards" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 justify-items-center animate-in fade-in zoom-in-95 duration-300">
-                  {displayData.map((item) => {
+                  {sortedDisplayData.map((item) => {
                     const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
                     const isClickable = dashboardMode === 'simple' || !hasBreakdown;
 
@@ -1357,3 +1367,4 @@ export default function Home() {
     </SidebarLayout>
   );
 }
+

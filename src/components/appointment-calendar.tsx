@@ -186,6 +186,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingHolidays, setIsLoadingHolidays] = useState(true);
+  const [examPrices, setExamPrices] = useState<Record<string, string | number>>({});
 
   const [allHolidays, setAllHolidays] = useState<Holiday[]>([]);
   const [holidaysForCalendar, setHolidaysForCalendar] = useState<Date[]>([]);
@@ -255,6 +256,28 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     setDefaults(undefined);
     setAutoFillKey((k) => k + 1);
   };
+
+  /* ---------------------- CARREGA PREÇOS DOS EXAMES ---------------- */
+  useEffect(() => {
+    const base = getFirebasePathBase();
+    const pricesPath = `${base}/agendamentoWhatsApp/configuracoes/exames`;
+    const unsubPrices = onValue(
+      ref(getDatabaseInstance(ENVIRONMENT), pricesPath),
+      (snap: DataSnapshot) => {
+        const val = snap.val();
+        if (val && typeof val === "object") {
+          const pricesObj: Record<string, string | number> = {};
+          Object.keys(val).forEach((examName) => {
+            if (val[examName].preco !== undefined) {
+              pricesObj[examName] = val[examName].preco;
+            }
+          });
+          setExamPrices(pricesObj);
+        }
+      }
+    );
+    return () => unsubPrices();
+  }, []);
 
 
 
@@ -610,8 +633,38 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                       </p>
                                       <p>
                                         <strong>Exames:</strong>{" "}
-                                        {app.exames.join(", ")}
+                                        {app.exames.map((exame, i) => {
+                                          const preco = examPrices[exame];
+                                          const precoStr = preco
+                                            ? (typeof preco === 'number' ? `R$ ${preco.toFixed(2).replace('.', ',')}` : preco)
+                                            : "";
+                                          return (
+                                            <span key={i}>
+                                              {exame}{precoStr ? ` - ${precoStr}` : ""}
+                                              {i < app.exames.length - 1 ? ", " : ""}
+                                            </span>
+                                          );
+                                        })}
                                       </p>
+                                      {(() => {
+                                        const total = app.exames.reduce((acc, exame) => {
+                                          const preco = examPrices[exame];
+                                          if (typeof preco === 'number') return acc + preco;
+                                          if (typeof preco === 'string') {
+                                            const strPrice = preco.replace(/[^\d.,]/g, '').replace(',', '.');
+                                            if (strPrice !== '') {
+                                              const num = parseFloat(strPrice);
+                                              if (!isNaN(num) && num > 0) return acc + num;
+                                            }
+                                          }
+                                          return acc;
+                                        }, 0);
+                                        return total > 0 ? (
+                                          <p>
+                                            <strong>Valor Total:</strong> <span>R$ {total.toFixed(2).replace('.', ',')}</span>
+                                          </p>
+                                        ) : null;
+                                      })()}
                                       <p>
                                         <strong>
                                           {getFirebasePathBase() === 'OFT/45' ? 'Médico:' : 'Unidade:'}

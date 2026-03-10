@@ -4,7 +4,7 @@ import SidebarLayout from "@/components/layout/sidebar-layout";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DollarSign, Plus, Landmark, Users, FileText, Activity, MapPin, BarChart3, LayoutGrid, List } from "lucide-react";
+import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
@@ -94,6 +94,7 @@ export default function Home() {
 
   // Dashboard Mode State
   const [dashboardMode, setDashboardMode] = useState<DashboardMode>("simple");
+  const [periodMode, setPeriodMode] = useState<'month' | 'year'>('month');
 
   // Filters (Shared)
   const [filter, setFilter] = useState<string>("");
@@ -249,19 +250,88 @@ export default function Home() {
 
   /* ---------- Default Filter ---------- */
   useEffect(() => {
-    if (statType === 'historico' && filter.includes(' de ')) {
-      const justYear = filter.split(' de ')[1];
-      if (justYear) setFilter(justYear);
-      return;
+    if (!filter) {
+      const now = new Date();
+      if (statType === "historico" || periodMode === "year") {
+        setFilter(String(now.getFullYear()));
+      } else {
+        const monthYear = `${MESES[now.getMonth()]} de ${now.getFullYear()}`;
+        setFilter(monthYear);
+      }
     }
-    if (filter) return;
+  }, [filter, statType, periodMode]);
 
-    const hoje = new Date();
-    const mesAtual = `${MESES[hoje.getMonth()]} de ${hoje.getFullYear()}`;
-    if (mesesDisponiveis.includes(mesAtual)) setFilter(mesAtual);
-    else if (mesesDisponiveis.length) setFilter(mesesDisponiveis.at(-1)!);
-    else if (anosDisponiveis.length) setFilter(anosDisponiveis[0]);
-  }, [filter, mesesDisponiveis, anosDisponiveis, statType]);
+  /* ---------- Navigational Period Filter Helpers ---------- */
+  const handlePeriodChange = (direction: 'prev' | 'next') => {
+    if (statType === 'historico' || periodMode === 'year') {
+      // Navigating Years
+      const years = [...anosDisponiveis].sort((a, b) => Number(a) - Number(b)); // Ascending
+      const currentYearStr = filter.includes(' de ') ? filter.split(' de ')[1] : filter;
+      const currentIndex = years.indexOf(currentYearStr);
+
+      if (direction === 'prev' && currentIndex > 0) {
+        setFilter(years[currentIndex - 1]);
+      } else if (direction === 'next' && currentIndex < years.length - 1) {
+        setFilter(years[currentIndex + 1]);
+      }
+    } else {
+      // Navigating Months
+      const months = [...mesesDisponiveis]; // Assumes months are already sorted chronologically
+      const currentIndex = months.indexOf(filter);
+
+      if (direction === 'prev' && currentIndex > 0) {
+        setFilter(months[currentIndex - 1]);
+      } else if (direction === 'next' && currentIndex < months.length - 1) {
+        setFilter(months[currentIndex + 1]);
+      }
+    }
+  };
+
+  const isPrevDisabled = useMemo(() => {
+    if (statType === 'historico' || periodMode === 'year') {
+      const years = [...anosDisponiveis].sort((a, b) => Number(a) - Number(b));
+      const currentYearStr = filter.includes(' de ') ? filter.split(' de ')[1] : filter;
+      return years.indexOf(currentYearStr) <= 0;
+    } else {
+      return mesesDisponiveis.indexOf(filter) <= 0;
+    }
+  }, [filter, statType, periodMode, anosDisponiveis, mesesDisponiveis]);
+
+  const isNextDisabled = useMemo(() => {
+    if (statType === 'historico' || periodMode === 'year') {
+      const years = [...anosDisponiveis].sort((a, b) => Number(a) - Number(b));
+      const currentYearStr = filter.includes(' de ') ? filter.split(' de ')[1] : filter;
+      return years.indexOf(currentYearStr) >= years.length - 1;
+    } else {
+      return mesesDisponiveis.indexOf(filter) >= mesesDisponiveis.length - 1;
+    }
+  }, [filter, statType, periodMode, anosDisponiveis, mesesDisponiveis]);
+
+  const togglePeriodMode = () => {
+    if (periodMode === 'year') {
+      setPeriodMode('month');
+      // Set to current month of the currently selected year, or just now if unavailable
+      const yearFromFilter = filter;
+      const now = new Date();
+      const monthYear = `${MESES[now.getMonth()]} de ${yearFromFilter}`;
+      if (mesesDisponiveis.includes(monthYear)) {
+        setFilter(monthYear);
+      } else if (mesesDisponiveis.some(m => m.endsWith(yearFromFilter))) {
+        setFilter(mesesDisponiveis.filter(m => m.endsWith(yearFromFilter))[0]);
+      } else {
+        setFilter(`${MESES[now.getMonth()]} de ${now.getFullYear()}`);
+      }
+    } else {
+      setPeriodMode('year');
+      // Set filter to the year of the currently selected month
+      const justYear = filter.includes(' de ') ? filter.split(' de ')[1] : filter;
+      if (anosDisponiveis.includes(justYear)) {
+        setFilter(justYear);
+      }
+    }
+  };
+
+  /* ---------- Drill-down states ---------- */
 
 
   /* ---------- Data Processing Logic (Unified) ---------- */
@@ -361,7 +431,7 @@ export default function Home() {
         return Object.keys(unitCounts).sort().map(unit => {
           const breakdown = unitConvenios[unit] || {};
           const top3 = Object.entries(breakdown)
-            .sort((a,b) => b[1] - a[1])
+            .sort((a, b) => b[1] - a[1])
             .slice(0, 3)
             .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -432,7 +502,7 @@ export default function Home() {
         return Object.keys(unitCounts).sort().map(unit => {
           const breakdown = unitExames[unit] || {};
           const top3 = Object.entries(breakdown)
-            .sort((a,b) => b[1] - a[1])
+            .sort((a, b) => b[1] - a[1])
             .slice(0, 3)
             .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -488,7 +558,7 @@ export default function Home() {
           .map(convenio => {
             const breakdown = convenioUnidades[convenio] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a,b) => b[1] - a[1])
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
@@ -527,7 +597,7 @@ export default function Home() {
           .map(convenio => {
             const breakdown = convenioFaixas[convenio] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a,b) => b[1] - a[1])
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -564,7 +634,7 @@ export default function Home() {
           .map(convenio => {
             const breakdown = convenioExames[convenio] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a,b) => b[1] - a[1])
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -586,7 +656,7 @@ export default function Home() {
         counts[conv] = (counts[conv] || 0) + 1;
       });
       return Object.entries(counts)
-        .sort((a,b) => b[1] - a[1])
+        .sort((a, b) => b[1] - a[1])
         .map(([name, count]) => ({
           id: name,
           title: name,
@@ -620,7 +690,7 @@ export default function Home() {
           .map(faixa => {
             const breakdown = faixaUnidades[faixa] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a,b) => b[1] - a[1])
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
@@ -662,7 +732,7 @@ export default function Home() {
           .map(faixa => {
             const breakdown = faixaConvenios[faixa] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a,b) => b[1] - a[1])
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -703,7 +773,7 @@ export default function Home() {
           .map(faixa => {
             const breakdown = faixaExames[faixa] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a,b) => b[1] - a[1])
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -762,7 +832,7 @@ export default function Home() {
           .map(exame => {
             const breakdown = exameUnidades[exame] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a,b) => b[1] - a[1])
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
@@ -803,7 +873,7 @@ export default function Home() {
           .map(exame => {
             const breakdown = exameConvenios[exame] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a,b) => b[1] - a[1])
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -841,7 +911,7 @@ export default function Home() {
           .map(exame => {
             const breakdown = exameFaixas[exame] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a,b) => b[1] - a[1])
+              .sort((a, b) => b[1] - a[1])
               .slice(0, 3)
               .map(([name, count]) => ({ name, count, value: count * 30 }));
 
@@ -866,7 +936,7 @@ export default function Home() {
         }
       });
       return Object.entries(counts)
-        .sort((a,b) => b[1] - a[1])
+        .sort((a, b) => b[1] - a[1])
         .map(([name, count]) => ({
           id: name,
           title: name,
@@ -1104,16 +1174,32 @@ export default function Home() {
           {/* Basic Period Filter (Visible ONLY in Simple Mode) */}
           {dashboardMode === 'simple' && (
             <div className="flex flex-col items-end pt-4">
-              <Select value={filter} onValueChange={setFilter}>
-                <SelectTrigger className="w-[180px] bg-white border-blue-200">
-                  <SelectValue placeholder="Período" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[200px] overflow-y-auto">
-                  {anosDisponiveis.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
-                  {/* Show months only if NOT history mode */}
-                  {statType !== 'historico' && mesesDisponiveis.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center bg-white border border-blue-200 rounded-md overflow-hidden shadow-sm">
+                <button
+                  onClick={() => handlePeriodChange('prev')}
+                  disabled={isPrevDisabled}
+                  className="p-2 text-gray-600 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors border-r border-blue-100"
+                  title="Anterior"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={togglePeriodMode}
+                  className="px-4 py-2 font-medium text-sm text-blue-900 min-w-[155px] text-center select-none hover:bg-blue-50 transition-colors cursor-pointer flex flex-col items-center leading-tight"
+                  title={`Clique para alternar para visualização por ${periodMode === 'year' ? 'Mês' : 'Ano'}`}
+                >
+                  <span className="text-[9px] font-semibold text-blue-400 uppercase tracking-widest">{periodMode === 'year' ? 'Ano' : 'Mês'}</span>
+                  <span>{filter}</span>
+                </button>
+                <button
+                  onClick={() => handlePeriodChange('next')}
+                  disabled={isNextDisabled}
+                  className="p-2 text-gray-600 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors border-l border-blue-100"
+                  title="Próximo"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           )}
         </section>

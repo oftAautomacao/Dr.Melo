@@ -1174,31 +1174,35 @@ export default function Home() {
           {/* Basic Period Filter (Visible ONLY in Simple Mode) */}
           {dashboardMode === 'simple' && (
             <div className="flex flex-col items-end pt-4">
-              <div className="flex items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100">
-                <button
-                  onClick={() => handlePeriodChange('prev')}
-                  disabled={isPrevDisabled}
-                  className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
-                  title="Anterior"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={togglePeriodMode}
-                  className="flex flex-col items-center px-6 py-2 cursor-pointer hover:bg-slate-50 transition-colors min-w-[148px]"
-                  title={`Clique para ver por ${periodMode === 'year' ? 'Mês' : 'Ano'}`}
-                >
-                  <span className="text-[10px] text-slate-400 mb-0.5">{periodMode === 'year' ? 'anual' : 'mensal'}</span>
-                  <span className="text-xs font-medium text-slate-700 tracking-wide">{filter}</span>
-                </button>
-                <button
-                  onClick={() => handlePeriodChange('next')}
-                  disabled={isNextDisabled}
-                  className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
-                  title="Próximo"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-sm font-medium text-slate-500">
+                  {periodMode === 'year' ? 'anual' : 'mensal'}
+                </span>
+                <div className="flex items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100">
+                  <button
+                    onClick={() => handlePeriodChange('prev')}
+                    disabled={isPrevDisabled}
+                    className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
+                    title="Anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={togglePeriodMode}
+                    className="px-6 py-2 text-xs font-medium text-slate-700 hover:text-blue-600 min-w-[148px] text-center tracking-wide transition-colors cursor-pointer"
+                    title={`Clique para ver por ${periodMode === 'year' ? 'Mês' : 'Ano'}`}
+                  >
+                    {filter}
+                  </button>
+                  <button
+                    onClick={() => handlePeriodChange('next')}
+                    disabled={isNextDisabled}
+                    className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
+                    title="Próximo"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -1174,30 +1174,30 @@ export default function Home() {
           {/* Basic Period Filter (Visible ONLY in Simple Mode) */}
           {dashboardMode === 'simple' && (
             <div className="flex flex-col items-end pt-4">
-              <div className="flex items-center bg-white border border-blue-200 rounded-md overflow-hidden shadow-sm">
+              <div className="flex items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100">
                 <button
                   onClick={() => handlePeriodChange('prev')}
                   disabled={isPrevDisabled}
-                  className="p-2 text-gray-600 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors border-r border-blue-100"
+                  className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
                   title="Anterior"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
                 <button
                   onClick={togglePeriodMode}
-                  className="px-4 py-2 font-medium text-sm text-blue-900 min-w-[155px] text-center select-none hover:bg-blue-50 transition-colors cursor-pointer flex flex-col items-center leading-tight"
-                  title={`Clique para alternar para visualização por ${periodMode === 'year' ? 'Mês' : 'Ano'}`}
+                  className="flex flex-col items-center px-6 py-2 cursor-pointer hover:bg-slate-50 transition-colors min-w-[148px]"
+                  title={`Clique para ver por ${periodMode === 'year' ? 'Mês' : 'Ano'}`}
                 >
-                  <span className="text-[9px] font-semibold text-blue-400 uppercase tracking-widest">{periodMode === 'year' ? 'Ano' : 'Mês'}</span>
-                  <span>{filter}</span>
+                  <span className="text-[10px] text-slate-400 mb-0.5">{periodMode === 'year' ? 'anual' : 'mensal'}</span>
+                  <span className="text-xs font-medium text-slate-700 tracking-wide">{filter}</span>
                 </button>
                 <button
                   onClick={() => handlePeriodChange('next')}
                   disabled={isNextDisabled}
-                  className="p-2 text-gray-600 hover:bg-blue-50 disabled:opacity-30 disabled:hover:bg-transparent transition-colors border-l border-blue-100"
+                  className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
                   title="Próximo"
                 >
-                  <ChevronRight className="w-5 h-5" />
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </div>

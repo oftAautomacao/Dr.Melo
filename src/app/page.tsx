@@ -1175,9 +1175,6 @@ export default function Home() {
           {dashboardMode === 'simple' && (
             <div className="flex flex-col items-end pt-4">
               <div className="flex flex-col items-end gap-1">
-                <span className="text-sm font-medium text-slate-500">
-                  {periodMode === 'year' ? 'anual' : 'mensal'}
-                </span>
                 <div className="flex items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100">
                   <button
                     onClick={() => handlePeriodChange('prev')}

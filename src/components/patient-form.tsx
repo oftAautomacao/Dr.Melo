@@ -26,6 +26,8 @@ import {
   Building,
   HeartPulse,
   Stethoscope,
+  BrainCircuit,
+  Image as ImageIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -50,6 +52,7 @@ import { saveAppointmentAction, cancelAppointment, checkAppointmentAvailabilityA
 import { categorizePatientObservations } from "@/ai/flows/categorize-patient-observations";
 import { fetchHolidays, isHoliday as checkIsHoliday, type Holiday as HolidayType } from '@/lib/holidays';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { extractAppointmentFromImageAction } from "@/app/actions/ai-analysis";
 
 import type { CalendarAppointment } from "./appointment-calendar"; // Corrected import path
 interface PatientFormProps {
@@ -131,8 +134,11 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
   const [selectedDateIsHoliday, setSelectedDateIsHoliday] = useState<HolidayType | undefined>(undefined);
   const [allHolidays, setAllHolidays] = useState<HolidayType[]>([]);
   const [isLoadingHolidays, setIsLoadingHolidays] = useState(true);
-  const [dontSendSecretaryMessage, setDontSendSecretaryMessage] = useState(true);
-  const [dontSendSecretaryMessageOnCreate, setDontSendSecretaryMessageOnCreate] = useState(true);
+  const [sendSecretaryMessage, setSendSecretaryMessage] = useState(false);
+  const [sendSecretaryMessageOnCreate, setSendSecretaryMessageOnCreate] = useState(false);
+  const [sendPatientMessage, setSendPatientMessage] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [isClient, setIsClient] = useState(false);
   const form = useForm<PatientFormData>({
@@ -611,7 +617,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                 aiCategorization: initialData.aiCategorization,
               },
               cancelReason: "Consulta reagendada",
-              enviarMsgSecretaria: !dontSendSecretaryMessage,
+              enviarMsgSecretaria: sendSecretaryMessage,
             },
             ENVIRONMENT
           );
@@ -672,7 +678,8 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         data,
         ENVIRONMENT,
         aiResult || undefined,
-        !dontSendSecretaryMessageOnCreate, // Pass the flag directly for both new and reschedule
+        sendSecretaryMessageOnCreate,
+        sendPatientMessage,
         shouldCheckConflictInSave
       );
 
@@ -745,12 +752,117 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     setIsCategorizing(false);
   };
 
+  const handleImagePaste = async (event: React.ClipboardEvent) => {
+    const items = event.clipboardData.items;
+    let blob: Blob | null = null;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image") !== -1) {
+        blob = items[i].getAsFile();
+        break;
+      }
+    }
+
+    if (blob) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        setImagePreview(base64);
+        const base64Data = base64.split(",")[1];
+
+        setIsExtracting(true);
+        try {
+          const result = await extractAppointmentFromImageAction(base64Data);
+          if (result) {
+            if (result.nomePaciente) form.setValue("nomePaciente", result.nomePaciente);
+            if (result.cpf) form.setValue("cpf", result.cpf);
+            if (result.telefone) form.setValue("telefone", result.telefone);
+            if (result.dataNascimento) {
+              const parsed = dateFnsParse(result.dataNascimento, "dd/MM/yyyy", new Date());
+              if (dateFnsIsValid(parsed)) form.setValue("dataNascimento", parsed);
+            }
+            if (result.dataAgendamento) {
+              const parsed = dateFnsParse(result.dataAgendamento, "yyyy-MM-dd", new Date());
+              if (dateFnsIsValid(parsed)) form.setValue("dataAgendamento", parsed);
+            }
+            if (result.horario) form.setValue("horario", result.horario);
+
+            // Mapeamento de Unidade (Otimista)
+            if (result.unidade && unidadesList.length > 0) {
+              const matched = unidadesList.find(u =>
+                u.nome.toLowerCase().includes(result.unidade!.toLowerCase()) ||
+                result.unidade!.toLowerCase().includes(u.nome.toLowerCase())
+              );
+              if (matched) form.setValue("local", matched.id);
+            }
+
+            toast({ title: "Extraído com Sucesso!", description: "Os campos foram preenchidos com base no print." });
+          }
+        } catch (err) {
+          console.error("Erro na extração IA:", err);
+          toast({ title: "Erro na IA", description: "Não foi possível extrair dados da imagem.", variant: "destructive" });
+        } finally {
+          setIsExtracting(false);
+        }
+      };
+      reader.readAsDataURL(blob);
+    }
+  };
+
   return (
     <Card className="w-full shadow-lg">
       <CardHeader /> {/* Keep CardHeader, but remove content */}
       <CardContent>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" onPaste={handleImagePaste}>
+
+            {/* Seção de Extração IA por Print */}
+            <div className="mb-6 p-4 border-2 border-dashed border-blue-200 rounded-xl bg-blue-50/30 hover:bg-blue-50/50 transition-all group relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-1 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
+                <BrainCircuit className="h-16 w-16 text-blue-600" />
+              </div>
+
+              <div className="flex flex-col md:flex-row items-center gap-4">
+                <div className="flex-1 space-y-1.5 text-center md:text-left">
+                  <div className="flex items-center gap-2 justify-center md:justify-start">
+                    <div className="p-1.5 bg-blue-600 rounded-md">
+                      <Sparkles className="h-4 w-4 text-white" />
+                    </div>
+                    <h3 className="text-base font-bold text-blue-900 leading-none">Agendamento Inteligente</h3>
+                  </div>
+                  <p className="text-xs text-blue-700/80 font-medium">
+                    Cole seu print aqui: <kbd className="px-1 py-0.5 rounded bg-blue-100 border border-blue-200 text-blue-800 text-[10px] font-bold">Ctrl+V</kbd>
+                  </p>
+                  <ul className="text-[10px] text-blue-600/70 space-y-0.5 mt-2 flex flex-wrap gap-x-3 justify-center md:justify-start list-none">
+                    <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Nome</li>
+                    <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Nascimento</li>
+                    <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>CPF</li>
+                    <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Telefone</li>
+                  </ul>
+                </div>
+
+                <div className="w-full md:w-32 h-20 bg-white rounded-lg border border-blue-100 shadow-sm flex items-center justify-center relative overflow-hidden group/img">
+                  {isExtracting ? (
+                    <div className="flex flex-col items-center gap-1">
+                      <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                      <span className="text-[9px] font-bold text-blue-600 uppercase">Analisando...</span>
+                    </div>
+                  ) : imagePreview ? (
+                    <img src={imagePreview} alt="Preview" className="w-full h-full object-cover opacity-80 group-hover/img:opacity-100 transition-opacity" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-1 opacity-30">
+                      <ImageIcon className="h-6 w-6 text-blue-400" />
+                      <span className="text-[8px] font-bold text-blue-400 uppercase">Aguardando Print</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {isExtracting && (
+                <div className="absolute inset-x-0 bottom-0 h-0.5 bg-blue-100">
+                  <div className="h-full bg-blue-600 animate-progress origin-left w-full"></div>
+                </div>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Row 1: Name, Date of Birth, Phone */}
@@ -1067,31 +1179,46 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="reschedule-send-secretary-message-create"
-                    checked={dontSendSecretaryMessageOnCreate}
+                    checked={sendSecretaryMessageOnCreate}
                     onCheckedChange={(checked) =>
-                      setDontSendSecretaryMessageOnCreate(Boolean(checked))
+                      setSendSecretaryMessageOnCreate(Boolean(checked))
                     }
                   />
                   <Label
                     htmlFor="reschedule-send-secretary-message-create"
                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                   >
-                    Não enviar mensagem para secretária sobre o <strong>novo agendamento</strong>
+                    Enviar mensagem para secretária sobre o <strong>novo agendamento</strong>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="reschedule-send-patient-message"
+                    checked={sendPatientMessage}
+                    onCheckedChange={(checked) =>
+                      setSendPatientMessage(Boolean(checked))
+                    }
+                  />
+                  <Label
+                    htmlFor="reschedule-send-patient-message"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Enviar mensagem de confirmação para o <strong>paciente</strong>
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="reschedule-send-secretary-message-cancel"
-                    checked={dontSendSecretaryMessage}
+                    checked={sendSecretaryMessage}
                     onCheckedChange={(checked) =>
-                      setDontSendSecretaryMessage(Boolean(checked))
+                      setSendSecretaryMessage(Boolean(checked))
                     }
                   />
                   <Label
                     htmlFor="reschedule-send-secretary-message-cancel"
                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                   >
-                    Não enviar mensagem para secretária sobre o <strong>cancelamento</strong>
+                    Enviar mensagem para secretária sobre o <strong>cancelamento</strong>
                   </Label>
                 </div>
               </div>
@@ -1101,16 +1228,31 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="new-appointment-send-secretary-message"
-                    checked={dontSendSecretaryMessageOnCreate}
+                    checked={sendSecretaryMessageOnCreate}
                     onCheckedChange={(checked) =>
-                      setDontSendSecretaryMessageOnCreate(Boolean(checked))
+                      setSendSecretaryMessageOnCreate(Boolean(checked))
                     }
                   />
                   <Label
                     htmlFor="new-appointment-send-secretary-message"
                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                   >
-                    Não enviar mensagem para secretária sobre este agendamento
+                    Enviar mensagem para secretária sobre este agendamento
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="new-appointment-send-patient-message"
+                    checked={sendPatientMessage}
+                    onCheckedChange={(checked) =>
+                      setSendPatientMessage(Boolean(checked))
+                    }
+                  />
+                  <Label
+                    htmlFor="new-appointment-send-patient-message"
+                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                  >
+                    Enviar mensagem de confirmação para o paciente
                   </Label>
                 </div>
               </div>

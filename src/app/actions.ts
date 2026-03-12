@@ -1,5 +1,7 @@
 "use server";
 
+import { whatsappService } from "@/lib/whatsapp-service";
+import { revalidatePath } from "next/cache";
 import { ref, update, get } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
 import type {
@@ -67,6 +69,20 @@ function ensureOFTMedicoOnRecord(
   return record;
 }
 
+/**
+ * Helper para formatar a data por extenso (ex: 09/mar (2a feira))
+ */
+function formatLongDate(date: Date): string {
+  const days = ["domingo", "2a feira", "3a feira", "4a feira", "5a feira", "6a feira", "sábado"];
+  const months = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+  const dayName = days[date.getDay()];
+  const dayOfMonth = date.getDate().toString().padStart(2, '0');
+  const monthName = months[date.getMonth()];
+
+  return `${dayOfMonth}/${monthName} (${dayName})`;
+}
+
 /* =============================================================
    CHECK AVAILABILITY: verifica se já existe agendamento
    ============================================================= */
@@ -111,13 +127,14 @@ export async function checkAppointmentAvailabilityAction(
 export async function saveAppointmentAction(
   firebaseBase: string,
   formData: PatientFormData,
-  environment: "teste" | "producao", // NEW PARAM
+  environment: "teste" | "producao",
   aiCategorizationResult?: AICategorization,
   enviarMsgSecretaria?: boolean,
+  enviarMsgPaciente?: boolean,
   checkConflict: boolean = true
 ): Promise<SaveAppointmentResult> {
   console.log("SAVE_ACTION - firebaseBase:", firebaseBase);
-  console.log("SAVE_ACTION - formData:", formData); // Adicionado log para depuração
+  console.log("SAVE_ACTION - formData:", formData);
   console.log("SAVE_ACTION - ENVIRONMENT:", environment);
 
   try {
@@ -125,11 +142,7 @@ export async function saveAppointmentAction(
     if (!validation.success) {
       return {
         success: false,
-        message:
-          "Dados inválidos: " +
-          validation.error.errors
-            .map((e) => `${e.path.join(".")}: ${e.message}`)
-            .join(", "),
+        message: "Dados inválidos: " + validation.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`).join(", "),
       };
     }
 
@@ -138,52 +151,44 @@ export async function saveAppointmentAction(
     // Determinar o valor correto para o campo 'unidade' nos dados a serem salvos
     const unidadeParaCampo = firebaseBase === 'OFT/45' ? "OftalmoDayTijuca" : v.local;
 
-    // Monta o registro no formato usado (mantendo horaAgendamento)
-    // Corrigido o nome do campo para 'medico' e atualizado o tipo
+    // Monta o registro no formato usado
     const appointmentRecord: Partial<AppointmentFirebaseRecord & { medico?: string }> = {
       nomePaciente: v.nomePaciente,
       ...(v.cpf ? { cpf: v.cpf } : {}),
       nascimento: formatDateFn(v.dataNascimento, "dd/MM/yyyy"),
       dataAgendamento: formatDateFn(v.dataAgendamento, "dd/MM/yyyy"),
-      horaAgendamento: v.horario, // HH:mm
+      horaAgendamento: v.horario,
       convenio: v.convenio,
       exames: v.exames,
       motivacao: v.motivacao,
-      unidade: unidadeParaCampo, // Usar o valor determinado acima
+      unidade: unidadeParaCampo,
       telefone: v.telefone,
-      ...(firebaseBase === 'OFT/45' ? { medico: v.local } : {}), // Adicionar campo medico para OFT/45
-      ...(aiCategorizationResult &&
-        aiCategorizationResult.category &&
-        !["unknown", "desconhecido", "n/a"].includes(
-          aiCategorizationResult.category.toLowerCase().trim()
-        )
+      ...(firebaseBase === 'OFT/45' ? { medico: v.local } : {}),
+      ...(aiCategorizationResult && aiCategorizationResult.category && !["unknown", "desconhecido", "n/a"].includes(aiCategorizationResult.category.toLowerCase().trim())
         ? { aiCategorization: aiCategorizationResult }
         : {}),
-      Observacoes: v.observacoes ?? "", // Ensure Observacoes is saved
+      Observacoes: v.observacoes ?? "",
     };
 
     if (enviarMsgSecretaria !== undefined) {
       appointmentRecord.enviarMsgSecretaria = enviarMsgSecretaria;
     }
 
-    const idxNode = getIdxNode(firebaseBase); // "unidades" | "medicos"
+    const idxNode = getIdxNode(firebaseBase);
     const setor = v.local;
     const datePath = formatDateFn(v.dataAgendamento, "yyyy-MM-dd");
-    const timePath = v.horario; // HH:mm
+    const timePath = v.horario;
     const phone = String(v.telefone);
 
-    // --- CHECK CONFLICT (Server-side safety) ---
+    // --- CHECK CONFLICT ---
     if (checkConflict) {
       const availability = await checkAppointmentAvailabilityAction(firebaseBase, datePath, timePath, setor, environment);
       if (!availability.available) {
-        return {
-          success: false,
-          message: availability.message || "Horário indisponível.",
-        };
+        return { success: false, message: availability.message || "Horário indisponível." };
       }
     }
 
-    // --- BUSCAR PREÇOS DOS EXAMES SELECIONADOS ---
+    // --- BUSCAR PREÇOS ---
     const precos: Record<string, string> = {};
     if (v.exames && v.exames.length > 0) {
       try {
@@ -196,13 +201,17 @@ export async function saveAppointmentAction(
           for (const exameId of v.exames) {
             const exameInfo = examesData[exameId];
             if (exameInfo && exameInfo.preco !== undefined) {
-              const preco = exameInfo.preco;
-              if (typeof preco === "number") {
-                // Formata número como "R$ 110,00"
-                precos[exameId] = `R$ ${preco.toFixed(2).replace(".", ",")}`;
-              } else {
-                // Mantém strings como "incluso na consulta"
-                precos[exameId] = String(preco);
+              const precoRaw = exameInfo.preco;
+              if (typeof precoRaw === "number") {
+                precos[exameId] = `R$ ${precoRaw.toFixed(2).replace(".", ",")}`;
+              } else if (typeof precoRaw === "string") {
+                const cleaned = precoRaw.replace(/[^\d.,]/g, "").replace(",", ".");
+                const val = Number(cleaned);
+                if (!isNaN(val)) {
+                  precos[exameId] = `R$ ${val.toFixed(2).replace(".", ",")}`;
+                } else {
+                  precos[exameId] = precoRaw;
+                }
               }
             }
           }
@@ -214,31 +223,156 @@ export async function saveAppointmentAction(
 
     const pathBase = `/${firebaseBase}/agendamentoWhatsApp/operacional`;
     const agBase = `${pathBase}/consultasAgendadas`;
-
     const updates: Record<string, any> = {};
 
-    // raiz por setor (organizado por data/hora)
     updates[`${agBase}/${idxNode}/${setor}/${datePath}/${timePath}`] = {
       ...appointmentRecord,
       obs: [v.observacoes || ""],
       ...(Object.keys(precos).length > 0 ? { precos } : {}),
     };
 
-    // por telefone (organizado por data/hora)
     updates[`${agBase}/telefones/${phone}/${datePath}/${timePath}`] = {
       ...appointmentRecord,
       obs: [v.observacoes || ""],
       ...(Object.keys(precos).length > 0 ? { precos } : {}),
     };
 
-    console.log("FIREBASE_SAVE_PATHS:", updates);
-
     const dbInstance = getDatabaseInstance(environment);
     await update(ref(dbInstance), updates);
 
+    // --- DISPARAR WHATSAPP PARA O PACIENTE ---
+    if (enviarMsgPaciente) {
+      // 1. Buscar dados da Unidade
+      let endereco = "Endereço não informado";
+      let telefoneUnidade = "Telefone não informado";
+      let nomeUnidadeAmigavel = unidadeParaCampo;
+
+      try {
+        const unidadeConfigPath = `/${firebaseBase}/agendamentoWhatsApp/configuracoes/unidades/${v.local}`;
+        const unidadeSnap = await get(ref(dbInstance, unidadeConfigPath));
+        const unidadeData = unidadeSnap.val();
+        if (unidadeData) {
+          endereco = unidadeData.endereco || endereco;
+          telefoneUnidade = unidadeData.telefoneUnidade || telefoneUnidade;
+          nomeUnidadeAmigavel = unidadeData.unidade || nomeUnidadeAmigavel;
+        }
+      } catch (err) {
+        console.warn("SAVE_ACTION: Erro ao buscar dados da unidade:", err);
+      }
+
+      // 2. Calcular Valor (Somente Particular)
+      let valorString = "";
+      const isParticular = v.convenio.toLowerCase().includes("particular");
+
+      if (isParticular) {
+        let total = 0;
+        let consultaPrice = 0;
+        let hasIncluso = false;
+        let consultaExameId = "";
+        const listaExamesPrecos: string[] = [];
+
+        // Tenta achar o preço base da "consulta"
+        try {
+          const examesConfigPath = `/${firebaseBase}/agendamentoWhatsApp/configuracoes/exames`;
+          const examesSnap = await get(ref(dbInstance, examesConfigPath));
+          const examesData = examesSnap.val();
+
+          if (examesData) {
+            // Acha o ID do exame "consulta" (ou similar)
+            consultaExameId = Object.keys(examesData).find(id =>
+              id.toLowerCase() === "consulta" ||
+              examesData[id].nome?.toLowerCase() === "consulta"
+            ) || "";
+
+            if (consultaExameId) {
+              const p = examesData[consultaExameId].preco;
+              if (typeof p === "number") {
+                consultaPrice = p;
+              } else if (typeof p === "string") {
+                const parsed = Number(p.replace(/[^\d.,]/g, "").replace(",", "."));
+                if (!isNaN(parsed)) consultaPrice = parsed;
+              }
+            }
+
+            let consultaJaSomadaNoIndividual = false;
+
+            for (const id of v.exames) {
+              const info = examesData[id];
+              if (!info) continue;
+
+              const nomeExame = info.nome || id;
+              let exPrecoStr = "";
+
+              const precoRaw = info.preco;
+              let precoNum = 0;
+              let isNumeric = false;
+
+              if (typeof precoRaw === "number") {
+                precoNum = precoRaw;
+                isNumeric = true;
+              } else if (typeof precoRaw === "string") {
+                const cleaned = precoRaw.replace(/[^\d.,]/g, "").replace(",", ".");
+                const val = Number(cleaned);
+                if (!isNaN(val)) {
+                  precoNum = val;
+                  isNumeric = true;
+                }
+              }
+
+              if (isNumeric) {
+                total += precoNum;
+                exPrecoStr = `R$ ${precoNum.toFixed(2).replace(".", ",")}`;
+                if (id === consultaExameId) consultaJaSomadaNoIndividual = true;
+              } else if (String(precoRaw).toLowerCase().includes("incluso na consulta")) {
+                hasIncluso = true;
+                exPrecoStr = "Incluso";
+              } else {
+                exPrecoStr = String(precoRaw);
+              }
+
+              listaExamesPrecos.push(`   - ${nomeExame} - ${exPrecoStr}`);
+            }
+
+            // Se tem "incluso" mas a "consulta" não estava na lista individual, somamos o preço base
+            if (hasIncluso && !consultaJaSomadaNoIndividual) {
+              total += consultaPrice;
+            }
+          }
+        } catch (err) {
+          console.warn("SAVE_ACTION: Erro ao calcular preços para WhatsApp:", err);
+        }
+
+        const listaFormatada = listaExamesPrecos.length > 0
+          ? `\n- *Exames:*\n${listaExamesPrecos.join("\n")}`
+          : "";
+
+        valorString = `${listaFormatada}\n- *Valor:* R$ ${total.toFixed(2).replace(".", ",")}`;
+      }
+
+      const message = `Seu agendamento foi realizado com sucesso! Aqui estão os detalhes:
+
+- *Nome:* ${v.nomePaciente}
+- *Data de Nascimento:* ${formatDateFn(v.dataNascimento, "dd/MM/yyyy")}
+- *Unidade:* ${nomeUnidadeAmigavel}
+- *Data:* ${formatLongDate(v.dataAgendamento)}
+- *Horário:* ${v.horario}
+- *Endereço:* ${endereco}
+- *Telefone:* ${telefoneUnidade}${valorString}
+
+IMPORTANTE: esse agendamento está sujeito a alterações não previstas e a erros da assistente virtual. Recomendamos que entre em contato com a unidade até 24 horas antes para confirmar se está tudo certo com o horário agendado, com seu plano de saúde e com os procedimentos a serem realizados.
+
+Se gostou, SALVE nosso contato e COMPARTILHE com um amigo que precisa de um oftalmologista.`;
+
+      await whatsappService.sendMessage(
+        { phone: v.telefone, message },
+        firebaseBase as "DRM" | "OFT/45",
+        environment
+      );
+    }
+
     return {
       success: true,
-      message: "Agendamento salvo com sucesso em ambas as localidades!",
+      message: "Agendamento salvo com sucesso!",
       appointmentPath: `${agBase}/${idxNode}/${setor}/${datePath}/${timePath}`,
       phoneAppointmentPath: `${agBase}/telefones/${phone}/${datePath}/${timePath}`,
     };

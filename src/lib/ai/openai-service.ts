@@ -18,7 +18,7 @@ export type MessageRole = 'system' | 'user' | 'assistant';
 
 export interface ChatMessage {
     role: MessageRole;
-    content: string;
+    content: string | any[];
 }
 
 /**
@@ -47,7 +47,7 @@ export const openaiService = {
                 model: model,
                 messages: [
                     { role: "system", content: systemPrompt },
-                    ...messages
+                    ...messages as any
                 ],
                 temperature: 0.3, // Temperatura baixa para análises mais objetivas
             });
@@ -68,5 +68,45 @@ export const openaiService = {
         model: string = "gpt-4o-mini"
     ): Promise<string | null> {
         return this.analyzeConversation([{ role: "user", content: text }], prompt, model);
+    },
+
+    /**
+     * Analisa uma imagem em base64.
+     */
+    async analyzeImage(
+        base64Image: string,
+        prompt: string,
+        model: string = "gpt-4o"
+    ): Promise<string | null> {
+        if (!openai) {
+            console.error("OpenAI client not initialized.");
+            return null;
+        }
+
+        try {
+            const response = await openai.chat.completions.create({
+                model: model,
+                messages: [
+                    {
+                        role: "user",
+                        content: [
+                            { type: "text", text: prompt },
+                            {
+                                type: "image_url",
+                                image_url: {
+                                    url: `data:image/jpeg;base64,${base64Image}`,
+                                },
+                            },
+                        ],
+                    },
+                ],
+                max_tokens: 1000,
+            });
+
+            return response.choices[0].message.content;
+        } catch (error) {
+            console.error("Erro ao chamar OpenAI Vision:", error);
+            return null;
+        }
     }
 };

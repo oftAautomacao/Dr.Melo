@@ -90,6 +90,7 @@ export default function Home() {
   /* ---------- state ---------- */
   const [patientData, setPatientData] = useState<Record<string, Record<string, any>>>({});
   const [unitConfig, setUnitConfig] = useState<Record<string, { bairro?: string; empresa?: string }>>({});
+  const [examConfig, setExamConfig] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
 
   // Dashboard Mode State
@@ -147,9 +148,15 @@ export default function Home() {
       setUnitConfig(snap.exists() ? (snap.val() as any) : {});
     });
 
+    const examesRef = ref(db, `/DRM/agendamentoWhatsApp/configuracoes/exames`);
+    const offExames = onValue(examesRef, snap => {
+      setExamConfig(snap.exists() ? (snap.val() as any) : {});
+    });
+
     return () => {
       offAg();
       offCfg();
+      offExames();
     };
   }, []);
 
@@ -363,7 +370,42 @@ export default function Home() {
           }
 
           if (include) {
-            const app = { ...hours[time], _unit: unit, _date: date, _time: time };
+            let appValue = 0;
+            const isParticular = hours[time].convenio?.trim().toLowerCase() === "particular";
+            
+            if (date < "2026-03-01" || selectedUnit !== "DRM") {
+               appValue = 30; // Regra antiga
+            } else {
+               if (!isParticular) {
+                  appValue = 30; // Plano de Saúde: mantém 30,00
+               } else {
+                  // Particular: soma valor configurado
+                  let sum = 0;
+                  if (Array.isArray(hours[time].exames)) {
+                      hours[time].exames.forEach((exName: string) => {
+                          const conf = examConfig[exName];
+                          let priceDrMelo = conf?.drMelo;
+
+                          // Preparação para futura alteração onde drMelo será separado por unidade
+                          if (priceDrMelo && typeof priceDrMelo === 'object') {
+                              priceDrMelo = priceDrMelo[unit] || 0;
+                          }
+
+                          if (typeof priceDrMelo === 'number') {
+                              sum += priceDrMelo;
+                          } else if (typeof priceDrMelo === 'string') {
+                              if (!priceDrMelo.toLowerCase().includes("incluso")) {
+                                  const parsed = Number(priceDrMelo.replace(/[^\d.,]/g, '').replace(',', '.'));
+                                  if (!isNaN(parsed)) sum += parsed;
+                              }
+                          }
+                      });
+                  }
+                  appValue = sum;
+               }
+            }
+
+            const app = { ...hours[time], _unit: unit, _date: date, _time: time, _value: appValue };
 
             if (filterCategory === 'convenio' && filterValue && filterValue !== 'all' && app.convenio !== filterValue) continue;
             if (filterCategory === 'exame' && filterValue && filterValue !== 'all') {
@@ -381,7 +423,7 @@ export default function Home() {
       }
     }
     return appointments;
-  }, [patientData, filter, statType, filterCategory, filterValue]);
+  }, [patientData, filter, statType, filterCategory, filterValue, examConfig, selectedUnit]);
 
   const displayData = useMemo<CardData[]>(() => {
     const appointments = filteredAppointments;
@@ -390,9 +432,13 @@ export default function Home() {
     // 2. Aggregate
     if (statType === "historico") {
       const monthlyCounts: Record<string, number> = {};
+      const monthlyValues: Record<string, number> = {};
       appointments.forEach(app => {
         const m = obterNomeMes(app._date);
-        if (m) monthlyCounts[m] = (monthlyCounts[m] || 0) + 1;
+        if (m) {
+          monthlyCounts[m] = (monthlyCounts[m] || 0) + 1;
+          monthlyValues[m] = (monthlyValues[m] || 0) + app._value;
+        }
       });
       return Object.entries(monthlyCounts)
         .sort(([a], [b]) => {
@@ -407,7 +453,7 @@ export default function Home() {
           title: name.split(" de ")[0],
           subtitle: name.split(" de ")[1],
           count,
-          value: count * 30,
+          value: monthlyValues[name],
           icon: <BarChart3 className="h-5 w-5 text-indigo-500" />
         }));
     }
@@ -415,32 +461,36 @@ export default function Home() {
     if (statType === "unidades") {
       // Logic for "Unidades" + "Convenio" + "All" => Show Top 3 Convenios per Unit
       if (filterCategory === 'convenio' && filterValue === 'all') {
-        const unitConvenios: Record<string, Record<string, number>> = {};
-        const unitCounts: Record<string, number> = {};
+        const unitConvenios: Record<string, Record<string, { count: number, value: number }>> = {};
+        const unitCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const u = app._unit;
           const c = app.convenio || "Não informado";
 
-          unitCounts[u] = (unitCounts[u] || 0) + 1;
+          if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0 };
+          unitCounts[u].count += 1;
+          unitCounts[u].value += app._value;
 
           if (!unitConvenios[u]) unitConvenios[u] = {};
-          unitConvenios[u][c] = (unitConvenios[u][c] || 0) + 1;
+          if (!unitConvenios[u][c]) unitConvenios[u][c] = { count: 0, value: 0 };
+          unitConvenios[u][c].count += 1;
+          unitConvenios[u][c].value += app._value;
         });
 
         return Object.keys(unitCounts).sort().map(unit => {
           const breakdown = unitConvenios[unit] || {};
           const top3 = Object.entries(breakdown)
-            .sort((a, b) => b[1] - a[1])
+            .sort((a, b) => b[1].count - a[1].count)
             .slice(0, 3)
-            .map(([name, count]) => ({ name, count, value: count * 30 }));
+            .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
           return {
             id: unit,
             title: unitConfig?.[unit]?.empresa ?? unit,
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
-            count: unitCounts[unit],
-            value: unitCounts[unit] * 30,
+            count: unitCounts[unit].count,
+            value: unitCounts[unit].value,
             icon: <MapPin className="h-5 w-5 text-blue-500" />,
             topConvenios: top3
           };
@@ -449,33 +499,37 @@ export default function Home() {
 
       // Logic for "Unidades" + "Faixa Etaria" + "All" => Show Age Breakdown per Unit
       if (filterCategory === 'faixaEtaria' && filterValue === 'all') {
-        const unitFaixas: Record<string, Record<string, number>> = {};
-        const unitCounts: Record<string, number> = {};
+        const unitFaixas: Record<string, Record<string, { count: number, value: number }>> = {};
+        const unitCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const u = app._unit;
           const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
-          unitCounts[u] = (unitCounts[u] || 0) + 1;
+          if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0 };
+          unitCounts[u].count += 1;
+          unitCounts[u].value += app._value;
 
           if (!unitFaixas[u]) unitFaixas[u] = {};
-          unitFaixas[u][bucket] = (unitFaixas[u][bucket] || 0) + 1;
+          if (!unitFaixas[u][bucket]) unitFaixas[u][bucket] = { count: 0, value: 0 };
+          unitFaixas[u][bucket].count += 1;
+          unitFaixas[u][bucket].value += app._value;
         });
 
         return Object.keys(unitCounts).sort().map(unit => {
           const breakdown = unitFaixas[unit] || {};
           // Show Top 3 Age Groups by count
           const faixas = Object.entries(breakdown)
-            .sort((a, b) => b[1] - a[1])
+            .sort((a, b) => b[1].count - a[1].count)
             .slice(0, 3)
-            .map(([name, count]) => ({ name, count, value: count * 30 }));
+            .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
           return {
             id: unit,
             title: unitConfig?.[unit]?.empresa ?? unit,
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
-            count: unitCounts[unit],
-            value: unitCounts[unit] * 30,
+            count: unitCounts[unit].count,
+            value: unitCounts[unit].value,
             icon: <MapPin className="h-5 w-5 text-blue-500" />,
             topFaixas: faixas
           };
@@ -484,17 +538,21 @@ export default function Home() {
 
       // Logic for "Unidades" + "Exame" + "All" => Show Top 3 Exams per Unit
       if (filterCategory === 'exame' && filterValue === 'all') {
-        const unitExames: Record<string, Record<string, number>> = {};
-        const unitCounts: Record<string, number> = {};
+        const unitExames: Record<string, Record<string, { count: number, value: number }>> = {};
+        const unitCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const u = app._unit;
-          unitCounts[u] = (unitCounts[u] || 0) + 1;
+          if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0 };
+          unitCounts[u].count += 1;
+          unitCounts[u].value += app._value;
 
           if (!unitExames[u]) unitExames[u] = {};
           if (Array.isArray(app.exames)) {
             app.exames.forEach((ex: string) => {
-              unitExames[u][ex] = (unitExames[u][ex] || 0) + 1;
+              if (!unitExames[u][ex]) unitExames[u][ex] = { count: 0, value: 0 };
+              unitExames[u][ex].count += 1;
+              unitExames[u][ex].value += app._value;
             });
           }
         });
@@ -502,16 +560,16 @@ export default function Home() {
         return Object.keys(unitCounts).sort().map(unit => {
           const breakdown = unitExames[unit] || {};
           const top3 = Object.entries(breakdown)
-            .sort((a, b) => b[1] - a[1])
+            .sort((a, b) => b[1].count - a[1].count)
             .slice(0, 3)
-            .map(([name, count]) => ({ name, count, value: count * 30 }));
+            .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
           return {
             id: unit,
             title: unitConfig?.[unit]?.empresa ?? unit,
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
-            count: unitCounts[unit],
-            value: unitCounts[unit] * 30,
+            count: unitCounts[unit].count,
+            value: unitCounts[unit].value,
             icon: <MapPin className="h-5 w-5 text-blue-500" />,
             topExames: top3
           };
@@ -519,20 +577,22 @@ export default function Home() {
       }
 
       // Default Logic (Count only)
-      const counts: Record<string, number> = {};
+      const counts: Record<string, { count: number, value: number }> = {};
       appointments.forEach(app => {
-        counts[app._unit] = (counts[app._unit] || 0) + 1;
+        if (!counts[app._unit]) counts[app._unit] = { count: 0, value: 0 };
+        counts[app._unit].count += 1;
+        counts[app._unit].value += app._value;
       });
 
       // Always sort by Count Descending (as requested for List View consistency)
-      const entries = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+      const entries = Object.keys(counts).sort((a, b) => counts[b].count - counts[a].count);
 
       return entries.map(unit => ({
         id: unit,
         title: unitConfig?.[unit]?.empresa ?? unit,
         subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
-        count: counts[unit],
-        value: counts[unit] * 30,
+        count: counts[unit].count,
+        value: counts[unit].value,
         icon: <MapPin className="h-5 w-5 text-blue-500" />
       }));
     }
@@ -540,37 +600,41 @@ export default function Home() {
     if (statType === "convenios") {
       // Logic for "Convenios" + "Unidade" + "All" => Show Top 3 Units per Convenio
       if (filterCategory === 'unidade' && filterValue === 'all') {
-        const convenioUnidades: Record<string, Record<string, number>> = {};
-        const convenioCounts: Record<string, number> = {};
+        const convenioUnidades: Record<string, Record<string, { count: number, value: number }>> = {};
+        const convenioCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const c = app.convenio || "Não informado";
           const u = app._unit;
 
-          convenioCounts[c] = (convenioCounts[c] || 0) + 1;
+          if (!convenioCounts[c]) convenioCounts[c] = { count: 0, value: 0 };
+          convenioCounts[c].count += 1;
+          convenioCounts[c].value += app._value;
 
           if (!convenioUnidades[c]) convenioUnidades[c] = {};
-          convenioUnidades[c][u] = (convenioUnidades[c][u] || 0) + 1;
+          if (!convenioUnidades[c][u]) convenioUnidades[c][u] = { count: 0, value: 0 };
+          convenioUnidades[c][u].count += 1;
+          convenioUnidades[c][u].value += app._value;
         });
 
         return Object.keys(convenioCounts)
-          .sort((a, b) => convenioCounts[b] - convenioCounts[a])
+          .sort((a, b) => convenioCounts[b].count - convenioCounts[a].count)
           .map(convenio => {
             const breakdown = convenioUnidades[convenio] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
+              .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
-              .map(([name, count]) => ({
+              .map(([name, data]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
-                count,
-                value: count * 30
+                count: data.count,
+                value: data.value
               }));
 
             return {
               id: convenio,
               title: convenio,
               subtitle: "Convênio Médico",
-              count: convenioCounts[convenio],
+              count: convenioCounts[convenio].count,
               icon: <FileText className="h-5 w-5 text-green-600" />,
               topUnidades: top3
             };
@@ -579,33 +643,37 @@ export default function Home() {
 
       // Logic for "Convenios" + "Faixa Etaria" + "All" => Show Top 3 Age Groups per Convenio
       if (filterCategory === 'faixaEtaria' && filterValue === 'all') {
-        const convenioFaixas: Record<string, Record<string, number>> = {};
-        const convenioCounts: Record<string, number> = {};
+        const convenioFaixas: Record<string, Record<string, { count: number, value: number }>> = {};
+        const convenioCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const c = app.convenio || "Não informado";
           const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
-          convenioCounts[c] = (convenioCounts[c] || 0) + 1;
+          if (!convenioCounts[c]) convenioCounts[c] = { count: 0, value: 0 };
+          convenioCounts[c].count += 1;
+          convenioCounts[c].value += app._value;
 
           if (!convenioFaixas[c]) convenioFaixas[c] = {};
-          convenioFaixas[c][bucket] = (convenioFaixas[c][bucket] || 0) + 1;
+          if (!convenioFaixas[c][bucket]) convenioFaixas[c][bucket] = { count: 0, value: 0 };
+          convenioFaixas[c][bucket].count += 1;
+          convenioFaixas[c][bucket].value += app._value;
         });
 
         return Object.keys(convenioCounts)
-          .sort((a, b) => convenioCounts[b] - convenioCounts[a])
+          .sort((a, b) => convenioCounts[b].count - convenioCounts[a].count)
           .map(convenio => {
             const breakdown = convenioFaixas[convenio] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
+              .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
-              .map(([name, count]) => ({ name, count, value: count * 30 }));
+              .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
               id: convenio,
               title: convenio,
               subtitle: "Convênio Médico",
-              count: convenioCounts[convenio],
+              count: convenioCounts[convenio].count,
               icon: <FileText className="h-5 w-5 text-green-600" />,
               topFaixas: top3
             };
@@ -614,35 +682,40 @@ export default function Home() {
 
       // Logic for "Convenios" + "Exame" + "All" => Show Top 3 Exams per Convenio
       if (filterCategory === 'exame' && filterValue === 'all') {
-        const convenioExames: Record<string, Record<string, number>> = {};
-        const convenioCounts: Record<string, number> = {};
+        const convenioExames: Record<string, Record<string, { count: number, value: number }>> = {};
+        const convenioCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const c = app.convenio || "Não informado";
-          convenioCounts[c] = (convenioCounts[c] || 0) + 1;
+
+          if (!convenioCounts[c]) convenioCounts[c] = { count: 0, value: 0 };
+          convenioCounts[c].count += 1;
+          convenioCounts[c].value += app._value;
 
           if (!convenioExames[c]) convenioExames[c] = {};
           if (Array.isArray(app.exames)) {
             app.exames.forEach((ex: string) => {
-              convenioExames[c][ex] = (convenioExames[c][ex] || 0) + 1;
+              if (!convenioExames[c][ex]) convenioExames[c][ex] = { count: 0, value: 0 };
+              convenioExames[c][ex].count += 1;
+              convenioExames[c][ex].value += app._value;
             });
           }
         });
 
         return Object.keys(convenioCounts)
-          .sort((a, b) => convenioCounts[b] - convenioCounts[a])
+          .sort((a, b) => convenioCounts[b].count - convenioCounts[a].count)
           .map(convenio => {
             const breakdown = convenioExames[convenio] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
+              .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
-              .map(([name, count]) => ({ name, count, value: count * 30 }));
+              .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
               id: convenio,
               title: convenio,
               subtitle: "Convênio Médico",
-              count: convenioCounts[convenio],
+              count: convenioCounts[convenio].count,
               icon: <FileText className="h-5 w-5 text-green-600" />,
               topExames: top3
             };
@@ -650,18 +723,21 @@ export default function Home() {
       }
 
       // Default Logic
-      const counts: Record<string, number> = {};
+      const counts: Record<string, { count: number, value: number }> = {};
       appointments.forEach(app => {
         const conv = app.convenio || "Não informado";
-        counts[conv] = (counts[conv] || 0) + 1;
+        if (!counts[conv]) counts[conv] = { count: 0, value: 0 };
+        counts[conv].count += 1;
+        counts[conv].value += app._value;
       });
       return Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => ({
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([name, data]) => ({
           id: name,
           title: name,
           subtitle: "Convênio Médico",
-          count,
+          count: data.count,
+          value: data.value,
           icon: <FileText className="h-5 w-5 text-green-600" />
         }));
     }
@@ -669,40 +745,45 @@ export default function Home() {
     if (statType === "faixaEtaria") {
       // Logic for "Faixa Etaria" + "Unidade" + "All" => Show Top 3 Units per Age Group
       if (filterCategory === 'unidade' && filterValue === 'all') {
-        const faixaUnidades: Record<string, Record<string, number>> = {};
-        const faixaCounts: Record<string, number> = {};
+        const faixaUnidades: Record<string, Record<string, { count: number, value: number }>> = {};
+        const faixaCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
           const u = app._unit;
 
-          faixaCounts[bucket] = (faixaCounts[bucket] || 0) + 1;
+          if (!faixaCounts[bucket]) faixaCounts[bucket] = { count: 0, value: 0 };
+          faixaCounts[bucket].count += 1;
+          faixaCounts[bucket].value += app._value;
 
           if (!faixaUnidades[bucket]) faixaUnidades[bucket] = {};
-          faixaUnidades[bucket][u] = (faixaUnidades[bucket][u] || 0) + 1;
+          if (!faixaUnidades[bucket][u]) faixaUnidades[bucket][u] = { count: 0, value: 0 };
+          faixaUnidades[bucket][u].count += 1;
+          faixaUnidades[bucket][u].value += app._value;
         });
 
         const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
         const order = ["Criança", "Adulto", "Idoso"];
 
         return order
-          .filter(f => faixaCounts[f] > 0)
+          .filter(f => faixaCounts[f] && faixaCounts[f].count > 0)
           .map(faixa => {
             const breakdown = faixaUnidades[faixa] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
+              .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
-              .map(([name, count]) => ({
+              .map(([name, data]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
-                count,
-                value: count * 30
+                count: data.count,
+                value: data.value
               }));
 
             return {
               id: faixa,
               title: faixa,
               subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Etária",
-              count: faixaCounts[faixa],
+              count: faixaCounts[faixa].count,
+              value: faixaCounts[faixa].value,
               icon: <Users className="h-5 w-5 text-purple-500" />,
               topUnidades: top3
             };
@@ -711,36 +792,41 @@ export default function Home() {
 
       // Logic for "Faixa Etaria" + "Convenio" + "All" => Show Top 3 Convenios per Age Group
       if (filterCategory === 'convenio' && filterValue === 'all') {
-        const faixaConvenios: Record<string, Record<string, number>> = {};
-        const faixaCounts: Record<string, number> = {};
+        const faixaConvenios: Record<string, Record<string, { count: number, value: number }>> = {};
+        const faixaCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
           const c = app.convenio || "Não informado";
 
-          faixaCounts[bucket] = (faixaCounts[bucket] || 0) + 1;
+          if (!faixaCounts[bucket]) faixaCounts[bucket] = { count: 0, value: 0 };
+          faixaCounts[bucket].count += 1;
+          faixaCounts[bucket].value += app._value;
 
           if (!faixaConvenios[bucket]) faixaConvenios[bucket] = {};
-          faixaConvenios[bucket][c] = (faixaConvenios[bucket][c] || 0) + 1;
+          if (!faixaConvenios[bucket][c]) faixaConvenios[bucket][c] = { count: 0, value: 0 };
+          faixaConvenios[bucket][c].count += 1;
+          faixaConvenios[bucket][c].value += app._value;
         });
 
         const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
         const order = ["Criança", "Adulto", "Idoso"];
 
         return order
-          .filter(f => faixaCounts[f] > 0)
+          .filter(f => faixaCounts[f] && faixaCounts[f].count > 0)
           .map(faixa => {
             const breakdown = faixaConvenios[faixa] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
+              .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
-              .map(([name, count]) => ({ name, count, value: count * 30 }));
+              .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
               id: faixa,
               title: faixa,
               subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Etária",
-              count: faixaCounts[faixa],
+              count: faixaCounts[faixa].count,
+              value: faixaCounts[faixa].value,
               icon: <Users className="h-5 w-5 text-purple-500" />,
               topConvenios: top3
             };
@@ -749,18 +835,22 @@ export default function Home() {
 
       // Logic for "Faixa Etaria" + "Exame" + "All" => Show Top 3 Exams per Age Group
       if (filterCategory === 'exame' && filterValue === 'all') {
-        const faixaExames: Record<string, Record<string, number>> = {};
-        const faixaCounts: Record<string, number> = {};
+        const faixaExames: Record<string, Record<string, { count: number, value: number }>> = {};
+        const faixaCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
-          faixaCounts[bucket] = (faixaCounts[bucket] || 0) + 1;
+          if (!faixaCounts[bucket]) faixaCounts[bucket] = { count: 0, value: 0 };
+          faixaCounts[bucket].count += 1;
+          faixaCounts[bucket].value += app._value;
 
           if (!faixaExames[bucket]) faixaExames[bucket] = {};
           if (Array.isArray(app.exames)) {
             app.exames.forEach((ex: string) => {
-              faixaExames[bucket][ex] = (faixaExames[bucket][ex] || 0) + 1;
+              if (!faixaExames[bucket][ex]) faixaExames[bucket][ex] = { count: 0, value: 0 };
+              faixaExames[bucket][ex].count += 1;
+              faixaExames[bucket][ex].value += app._value;
             });
           }
         });
@@ -769,19 +859,20 @@ export default function Home() {
         const order = ["Criança", "Adulto", "Idoso"];
 
         return order
-          .filter(f => faixaCounts[f] > 0)
+          .filter(f => faixaCounts[f] && faixaCounts[f].count > 0)
           .map(faixa => {
             const breakdown = faixaExames[faixa] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
+              .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
-              .map(([name, count]) => ({ name, count, value: count * 30 }));
+              .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
               id: faixa,
               title: faixa,
               subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Etária",
-              count: faixaCounts[faixa],
+              count: faixaCounts[faixa].count,
+              value: faixaCounts[faixa].value,
               icon: <Users className="h-5 w-5 text-purple-500" />,
               topExames: top3
             };
@@ -789,12 +880,17 @@ export default function Home() {
       }
 
       // Default Logic
-      const buckets: Record<string, number> = { "Criança": 0, "Adulto": 0, "Idoso": 0 };
+      const buckets: Record<string, { count: number, value: number }> = { 
+        "Criança": { count: 0, value: 0 }, 
+        "Adulto": { count: 0, value: 0 }, 
+        "Idoso": { count: 0, value: 0 } 
+      };
       const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
       appointments.forEach(app => {
         const bucket = getAgeBucket(app.nascimento);
         if (buckets[bucket] !== undefined) {
-          buckets[bucket]++;
+          buckets[bucket].count++;
+          buckets[bucket].value += app._value;
         }
       });
       const order = ["Criança", "Adulto", "Idoso"];
@@ -803,7 +899,8 @@ export default function Home() {
           id: name,
           title: name,
           subtitle: ranges[name as keyof typeof ranges] || "Faixa Etária",
-          count: buckets[name] || 0,
+          count: buckets[name]?.count || 0,
+          value: buckets[name]?.value || 0,
           icon: <Users className="h-5 w-5 text-purple-500" />
         }))
         .filter(item => item.count > 0);
@@ -812,39 +909,44 @@ export default function Home() {
     if (statType === "exames") {
       // Logic for "Exames" + "Unidade" + "All" => Show Top 3 Units per Exam
       if (filterCategory === 'unidade' && filterValue === 'all') {
-        const exameUnidades: Record<string, Record<string, number>> = {};
-        const exameCounts: Record<string, number> = {};
+        const exameUnidades: Record<string, Record<string, { count: number, value: number }>> = {};
+        const exameCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const u = app._unit;
           if (Array.isArray(app.exames)) {
             app.exames.forEach((ex: string) => {
-              exameCounts[ex] = (exameCounts[ex] || 0) + 1;
+              if (!exameCounts[ex]) exameCounts[ex] = { count: 0, value: 0 };
+              exameCounts[ex].count += 1;
+              exameCounts[ex].value += app._value;
 
               if (!exameUnidades[ex]) exameUnidades[ex] = {};
-              exameUnidades[ex][u] = (exameUnidades[ex][u] || 0) + 1;
+              if (!exameUnidades[ex][u]) exameUnidades[ex][u] = { count: 0, value: 0 };
+              exameUnidades[ex][u].count += 1;
+              exameUnidades[ex][u].value += app._value;
             });
           }
         });
 
         return Object.keys(exameCounts)
-          .sort((a, b) => exameCounts[b] - exameCounts[a])
+          .sort((a, b) => exameCounts[b].count - exameCounts[a].count)
           .map(exame => {
             const breakdown = exameUnidades[exame] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
+              .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
-              .map(([name, count]) => ({
+              .map(([name, data]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
-                count,
-                value: count * 30
+                count: data.count,
+                value: data.value
               }));
 
             return {
               id: exame,
               title: exame,
               subtitle: "Procedimento",
-              count: exameCounts[exame],
+              count: exameCounts[exame].count,
+              value: exameCounts[exame].value,
               icon: <Activity className="h-5 w-5 text-orange-500" />,
               topUnidades: top3
             };
@@ -853,35 +955,40 @@ export default function Home() {
 
       // Logic for "Exames" + "Convenio" + "All" => Show Top 3 Convenios per Exam
       if (filterCategory === 'convenio' && filterValue === 'all') {
-        const exameConvenios: Record<string, Record<string, number>> = {};
-        const exameCounts: Record<string, number> = {};
+        const exameConvenios: Record<string, Record<string, { count: number, value: number }>> = {};
+        const exameCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const c = app.convenio || "Não informado";
           if (Array.isArray(app.exames)) {
             app.exames.forEach((ex: string) => {
-              exameCounts[ex] = (exameCounts[ex] || 0) + 1;
+              if (!exameCounts[ex]) exameCounts[ex] = { count: 0, value: 0 };
+              exameCounts[ex].count += 1;
+              exameCounts[ex].value += app._value;
 
               if (!exameConvenios[ex]) exameConvenios[ex] = {};
-              exameConvenios[ex][c] = (exameConvenios[ex][c] || 0) + 1;
+              if (!exameConvenios[ex][c]) exameConvenios[ex][c] = { count: 0, value: 0 };
+              exameConvenios[ex][c].count += 1;
+              exameConvenios[ex][c].value += app._value;
             });
           }
         });
 
         return Object.keys(exameCounts)
-          .sort((a, b) => exameCounts[b] - exameCounts[a])
+          .sort((a, b) => exameCounts[b].count - exameCounts[a].count)
           .map(exame => {
             const breakdown = exameConvenios[exame] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
+              .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
-              .map(([name, count]) => ({ name, count, value: count * 30 }));
+              .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
               id: exame,
               title: exame,
               subtitle: "Procedimento",
-              count: exameCounts[exame],
+              count: exameCounts[exame].count,
+              value: exameCounts[exame].value,
               icon: <Activity className="h-5 w-5 text-orange-500" />,
               topConvenios: top3
             };
@@ -890,36 +997,41 @@ export default function Home() {
 
       // Logic for "Exames" + "Faixa Etaria" + "All" => Show Top 3 Age Groups per Exam
       if (filterCategory === 'faixaEtaria' && filterValue === 'all') {
-        const exameFaixas: Record<string, Record<string, number>> = {};
-        const exameCounts: Record<string, number> = {};
+        const exameFaixas: Record<string, Record<string, { count: number, value: number }>> = {};
+        const exameCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
           const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
           if (Array.isArray(app.exames)) {
             app.exames.forEach((ex: string) => {
-              exameCounts[ex] = (exameCounts[ex] || 0) + 1;
+              if (!exameCounts[ex]) exameCounts[ex] = { count: 0, value: 0 };
+              exameCounts[ex].count += 1;
+              exameCounts[ex].value += app._value;
 
               if (!exameFaixas[ex]) exameFaixas[ex] = {};
-              exameFaixas[ex][bucket] = (exameFaixas[ex][bucket] || 0) + 1;
+              if (!exameFaixas[ex][bucket]) exameFaixas[ex][bucket] = { count: 0, value: 0 };
+              exameFaixas[ex][bucket].count += 1;
+              exameFaixas[ex][bucket].value += app._value;
             });
           }
         });
 
         return Object.keys(exameCounts)
-          .sort((a, b) => exameCounts[b] - exameCounts[a])
+          .sort((a, b) => exameCounts[b].count - exameCounts[a].count)
           .map(exame => {
             const breakdown = exameFaixas[exame] || {};
             const top3 = Object.entries(breakdown)
-              .sort((a, b) => b[1] - a[1])
+              .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
-              .map(([name, count]) => ({ name, count, value: count * 30 }));
+              .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
               id: exame,
               title: exame,
               subtitle: "Procedimento",
-              count: exameCounts[exame],
+              count: exameCounts[exame].count,
+              value: exameCounts[exame].value,
               icon: <Activity className="h-5 w-5 text-orange-500" />,
               topFaixas: top3
             };
@@ -927,21 +1039,24 @@ export default function Home() {
       }
 
       // Default Logic
-      const counts: Record<string, number> = {};
+      const counts: Record<string, { count: number, value: number }> = {};
       appointments.forEach(app => {
         if (Array.isArray(app.exames)) {
           app.exames.forEach((ex: string) => {
-            counts[ex] = (counts[ex] || 0) + 1;
+            if (!counts[ex]) counts[ex] = { count: 0, value: 0 };
+            counts[ex].count += 1;
+            counts[ex].value += app._value;
           });
         }
       });
       return Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([name, count]) => ({
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([name, data]) => ({
           id: name,
           title: name,
           subtitle: "Procedimento",
-          count,
+          count: data.count,
+          value: data.value,
           icon: <Activity className="h-5 w-5 text-orange-500" />
         }));
     }
@@ -949,6 +1064,7 @@ export default function Home() {
   }, [filteredAppointments, statType, unitConfig, filterCategory, filterValue]);
 
   const totalPacientes = displayData.reduce((acc, item) => acc + item.count, 0);
+  const totalEstimado = displayData.reduce((acc, item) => acc + (item.value || 0), 0);
 
   // Apply sorting to displayData
   const sortedDisplayData = useMemo(() => {
@@ -1292,7 +1408,7 @@ export default function Home() {
                           <td colSpan={2} className="px-6 py-4 text-right uppercase text-xs tracking-wider">Total Geral</td>
                           <td className="px-6 py-4 text-center text-lg text-blue-700">{totalPacientes}</td>
                           <td className="px-6 py-4"></td>
-                          <td className="px-6 py-4 text-right text-green-700">{(statType === 'unidades' || statType === 'historico') && `R$ ${(totalPacientes * 30).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</td>
+                          <td className="px-6 py-4 text-right text-green-700">{(statType === 'unidades' || statType === 'historico') && `R$ ${(totalEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1470,7 +1586,7 @@ export default function Home() {
                   <div className="hidden sm:block w-px h-4 bg-gray-300"></div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Valor Estimado:</span>
-                    <span className="text-base font-bold text-green-600">{`R$ ${(totalPacientes * 30).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</span>
+                    <span className="text-base font-bold text-green-600">{`R$ ${(totalEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</span>
                   </div>
                 </>
               )}

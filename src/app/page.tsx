@@ -1372,6 +1372,13 @@ export default function Home() {
                                     </div>
                                   </div>
                                 ))}
+                                <div className="flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 mt-0.5">
+                                  <span className="font-semibold text-blue-800">Total</span>
+                                  <div className="flex gap-1.5">
+                                    <span className="font-bold text-blue-900">{item.count}</span>
+                                    <span className="font-mono text-green-700">R${item.value || 0}</span>
+                                  </div>
+                                </div>
                               </div>
                             ) : item.topConvenios ? (
                               <div className="flex flex-col gap-1 w-full px-1">
@@ -1384,6 +1391,13 @@ export default function Home() {
                                     </div>
                                   </div>
                                 ))}
+                                <div className="flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 mt-0.5">
+                                  <span className="font-semibold text-blue-800">Total</span>
+                                  <div className="flex gap-1.5">
+                                    <span className="font-bold text-blue-900">{item.count}</span>
+                                    <span className="font-mono text-green-700">R${item.value || 0}</span>
+                                  </div>
+                                </div>
                               </div>
                             ) : item.topFaixas ? (
                               <div className="flex flex-col gap-1 w-full px-1">
@@ -1396,6 +1410,13 @@ export default function Home() {
                                     </div>
                                   </div>
                                 ))}
+                                <div className="flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 mt-0.5">
+                                  <span className="font-semibold text-blue-800">Total</span>
+                                  <div className="flex gap-1.5">
+                                    <span className="font-bold text-blue-900">{item.count}</span>
+                                    <span className="font-mono text-green-700">R${item.value || 0}</span>
+                                  </div>
+                                </div>
                               </div>
                             ) : item.topExames ? (
                               <div className="flex flex-col gap-1 w-full px-1">
@@ -1408,6 +1429,13 @@ export default function Home() {
                                     </div>
                                   </div>
                                 ))}
+                                <div className="flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 mt-0.5">
+                                  <span className="font-semibold text-blue-800">Total</span>
+                                  <div className="flex gap-1.5">
+                                    <span className="font-bold text-blue-900">{item.count}</span>
+                                    <span className="font-mono text-green-700">R${item.value || 0}</span>
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <>

@@ -189,8 +189,9 @@ export async function saveAppointmentAction(
     }
 
     // --- BUSCAR PREÇOS ---
+    const isParticularForPrecos = v.convenio?.trim().toLowerCase() === "particular";
     const precos: Record<string, string> = {};
-    if (v.exames && v.exames.length > 0) {
+    if (isParticularForPrecos && v.exames && v.exames.length > 0) {
       try {
         const examesConfigPath = `/${firebaseBase}/agendamentoWhatsApp/configuracoes/exames`;
         const dbInstance = getDatabaseInstance(environment);

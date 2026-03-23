@@ -585,6 +585,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                               const formattedUnit = app.unidade
                                 .replace(/([A-Z])/g, " $1")
                                 .trim();
+                              const isParticular = app.convenio?.trim().toLowerCase() === "particular";
 
                               return (
                                 <div key={app.id}>
@@ -635,7 +636,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                         <strong>Exames:</strong>{" "}
                                         {app.exames.map((exame, i) => {
                                           const preco = examPrices[exame];
-                                          const precoStr = preco
+                                          const precoStr = (isParticular && preco)
                                             ? (typeof preco === 'number' ? `R$ ${preco.toFixed(2).replace('.', ',')}` : preco)
                                             : "";
                                           return (
@@ -647,6 +648,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                         })}
                                       </p>
                                       {(() => {
+                                        if (!isParticular) return null;
                                         const total = app.exames.reduce((acc, exame) => {
                                           const preco = examPrices[exame];
                                           if (typeof preco === 'number') return acc + preco;

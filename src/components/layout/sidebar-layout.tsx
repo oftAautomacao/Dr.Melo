@@ -38,10 +38,6 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }
             Conversas
           </Link>
 
-          <Link href="/download" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <Download className="mr-3 h-5 w-5" /> {/* Ícone de Download */}
-            Download
-          </Link>
           <Link href="/configuracoes" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
             <Settings className="mr-3 h-5 w-5" /> {/* Ícone de Configurações */}
             Configurações

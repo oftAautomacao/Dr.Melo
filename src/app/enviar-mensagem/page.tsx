@@ -4,10 +4,11 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import SidebarLayout from '@/components/layout/sidebar-layout';
 import { useState, useEffect, useRef, Suspense, useCallback } from "react";
-import { MessagesSquare, RefreshCcw, Send, ArrowLeft, Sparkles, Info, BrainCircuit } from "lucide-react";
+import { MessagesSquare, RefreshCcw, Send, ArrowLeft, Sparkles, Info, BrainCircuit, Download, Zap, MessageSquare } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { getFirestoreInstance } from "@/lib/firebase";
+import { getFirestoreInstance, getDatabaseInstance } from "@/lib/firebase";
+import { ref, get } from "firebase/database";
 import { ENVIRONMENT } from "../../../ambiente";
 import { Toaster, toast } from 'sonner';
 
@@ -34,6 +35,7 @@ const AVATARS = [
 
 import { identifyPatientSourceAction, type SourceAnalysisResult } from "@/app/actions/ai-analysis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 
 
 /* 
@@ -144,16 +146,153 @@ function PatientSourceHeaderControl({
   );
 }
 
+function DownloadHeaderControl({
+  patientId,
+  environment,
+  unit,
+}: {
+  patientId: string | null;
+  environment: "teste" | "producao";
+  unit: "DRM" | "OFT/45" | null;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<string[]>(["conversa"]);
+  const [isDownloading, setIsDownloading] = useState(false);
+
+  const options = [
+    { id: "conversa", label: "Conversa", icon: <MessageSquare className="h-3.5 w-3.5 text-green-600" /> },
+    { id: "agenteAtendimento", label: "IA - Atendimento", icon: <BrainCircuit className="h-3.5 w-3.5 text-blue-600" /> },
+    { id: "agenteExtracaoInfConversa", label: "IA - Extração", icon: <Zap className="h-3.5 w-3.5 text-purple-600" /> },
+  ];
+
+  const toggleItem = (id: string) => {
+    setSelectedItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const extractDefinition = (data: any): string => {
+    if (!data) return "";
+    if (typeof data === "string") return data;
+    let definitions: string[] = [];
+    const findDefinitions = (obj: any) => {
+      if (typeof obj === "object" && obj !== null) {
+        if ("definicao" in obj) definitions.push(String(obj.definicao));
+        for (const key in obj) findDefinitions(obj[key]);
+      }
+    };
+    findDefinitions(data);
+    return definitions.length > 0 ? definitions.join("\n\n") : JSON.stringify(data, null, 2);
+  };
+
+  const handleDownload = async () => {
+    if (!patientId || selectedItems.length === 0 || !unit) return;
+    setIsOpen(false);
+    setIsDownloading(true);
+    try {
+      for (const item of selectedItems) {
+        if (item === "conversa") {
+          const historyKey = unit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
+          const docRef = doc(getFirestoreInstance(environment), historyKey, patientId);
+          const snap = await getDoc(docRef);
+          if (snap.exists()) {
+            const data = snap.data();
+            let history: any[] = [];
+            if (data) {
+              if (Array.isArray((data as any).glbHistoricoDaConversa)) {
+                history = (data as any).glbHistoricoDaConversa;
+              } else {
+                for (const key in data) { if (Array.isArray((data as any)[key])) { history = (data as any)[key]; break; } }
+              }
+            }
+            const filtered = history.filter(m => m.role === "user" || m.role === "assistant");
+            downloadBlob(JSON.stringify(filtered, null, 2), "conversa", "json");
+          }
+        } else {
+          const pathSuffix = item === "agenteAtendimento" 
+            ? "/agendamentoWhatsApp/configuracoes/definicoesIA/agenteAtendimento"
+            : "/agendamentoWhatsApp/configuracoes/definicoesIA/agenteExtracaoInfConversa";
+          const fileName = item === "agenteAtendimento" ? "promptAtendimento" : "promptExtracao";
+          
+          const dbRTDB = getDatabaseInstance(environment);
+          const snapshot = await get(ref(dbRTDB, `/${unit}${pathSuffix}`));
+          if (snapshot.exists()) {
+            downloadBlob(extractDefinition(snapshot.val()), fileName, "txt");
+          }
+        }
+      }
+      toast.success("Download concluído!");
+    } catch (error) {
+      console.error("Download error:", error);
+      toast.error("Erro ao realizar download.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const downloadBlob = (content: string, fileName: string, extension: string) => {
+    const blob = new Blob([content], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${fileName}.${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  if (!patientId) return null;
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="secondary" size="sm" className="ml-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border-none shadow-none gap-2 h-8">
+          <Download className="h-4 w-4" />
+          <span className="hidden md:inline">Baixar</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-2 mr-4" align="end">
+        <div className="space-y-1">
+          <p className="text-[10px] font-bold text-slate-400 uppercase px-2 py-1">Opções de Download</p>
+          {options.map(opt => (
+            <div 
+              key={opt.id} 
+              onClick={() => toggleItem(opt.id)}
+              className="flex items-center gap-2 p-2 rounded-md hover:bg-slate-50 cursor-pointer transition-colors"
+            >
+              <Checkbox checked={selectedItems.includes(opt.id)} className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-1.5 flex-1">
+                {opt.icon}
+                <span className="text-xs font-medium text-slate-700">{opt.label}</span>
+              </div>
+            </div>
+          ))}
+          <Button 
+            onClick={handleDownload} 
+            disabled={isDownloading || selectedItems.length === 0} 
+            className="w-full mt-2 h-8 text-xs bg-slate-900 hover:bg-slate-800 text-white"
+          >
+            {isDownloading ? "Processando..." : "Iniciar Download"}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function EnviarMensagemComponent() {
   const router = useRouter();
   /* ---------- state ---------- */
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
+  const [environment, setEnvironment] = useState<"teste" | "producao">("teste");
   const searchParams = useSearchParams();
 
-  /* ---------- get unit from localStorage ---------- */
+  /* ---------- get config from localStorage ---------- */
   useEffect(() => {
     const storedPathBase = localStorage.getItem("FIREBASE_PATH_BASE") as "DRM" | "OFT/45" | null;
     if (storedPathBase) setSelectedUnit(storedPathBase);
+
+    const storedEnv = localStorage.getItem("APP_ENVIRONMENT") as "teste" | "producao" | null;
+    if (storedEnv) setEnvironment(storedEnv);
   }, []);
 
   /* ------------------------------ estado ----------------------------- */
@@ -188,7 +327,7 @@ function EnviarMensagemComponent() {
       try {
         const historyKey =
           selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
-        const col = collection(getFirestoreInstance(ENVIRONMENT), historyKey);
+        const col = collection(getFirestoreInstance(environment), historyKey);
         const snaps = await getDocs(col);
         setPatientList(snaps.docs.map((d) => d.id));
       } catch (err) {
@@ -206,7 +345,7 @@ function EnviarMensagemComponent() {
       const historyKey =
         selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
 
-      const ref = doc(getFirestoreInstance(ENVIRONMENT), historyKey, patientId);
+      const ref = doc(getFirestoreInstance(environment), historyKey, patientId);
       const snap: DocumentSnapshot = await getDoc(ref);
       const data = snap.exists() ? snap.data() : null;
 
@@ -264,7 +403,7 @@ function EnviarMensagemComponent() {
 
     let apiCredentials: { id: string; token: string; };
 
-    if (ENVIRONMENT === "teste") {
+    if (environment === "teste") {
       apiCredentials = {
         id: "3B74CE9AFF0D20904A9E9E548CC778EF",
         token: "A8F754F1402CAE3625D5D578",
@@ -319,7 +458,7 @@ function EnviarMensagemComponent() {
       const historyKey =
         selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
 
-      const refChat = doc(getFirestoreInstance(ENVIRONMENT), historyKey, selectedPatient);
+      const refChat = doc(getFirestoreInstance(environment), historyKey, selectedPatient);
       const snap = await getDoc(refChat);
       const data = snap.exists() ? snap.data() : null;
 
@@ -414,10 +553,17 @@ function EnviarMensagemComponent() {
             <h1 className="text-base font-medium mr-4">Conversa</h1>
 
             {/* AI Control in Header */}
-            <PatientSourceHeaderControl
-              patientId={selectedPatient}
-              history={conversationHistory}
-            />
+            <div className="ml-auto flex items-center gap-2">
+              <DownloadHeaderControl
+                patientId={selectedPatient}
+                environment={environment}
+                unit={selectedUnit}
+              />
+              <PatientSourceHeaderControl
+                patientId={selectedPatient}
+                history={conversationHistory}
+              />
+            </div>
           </header>
 
           {/* ========================================================================================= */}
@@ -470,7 +616,7 @@ function EnviarMensagemComponent() {
               value={messageContent}
               onChange={(e) => setMessageContent(e.target.value)}
               onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-              className="flex-1 resize-none h-4 rounded-full bg-blue-50 px-10 py-4 text-sm focus:ring-2 focus:ring-blue-300"
+              className="flex-1 resize-none h-9 min-h-0 rounded-full bg-blue-50 px-5 py-2 text-sm focus:ring-2 focus:ring-blue-300"
             />
             <Button
               variant="ghost"

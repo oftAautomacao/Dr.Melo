@@ -630,14 +630,15 @@ export default function Home() {
                 value: data.value
               }));
 
-            return {
-              id: convenio,
-              title: convenio,
-              subtitle: "Convênio Médico",
-              count: convenioCounts[convenio].count,
-              icon: <FileText className="h-5 w-5 text-green-600" />,
-              topUnidades: top3
-            };
+              return {
+                id: convenio,
+                title: convenio,
+                subtitle: "Convênio Médico",
+                count: convenioCounts[convenio].count,
+                value: convenioCounts[convenio].value,
+                icon: <FileText className="h-5 w-5 text-green-600" />,
+                topUnidades: top3
+              };
           });
       }
 
@@ -669,14 +670,15 @@ export default function Home() {
               .slice(0, 3)
               .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
-            return {
-              id: convenio,
-              title: convenio,
-              subtitle: "Convênio Médico",
-              count: convenioCounts[convenio].count,
-              icon: <FileText className="h-5 w-5 text-green-600" />,
-              topFaixas: top3
-            };
+              return {
+                id: convenio,
+                title: convenio,
+                subtitle: "Convênio Médico",
+                count: convenioCounts[convenio].count,
+                value: convenioCounts[convenio].value,
+                icon: <FileText className="h-5 w-5 text-green-600" />,
+                topFaixas: top3
+              };
           });
       }
 
@@ -711,14 +713,15 @@ export default function Home() {
               .slice(0, 3)
               .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
-            return {
-              id: convenio,
-              title: convenio,
-              subtitle: "Convênio Médico",
-              count: convenioCounts[convenio].count,
-              icon: <FileText className="h-5 w-5 text-green-600" />,
-              topExames: top3
-            };
+              return {
+                id: convenio,
+                title: convenio,
+                subtitle: "Convênio Médico",
+                count: convenioCounts[convenio].count,
+                value: convenioCounts[convenio].value,
+                icon: <FileText className="h-5 w-5 text-green-600" />,
+                topExames: top3
+              };
           });
       }
 
@@ -1104,7 +1107,7 @@ export default function Home() {
     // Default sorting logic for cards (and table if no column selected)
     // Matches the Simple Mode sorting: highest count first
     // Except for 'historico' (months), which relies on its own chronology sorted earlier
-    if (statType !== "historico") {
+    if (statType !== "historico" && statType !== "faixaEtaria") {
       return [...displayData].sort((a, b) => b.count - a.count);
     }
 
@@ -1408,7 +1411,7 @@ export default function Home() {
                           <td colSpan={2} className="px-6 py-4 text-right uppercase text-xs tracking-wider">Total Geral</td>
                           <td className="px-6 py-4 text-center text-lg text-blue-700">{totalPacientes}</td>
                           <td className="px-6 py-4"></td>
-                          <td className="px-6 py-4 text-right text-green-700">{(statType === 'unidades' || statType === 'historico') && `R$ ${(totalEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</td>
+                          <td className="px-6 py-4 text-right text-green-700">{`R$ ${(totalEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1581,15 +1584,11 @@ export default function Home() {
                 <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">{statType === 'exames' ? 'Total de Exames:' : 'Total de Pacientes:'}</span>
                 <span className="text-base font-bold text-blue-900">{totalPacientes}</span>
               </div>
-              {(statType === 'unidades' || statType === 'historico') && (
-                <>
-                  <div className="hidden sm:block w-px h-4 bg-gray-300"></div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Valor Estimado:</span>
-                    <span className="text-base font-bold text-green-600">{`R$ ${(totalEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</span>
-                  </div>
-                </>
-              )}
+              <div className="hidden sm:block w-px h-4 bg-gray-300"></div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">Valor Estimado:</span>
+                <span className="text-base font-bold text-green-600">{`R$ ${(totalEstimado).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}</span>
+              </div>
             </div>
           )}
 

@@ -4,7 +4,7 @@ import SidebarLayout from "@/components/layout/sidebar-layout";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight } from "lucide-react";
+import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Building2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
@@ -111,6 +111,17 @@ export default function Home() {
   // Drill-down states
   const [drillDownOpen, setDrillDownOpen] = useState(false);
   const [activeDrillDown, setActiveDrillDown] = useState<{ title: string; patients: AppointmentDetail[] } | null>(null);
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+
+  const toggleCardExpansion = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedCards(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
 
@@ -482,7 +493,6 @@ export default function Home() {
           const breakdown = unitConvenios[unit] || {};
           const top3 = Object.entries(breakdown)
             .sort((a, b) => b[1].count - a[1].count)
-            .slice(0, 3)
             .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
           return {
@@ -491,7 +501,7 @@ export default function Home() {
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
-            icon: <MapPin className="h-5 w-5 text-blue-500" />,
+            icon: <Building2 className="h-5 w-5 text-blue-500" />,
             topConvenios: top3
           };
         });
@@ -521,7 +531,6 @@ export default function Home() {
           // Show Top 3 Age Groups by count
           const faixas = Object.entries(breakdown)
             .sort((a, b) => b[1].count - a[1].count)
-            .slice(0, 3)
             .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
           return {
@@ -530,7 +539,7 @@ export default function Home() {
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
-            icon: <MapPin className="h-5 w-5 text-blue-500" />,
+            icon: <Building2 className="h-5 w-5 text-blue-500" />,
             topFaixas: faixas
           };
         });
@@ -561,7 +570,6 @@ export default function Home() {
           const breakdown = unitExames[unit] || {};
           const top3 = Object.entries(breakdown)
             .sort((a, b) => b[1].count - a[1].count)
-            .slice(0, 3)
             .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
           return {
@@ -570,7 +578,7 @@ export default function Home() {
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
-            icon: <MapPin className="h-5 w-5 text-blue-500" />,
+            icon: <Building2 className="h-5 w-5 text-blue-500" />,
             topExames: top3
           };
         });
@@ -593,7 +601,7 @@ export default function Home() {
         subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
         count: counts[unit].count,
         value: counts[unit].value,
-        icon: <MapPin className="h-5 w-5 text-blue-500" />
+        icon: <Building2 className="h-5 w-5 text-blue-500" />
       }));
     }
 
@@ -667,7 +675,6 @@ export default function Home() {
             const breakdown = convenioFaixas[convenio] || {};
             const top3 = Object.entries(breakdown)
               .sort((a, b) => b[1].count - a[1].count)
-              .slice(0, 3)
               .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
               return {
@@ -710,7 +717,6 @@ export default function Home() {
             const breakdown = convenioExames[convenio] || {};
             const top3 = Object.entries(breakdown)
               .sort((a, b) => b[1].count - a[1].count)
-              .slice(0, 3)
               .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
               return {
@@ -774,7 +780,6 @@ export default function Home() {
             const breakdown = faixaUnidades[faixa] || {};
             const top3 = Object.entries(breakdown)
               .sort((a, b) => b[1].count - a[1].count)
-              .slice(0, 3)
               .map(([name, data]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
                 count: data.count,
@@ -821,7 +826,6 @@ export default function Home() {
             const breakdown = faixaConvenios[faixa] || {};
             const top3 = Object.entries(breakdown)
               .sort((a, b) => b[1].count - a[1].count)
-              .slice(0, 3)
               .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
@@ -867,7 +871,6 @@ export default function Home() {
             const breakdown = faixaExames[faixa] || {};
             const top3 = Object.entries(breakdown)
               .sort((a, b) => b[1].count - a[1].count)
-              .slice(0, 3)
               .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
@@ -937,7 +940,6 @@ export default function Home() {
             const breakdown = exameUnidades[exame] || {};
             const top3 = Object.entries(breakdown)
               .sort((a, b) => b[1].count - a[1].count)
-              .slice(0, 3)
               .map(([name, data]) => ({
                 name: unitConfig?.[name]?.empresa ?? name,
                 count: data.count,
@@ -983,7 +985,6 @@ export default function Home() {
             const breakdown = exameConvenios[exame] || {};
             const top3 = Object.entries(breakdown)
               .sort((a, b) => b[1].count - a[1].count)
-              .slice(0, 3)
               .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
@@ -1026,7 +1027,6 @@ export default function Home() {
             const breakdown = exameFaixas[exame] || {};
             const top3 = Object.entries(breakdown)
               .sort((a, b) => b[1].count - a[1].count)
-              .slice(0, 3)
               .map(([name, data]) => ({ name, count: data.count, value: data.value }));
 
             return {
@@ -1128,7 +1128,7 @@ export default function Home() {
 
 
   // Function to handle card click for detailed records
-  const handleCardDrillDown = (item: CardData) => {
+  const handleDrillDown = (item: CardData, subItemName?: string) => {
     // If NOT in analytic mode, navigate to unit calendar if it's a unit card
     if (dashboardMode === 'simple') {
       if (statType === 'unidades') {
@@ -1137,9 +1137,9 @@ export default function Home() {
       return;
     }
 
-    // In Analytic Mode: Only drill down if there's no breakdown
+    // In Analytic Mode: Only drill down if there's no breakdown OR if it's a subItem click
     const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
-    if (hasBreakdown) return;
+    if (hasBreakdown && !subItemName) return;
 
     // Filter appointments for this item from filteredAppointments
     let matches: any[] = [];
@@ -1155,6 +1155,19 @@ export default function Home() {
       matches = filteredAppointments.filter((app: any) => obterNomeMes(app._date) === item.id);
     }
 
+    // Secondary filter if subItemName is provided
+    if (subItemName) {
+      if (item.topUnidades) {
+        matches = matches.filter((app: any) => (unitConfig?.[app._unit]?.empresa ?? app._unit) === subItemName);
+      } else if (item.topConvenios) {
+        matches = matches.filter((app: any) => (app.convenio || "Não informado") === subItemName);
+      } else if (item.topFaixas) {
+        matches = matches.filter((app: any) => getAgeBucket(app.nascimento) === subItemName);
+      } else if (item.topExames) {
+        matches = matches.filter((app: any) => Array.isArray(app.exames) && app.exames.includes(subItemName));
+      }
+    }
+
     const details: AppointmentDetail[] = matches.map((app: any) => ({
       nome: app.nomePaciente || app.nome || "Não informado",
       nascimento: app.nascimento || "-",
@@ -1168,7 +1181,8 @@ export default function Home() {
       telefone: app.telefone || ""
     }));
 
-    setActiveDrillDown({ title: item.title, patients: details });
+    const finalTitle = subItemName ? `${item.title} › ${subItemName}` : item.title;
+    setActiveDrillDown({ title: finalTitle, patients: details });
     setDrillDownOpen(true);
   };
 
@@ -1430,7 +1444,7 @@ export default function Home() {
                         key={item.id}
                         className={`w-full max-w-sm rounded-xl shadow-lg bg-white p-2 transition-transform duration-200 relative 
                             ${isClickable ? "cursor-pointer hover:scale-105" : ""}`}
-                        onClick={() => handleCardDrillDown(item)}
+                        onClick={() => handleDrillDown(item)}
                       >
                         <div className="relative z-10 flex flex-col h-full">
                           <CardHeader className="p-0 pb-1 flex flex-row items-start justify-between space-y-0 w-full">
@@ -1473,87 +1487,159 @@ export default function Home() {
                               </div>
                             )}
 
-                            {/* If NOT Unidades, show Icon */}
-                            {statType !== "unidades" && (
+                            {/* Only show Icon in Advanced (Analytic) Mode */}
+                            {dashboardMode === 'advanced' && (
                               <div className="shrink-0 opacity-80">{item.icon}</div>
                             )}
                           </CardHeader>
 
                           <CardContent className="p-0 text-center flex-grow flex flex-col justify-center mt-0.5">
                             {item.topUnidades ? (
-                              <div className="flex flex-col gap-1 w-full px-1">
-                                {item.topUnidades.map((u, i) => (
-                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100">
-                                    <span className="truncate font-medium text-gray-700 max-w-[80px]" title={u.name}>{u.name}</span>
+                              <div className="flex flex-col justify-between w-full h-full px-1 pt-1 pb-1">
+                                <div className="flex flex-col gap-1 w-full">
+                                  {(expandedCards.has(item.id) ? item.topUnidades : item.topUnidades.slice(0, 3)).map((u, i) => (
+                                    <div 
+                                      key={i} 
+                                      className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group"
+                                      onClick={() => handleDrillDown(item, u.name)}
+                                      title={`Ver pacientes de ${u.name}`}
+                                    >
+                                      <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={u.name}>{u.name}</span>
+                                      <div className="flex gap-1.5 px-0.5">
+                                        <span className="font-bold text-gray-900">{u.count}</span>
+                                        <span className="font-mono text-green-600">R${u.value}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <div className="flex-grow flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 shadow-inner">
+                                    <span className="font-semibold text-blue-800">Total</span>
                                     <div className="flex gap-1.5">
-                                      <span className="font-bold text-gray-900">{u.count}</span>
-                                      <span className="font-mono text-green-600">R${u.value}</span>
+                                      <span className="font-bold text-blue-900">{item.count}</span>
+                                      <span className="font-mono text-green-700">R${item.value || 0}</span>
                                     </div>
                                   </div>
-                                ))}
-                                <div className="flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 mt-0.5">
-                                  <span className="font-semibold text-blue-800">Total</span>
-                                  <div className="flex gap-1.5">
-                                    <span className="font-bold text-blue-900">{item.count}</span>
-                                    <span className="font-mono text-green-700">R${item.value || 0}</span>
-                                  </div>
+                                  {item.topUnidades.length > 3 && (
+                                    <button 
+                                      onClick={(e) => toggleCardExpansion(item.id, e)} 
+                                      className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"
+                                      title={expandedCards.has(item.id) ? "Ver menos" : "Ver todos"}
+                                    >
+                                      {expandedCards.has(item.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ) : item.topConvenios ? (
-                              <div className="flex flex-col gap-1 w-full px-1">
-                                {item.topConvenios.map((c, i) => (
-                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100">
-                                    <span className="truncate font-medium text-gray-700 max-w-[80px]" title={c.name}>{c.name}</span>
+                              <div className="flex flex-col justify-between w-full h-full px-1 pt-1 pb-1">
+                                <div className="flex flex-col gap-1 w-full">
+                                  {(expandedCards.has(item.id) ? item.topConvenios : item.topConvenios.slice(0, 3)).map((c, i) => (
+                                    <div 
+                                      key={i} 
+                                      className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group"
+                                      onClick={() => handleDrillDown(item, c.name)}
+                                      title={`Ver pacientes de ${c.name}`}
+                                    >
+                                      <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={c.name}>{c.name}</span>
+                                      <div className="flex gap-1.5 px-0.5">
+                                        <span className="font-bold text-gray-900">{c.count}</span>
+                                        <span className="font-mono text-green-600">R${c.value}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <div className="flex-grow flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 shadow-inner">
+                                    <span className="font-semibold text-blue-800">Total</span>
                                     <div className="flex gap-1.5">
-                                      <span className="font-bold text-gray-900">{c.count}</span>
-                                      <span className="font-mono text-green-600">R${c.value}</span>
+                                      <span className="font-bold text-blue-900">{item.count}</span>
+                                      <span className="font-mono text-green-700">R${item.value || 0}</span>
                                     </div>
                                   </div>
-                                ))}
-                                <div className="flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 mt-0.5">
-                                  <span className="font-semibold text-blue-800">Total</span>
-                                  <div className="flex gap-1.5">
-                                    <span className="font-bold text-blue-900">{item.count}</span>
-                                    <span className="font-mono text-green-700">R${item.value || 0}</span>
-                                  </div>
+                                  {item.topConvenios.length > 3 && (
+                                    <button 
+                                      onClick={(e) => toggleCardExpansion(item.id, e)} 
+                                      className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"
+                                      title={expandedCards.has(item.id) ? "Ver menos" : "Ver todos"}
+                                    >
+                                      {expandedCards.has(item.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ) : item.topFaixas ? (
-                              <div className="flex flex-col gap-1 w-full px-1">
-                                {item.topFaixas.map((f, i) => (
-                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100">
-                                    <span className="truncate font-medium text-gray-700 max-w-[80px]" title={f.name}>{f.name}</span>
+                              <div className="flex flex-col justify-between w-full h-full px-1 pt-1 pb-1">
+                                <div className="flex flex-col gap-1 w-full">
+                                  {(expandedCards.has(item.id) ? item.topFaixas : item.topFaixas.slice(0, 3)).map((f, i) => (
+                                    <div 
+                                      key={i} 
+                                      className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group"
+                                      onClick={() => handleDrillDown(item, f.name)}
+                                      title={`Ver pacientes de ${f.name}`}
+                                    >
+                                      <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={f.name}>{f.name}</span>
+                                      <div className="flex gap-1.5 px-0.5">
+                                        <span className="font-bold text-gray-900">{f.count}</span>
+                                        <span className="font-mono text-green-600">R${f.value}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <div className="flex-grow flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 shadow-inner">
+                                    <span className="font-semibold text-blue-800">Total</span>
                                     <div className="flex gap-1.5">
-                                      <span className="font-bold text-gray-900">{f.count}</span>
-                                      <span className="font-mono text-green-600">R${f.value}</span>
+                                      <span className="font-bold text-blue-900">{item.count}</span>
+                                      <span className="font-mono text-green-700">R${item.value || 0}</span>
                                     </div>
                                   </div>
-                                ))}
-                                <div className="flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 mt-0.5">
-                                  <span className="font-semibold text-blue-800">Total</span>
-                                  <div className="flex gap-1.5">
-                                    <span className="font-bold text-blue-900">{item.count}</span>
-                                    <span className="font-mono text-green-700">R${item.value || 0}</span>
-                                  </div>
+                                  {item.topFaixas.length > 3 && (
+                                    <button 
+                                      onClick={(e) => toggleCardExpansion(item.id, e)} 
+                                      className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"
+                                      title={expandedCards.has(item.id) ? "Ver menos" : "Ver todos"}
+                                    >
+                                      {expandedCards.has(item.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ) : item.topExames ? (
-                              <div className="flex flex-col gap-1 w-full px-1">
-                                {item.topExames.map((e, i) => (
-                                  <div key={i} className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100">
-                                    <span className="truncate font-medium text-gray-700 max-w-[80px]" title={e.name}>{e.name}</span>
+                              <div className="flex flex-col justify-between w-full h-full px-1 pt-1 pb-1">
+                                <div className="flex flex-col gap-1 w-full">
+                                  {(expandedCards.has(item.id) ? item.topExames : item.topExames.slice(0, 3)).map((e, i) => (
+                                    <div 
+                                      key={i} 
+                                      className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group"
+                                      onClick={() => handleDrillDown(item, e.name)}
+                                      title={`Ver pacientes de ${e.name}`}
+                                    >
+                                      <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={e.name}>{e.name}</span>
+                                      <div className="flex gap-1.5 px-0.5">
+                                        <span className="font-bold text-gray-900">{e.count}</span>
+                                        <span className="font-mono text-green-600">R${e.value}</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <div className="flex-grow flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 shadow-inner">
+                                    <span className="font-semibold text-blue-800">Total</span>
                                     <div className="flex gap-1.5">
-                                      <span className="font-bold text-gray-900">{e.count}</span>
-                                      <span className="font-mono text-green-600">R${e.value}</span>
+                                      <span className="font-bold text-blue-900">{item.count}</span>
+                                      <span className="font-mono text-green-700">R${item.value || 0}</span>
                                     </div>
                                   </div>
-                                ))}
-                                <div className="flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 mt-0.5">
-                                  <span className="font-semibold text-blue-800">Total</span>
-                                  <div className="flex gap-1.5">
-                                    <span className="font-bold text-blue-900">{item.count}</span>
-                                    <span className="font-mono text-green-700">R${item.value || 0}</span>
-                                  </div>
+                                  {item.topExames.length > 3 && (
+                                    <button 
+                                      onClick={(e) => toggleCardExpansion(item.id, e)} 
+                                      className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"
+                                      title={expandedCards.has(item.id) ? "Ver menos" : "Ver todos"}
+                                    >
+                                      {expandedCards.has(item.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             ) : (

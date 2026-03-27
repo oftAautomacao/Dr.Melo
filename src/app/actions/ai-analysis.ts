@@ -78,6 +78,7 @@ export interface AppointmentExtractionResult {
     dataAgendamento?: string;
     horario?: string;
     telefone?: string;
+    convenio?: string;
 }
 
 /**
@@ -87,18 +88,20 @@ export async function extractAppointmentFromImageAction(
     base64Image: string
 ): Promise<AppointmentExtractionResult | null> {
     const prompt = `
-    Analise a imagem de agendamento médico e extraia as seguintes informações no formato JSON:
+    Analise a imagem de agendamento médico e extraia as informações RELEVANTES E CONFIRMADAS no formato JSON:
     - nomePaciente (Nome completo)
     - dataNascimento (Formato DD/MM/AAAA)
     - cpf (Apenas números)
-    - unidade (Nome da clínica/unidade)
-    - dataAgendamento (Formato AAAA-MM-DD. Se o texto disser "09/mar", infira o ano corrente 2026, pois hoje é março de 2026)
-    - horario (Formato HH:MM)
+    - unidade (Nome da clínica/unidade que foi ESCOLHIDA ou CONFIRMADA pelo paciente. Se houver nomes entre parênteses ou bairros como 'Meier (Ciom)', extraia o nome completo e o bairro, ex: 'Meier Ciom')
+    - dataAgendamento (Formato AAAA-MM-DD da data ESCOLHIDA ou CONFIRMADA. Se o texto disser "09/mar", infira o ano corrente 2026, pois hoje é março de 2026)
+    - horario (Formato HH:MM do horário ESCOLHIDO ou CONFIRMADO)
     - telefone (Apenas números, incluindo 55 e DDD. Se não houver 55, assuma o do Brasil)
+    - convenio (Nome do plano de saúde, se houver clareza na imagem)
 
     IMPORTANTE:
+    - ANÁLISE DE CONTEXTO: Se houver múltiplos locais, datas ou horários mencionados em um print de conversa, extraia apenas o que o paciente ACEITOU ou CONFIRMOU. Ignore sugestões que foram recusadas. No caso do print enviado, o paciente confirmou 'Meier (Ciom)'.
+    - PREENCHIMENTO SELETIVO: Se não encontrar um campo ou se ele não estiver confirmado, deixe-o em branco ou nulo no JSON. NÃO invente informações.
     - Retorne APENAS o JSON.
-    - Se não encontrar algum campo, deixe-o em branco ou nulo no JSON.
     - Converta datas relativas para o formato solicitado.
   `;
 

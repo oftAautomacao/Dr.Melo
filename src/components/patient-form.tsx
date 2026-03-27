@@ -786,16 +786,35 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
             }
             if (result.horario) form.setValue("horario", result.horario);
 
-            // Mapeamento de Unidade (Otimista)
-            if (result.unidade && unidadesList.length > 0) {
-              const matched = unidadesList.find(u =>
-                u.nome.toLowerCase().includes(result.unidade!.toLowerCase()) ||
-                result.unidade!.toLowerCase().includes(u.nome.toLowerCase())
+            // Mapeamento de Convênio
+            if (result.convenio && conveniosList.length > 0) {
+              const matched = conveniosList.find(c =>
+                c.nome.toLowerCase().includes(result.convenio!.toLowerCase()) ||
+                result.convenio!.toLowerCase().includes(c.nome.toLowerCase()) ||
+                c.id.toLowerCase() === result.convenio!.toLowerCase()
               );
+              if (matched) form.setValue("convenio", matched.id);
+            }
+
+            // Mapeamento de Unidade (Otimista e Robusto)
+            if (result.unidade && unidadesList.length > 0) {
+              const resUnidade = result.unidade.toLowerCase();
+              const matched = unidadesList.find(u => {
+                const uNome = u.name?.toLowerCase() || u.nome?.toLowerCase() || "";
+                const uId = u.id.toLowerCase();
+                
+                // Match exato ou inclusão direta
+                if (uNome === resUnidade || uId === resUnidade) return true;
+                if (uNome.includes(resUnidade) || resUnidade.includes(uNome)) return true;
+                
+                // Match por palavras-chave (ex: "Meier", "Ciom", "Tijuca")
+                const tokens = resUnidade.split(/[\s()\-]+/).filter(t => t.length > 2);
+                return tokens.some(t => uNome.includes(t) || uId.includes(t));
+              });
               if (matched) form.setValue("local", matched.id);
             }
 
-            toast({ title: "Extraído com Sucesso!", description: "Os campos foram preenchidos com base no print." });
+            toast({ title: "Extraído com Sucesso!", description: "Os campos foram preenchidos com base no print (apenas as informações confirmadas)." });
           }
         } catch (err) {
           console.error("Erro na extração IA:", err);
@@ -837,6 +856,9 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                     <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Nascimento</li>
                     <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>CPF</li>
                     <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Telefone</li>
+                    <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Convênio</li>
+                    <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Data/Hora</li>
+                    <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Unidade</li>
                   </ul>
                 </div>
 

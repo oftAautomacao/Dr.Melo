@@ -383,40 +383,45 @@ export default function Home() {
           if (include) {
             let appValue = 0;
             const isParticular = hours[time].convenio?.trim().toLowerCase() === "particular";
+            const examPrices: Record<string, number> = {};
+            const examesArray = Array.isArray(hours[time].exames) ? hours[time].exames : [];
             
-            if (date < "2026-03-01" || selectedUnit !== "DRM") {
-               appValue = 30; // Regra antiga
-            } else {
-               if (!isParticular) {
-                  appValue = 30; // Plano de Saúde: mantém 30,00
-               } else {
-                  // Particular: soma valor configurado
-                  let sum = 0;
-                  if (Array.isArray(hours[time].exames)) {
-                      hours[time].exames.forEach((exName: string) => {
-                          const conf = examConfig[exName];
-                          let priceDrMelo = conf?.drMelo;
-
-                          // Preparação para futura alteração onde drMelo será separado por unidade
-                          if (priceDrMelo && typeof priceDrMelo === 'object') {
-                              priceDrMelo = priceDrMelo[unit] || 0;
-                          }
-
-                          if (typeof priceDrMelo === 'number') {
-                              sum += priceDrMelo;
-                          } else if (typeof priceDrMelo === 'string') {
-                              if (!priceDrMelo.toLowerCase().includes("incluso")) {
-                                  const parsed = Number(priceDrMelo.replace(/[^\d.,]/g, '').replace(',', '.'));
-                                  if (!isNaN(parsed)) sum += parsed;
-                              }
-                          }
-                      });
-                  }
-                  appValue = sum;
+            if (date < "2026-03-01" || selectedUnit !== "DRM" || !isParticular) {
+               appValue = 30; // Regra antiga / Plano de Saúde
+               const count = examesArray.length;
+               if (count > 0) {
+                 examesArray.forEach((ex: string) => {
+                   examPrices[ex] = 30 / count;
+                 });
                }
+            } else {
+               // Particular: soma valor configurado
+               let sum = 0;
+               examesArray.forEach((exName: string) => {
+                   const conf = examConfig[exName];
+                   let priceDrMelo = conf?.drMelo;
+
+                   // Preparação para futura alteração onde drMelo será separado por unidade
+                   if (priceDrMelo && typeof priceDrMelo === 'object') {
+                       priceDrMelo = priceDrMelo[unit] || 0;
+                   }
+
+                   let examVal = 0;
+                   if (typeof priceDrMelo === 'number') {
+                       examVal = priceDrMelo;
+                   } else if (typeof priceDrMelo === 'string') {
+                       if (!priceDrMelo.toLowerCase().includes("incluso")) {
+                           const parsed = Number(priceDrMelo.replace(/[^\d.,]/g, '').replace(',', '.'));
+                           if (!isNaN(parsed)) examVal = parsed;
+                       }
+                   }
+                   examPrices[exName] = examVal;
+                   sum += examVal;
+               });
+               appValue = sum;
             }
 
-            const app = { ...hours[time], _unit: unit, _date: date, _time: time, _value: appValue };
+            const app = { ...hours[time], _unit: unit, _date: date, _time: time, _value: appValue, _examPrices: examPrices };
 
             if (filterCategory === 'convenio' && filterValue && filterValue !== 'all' && app.convenio !== filterValue) continue;
             if (filterCategory === 'exame' && filterValue && filterValue !== 'all') {
@@ -439,6 +444,10 @@ export default function Home() {
   const displayData = useMemo<CardData[]>(() => {
     const appointments = filteredAppointments;
     if (appointments.length === 0) return [];
+
+    const getExamValue = (exName: string, app: any) => {
+      return app._examPrices?.[exName] || 0;
+    };
 
     // 2. Aggregate
     if (statType === "historico") {
@@ -561,7 +570,7 @@ export default function Home() {
             app.exames.forEach((ex: string) => {
               if (!unitExames[u][ex]) unitExames[u][ex] = { count: 0, value: 0 };
               unitExames[u][ex].count += 1;
-              unitExames[u][ex].value += app._value;
+              unitExames[u][ex].value += getExamValue(ex, app);
             });
           }
         });
@@ -706,7 +715,7 @@ export default function Home() {
             app.exames.forEach((ex: string) => {
               if (!convenioExames[c][ex]) convenioExames[c][ex] = { count: 0, value: 0 };
               convenioExames[c][ex].count += 1;
-              convenioExames[c][ex].value += app._value;
+              convenioExames[c][ex].value += getExamValue(ex, app);
             });
           }
         });
@@ -857,7 +866,7 @@ export default function Home() {
             app.exames.forEach((ex: string) => {
               if (!faixaExames[bucket][ex]) faixaExames[bucket][ex] = { count: 0, value: 0 };
               faixaExames[bucket][ex].count += 1;
-              faixaExames[bucket][ex].value += app._value;
+              faixaExames[bucket][ex].value += getExamValue(ex, app);
             });
           }
         });
@@ -924,12 +933,12 @@ export default function Home() {
             app.exames.forEach((ex: string) => {
               if (!exameCounts[ex]) exameCounts[ex] = { count: 0, value: 0 };
               exameCounts[ex].count += 1;
-              exameCounts[ex].value += app._value;
+              exameCounts[ex].value += getExamValue(ex, app);
 
               if (!exameUnidades[ex]) exameUnidades[ex] = {};
               if (!exameUnidades[ex][u]) exameUnidades[ex][u] = { count: 0, value: 0 };
               exameUnidades[ex][u].count += 1;
-              exameUnidades[ex][u].value += app._value;
+              exameUnidades[ex][u].value += getExamValue(ex, app);
             });
           }
         });
@@ -969,12 +978,12 @@ export default function Home() {
             app.exames.forEach((ex: string) => {
               if (!exameCounts[ex]) exameCounts[ex] = { count: 0, value: 0 };
               exameCounts[ex].count += 1;
-              exameCounts[ex].value += app._value;
+              exameCounts[ex].value += getExamValue(ex, app);
 
               if (!exameConvenios[ex]) exameConvenios[ex] = {};
               if (!exameConvenios[ex][c]) exameConvenios[ex][c] = { count: 0, value: 0 };
               exameConvenios[ex][c].count += 1;
-              exameConvenios[ex][c].value += app._value;
+              exameConvenios[ex][c].value += getExamValue(ex, app);
             });
           }
         });
@@ -1011,12 +1020,12 @@ export default function Home() {
             app.exames.forEach((ex: string) => {
               if (!exameCounts[ex]) exameCounts[ex] = { count: 0, value: 0 };
               exameCounts[ex].count += 1;
-              exameCounts[ex].value += app._value;
+              exameCounts[ex].value += getExamValue(ex, app);
 
               if (!exameFaixas[ex]) exameFaixas[ex] = {};
               if (!exameFaixas[ex][bucket]) exameFaixas[ex][bucket] = { count: 0, value: 0 };
               exameFaixas[ex][bucket].count += 1;
-              exameFaixas[ex][bucket].value += app._value;
+              exameFaixas[ex][bucket].value += getExamValue(ex, app);
             });
           }
         });
@@ -1048,7 +1057,7 @@ export default function Home() {
           app.exames.forEach((ex: string) => {
             if (!counts[ex]) counts[ex] = { count: 0, value: 0 };
             counts[ex].count += 1;
-            counts[ex].value += app._value;
+            counts[ex].value += getExamValue(ex, app);
           });
         }
       });
@@ -1066,8 +1075,8 @@ export default function Home() {
     return [];
   }, [filteredAppointments, statType, unitConfig, filterCategory, filterValue]);
 
-  const totalPacientes = displayData.reduce((acc, item) => acc + item.count, 0);
-  const totalEstimado = displayData.reduce((acc, item) => acc + (item.value || 0), 0);
+  const totalPacientes = useMemo(() => filteredAppointments.length, [filteredAppointments]);
+  const totalEstimado = useMemo(() => filteredAppointments.reduce((acc, app) => acc + (app._value || 0), 0), [filteredAppointments]);
 
   // Apply sorting to displayData
   const sortedDisplayData = useMemo(() => {

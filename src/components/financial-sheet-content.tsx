@@ -172,32 +172,35 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     const head = [['Data', 'Nome', 'Convenio', 'Exames', 'Realizou (S/N)']];
     const body: any[] = [];
 
+    let isAlternatePatient = false;
     appointmentsForMonth.forEach(app => {
       const date = new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
       const name = app.nomePaciente || "Não informado";
       const convenio = app.convenio || "Não informado";
-      const exames = app.exames || [];
+      
+      const itens = app.exames || [];
+      const bgColor = isAlternatePatient ? [240, 248, 255] : [255, 255, 255]; // Azul muito claro alternado com branco
 
-      if (exames.length === 0) {
-        body.push([date, name, convenio, "Nenhum exame", ""]);
+      if (itens.length === 0) {
+        body.push([
+          { content: date, styles: { fillColor: bgColor } },
+          { content: name, styles: { fillColor: bgColor } },
+          { content: convenio, styles: { fillColor: bgColor } },
+          { content: "Nenhum procedimento", styles: { fillColor: bgColor } },
+          { content: "", styles: { fillColor: bgColor } }
+        ]);
       } else {
-        const numExames = exames.length;
-        exames.forEach((exame, index) => {
-          if (index === 0) {
-            // Primeira linha do paciente: define o rowSpan para os dados principais
-            body.push([
-              { content: date, rowSpan: numExames, styles: { valign: 'middle' } },
-              { content: name, rowSpan: numExames, styles: { valign: 'middle' } },
-              { content: convenio, rowSpan: numExames, styles: { valign: 'middle' } },
-              exame,
-              ""
-            ]);
-          } else {
-            // Linhas extras: os dados principais são preenchidos com null para serem ocupados pelo rowSpan
-            body.push([null, null, null, exame, ""]);
-          }
+        itens.forEach((item, index) => {
+          body.push([
+            { content: index === 0 ? date : "", styles: { fillColor: bgColor } },
+            { content: index === 0 ? name : "", styles: { fillColor: bgColor } },
+            { content: index === 0 ? convenio : "", styles: { fillColor: bgColor } },
+            { content: item, styles: { fillColor: bgColor } },
+            { content: "", styles: { fillColor: bgColor } }
+          ]);
         });
       }
+      isAlternatePatient = !isAlternatePatient;
     });
 
     // 3. Gerar a tabela
@@ -205,10 +208,9 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       head: head,
       body: body,
       startY: 40,
-      theme: 'grid',
-      styles: { fontSize: 10, cellPadding: 3 },
+      theme: 'plain', // Usamos plain para controlar as cores manualmente via estilos de célula
+      styles: { fontSize: 9, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.1 },
       headStyles: { fillColor: [0, 82, 204], textColor: [255, 255, 255], fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [250, 250, 250] },
       margin: { top: 40 },
     });
 

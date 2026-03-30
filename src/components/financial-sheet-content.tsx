@@ -181,12 +181,20 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       if (exames.length === 0) {
         body.push([date, name, convenio, "Nenhum exame", ""]);
       } else {
+        const numExames = exames.length;
         exames.forEach((exame, index) => {
           if (index === 0) {
-            body.push([date, name, convenio, exame, ""]);
+            // Primeira linha do paciente: define o rowSpan para os dados principais
+            body.push([
+              { content: date, rowSpan: numExames, styles: { valign: 'middle' } },
+              { content: name, rowSpan: numExames, styles: { valign: 'middle' } },
+              { content: convenio, rowSpan: numExames, styles: { valign: 'middle' } },
+              exame,
+              ""
+            ]);
           } else {
-            // Linhas extras do mesmo paciente com campos principais em branco
-            body.push(["", "", "", exame, ""]);
+            // Linhas extras: os dados principais são preenchidos com null para serem ocupados pelo rowSpan
+            body.push([null, null, null, exame, ""]);
           }
         });
       }
@@ -197,9 +205,10 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       head: head,
       body: body,
       startY: 40,
+      theme: 'grid',
       styles: { fontSize: 10, cellPadding: 3 },
-      headStyles: { fillColor: [0, 82, 204], textColor: [255, 255, 255] },
-      alternateRowStyles: { fillColor: [245, 245, 245] },
+      headStyles: { fillColor: [0, 82, 204], textColor: [255, 255, 255], fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
       margin: { top: 40 },
     });
 

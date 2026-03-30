@@ -16,16 +16,16 @@ import { Badge } from "@/components/ui/badge";
 import { Cog, RefreshCw, Database } from "lucide-react";
 
 // ------------------------------------------------
-// FLAG GLOBAL (live-binding)
+// FLAG LOCAL (Será sincronizada com localStorage)
 // ------------------------------------------------
-export let ENVIRONMENT: "teste" | "producao" = "teste";
+let ENVIRONMENT_VAR: "teste" | "producao" = "teste";
 
 /**
  * Atualiza a flag global e persiste no localStorage.
  * Também recarrega a página.
  */
-export function setEnvironment(newEnv: "teste" | "producao") {
-  ENVIRONMENT = newEnv;
+function setEnvironment(newEnv: "teste" | "producao") {
+  ENVIRONMENT_VAR = newEnv;
   if (typeof window !== "undefined") {
     localStorage.setItem("APP_ENVIRONMENT", newEnv);
     window.location.reload();

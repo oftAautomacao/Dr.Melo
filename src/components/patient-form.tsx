@@ -800,7 +800,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
             if (result.unidade && unidadesList.length > 0) {
               const resUnidade = result.unidade.toLowerCase();
               const matched = unidadesList.find(u => {
-                const uNome = u.name?.toLowerCase() || u.nome?.toLowerCase() || "";
+                const uNome = u.nome?.toLowerCase() || "";
                 const uId = u.id.toLowerCase();
                 
                 // Match exato ou inclusão direta

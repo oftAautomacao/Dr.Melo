@@ -67,9 +67,51 @@ export const whatsappService = {
                 return false;
             }
 
-            return true;
+            return response.ok;
         } catch (error) {
             console.error("[WhatsAppService] Erro inesperado:", error);
+            return false;
+        }
+    },
+
+    async sendDocument(
+        params: { phone: string; document: string; fileName: string; extension: string },
+        unit: "DRM" | "OFT/45",
+        env: "teste" | "producao"
+    ): Promise<boolean> {
+        let config: WhatsAppConfig;
+
+        if (env === "teste") {
+            config = TEST_CONFIG;
+        } else {
+            config = PROD_CONFIGS[unit];
+            if (!config) return false;
+        }
+
+        try {
+            console.log("[WhatsAppService] Chamando send-document para:", params.phone);
+            const response = await fetch(
+                `https://api.z-api.io/instances/${config.instanceId}/token/${config.token}/send-document`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Client-Token": "Fe948ba6a317942849b010c88cd9e6105S",
+                    },
+                    body: JSON.stringify({
+                        phone: params.phone,
+                        document: params.document,
+                        fileName: params.fileName,
+                        extension: params.extension
+                    }),
+                }
+            );
+
+            const data = await response.json().catch(() => ({}));
+            console.log("[WhatsAppService] Resposta da Z-API:", response.status, data);
+            return response.ok;
+        } catch (error) {
+            console.error("[WhatsAppService] Erro ao enviar documento:", error);
             return false;
         }
     }

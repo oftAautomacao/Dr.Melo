@@ -1,5 +1,3 @@
-// Removendo import de ENVIRONMENT global pois o serviço será usado em Server Actions (onde localStorage não existe)
-
 export interface WhatsAppConfig {
     instanceId: string;
     token: string;
@@ -36,13 +34,9 @@ export const whatsappService = {
 
         if (env === "teste") {
             config = TEST_CONFIG;
-            console.log(`[WhatsAppService] Ambiente de TESTE. Enviando para ${params.phone}`);
         } else {
             config = PROD_CONFIGS[unit];
-            if (!config) {
-                console.error(`[WhatsAppService] Configuração não encontrada para a unidade: ${unit} no ambiente ${env}`);
-                return false;
-            }
+            if (!config) return false;
         }
 
         try {
@@ -61,15 +55,9 @@ export const whatsappService = {
                 }
             );
 
-            if (!response.ok) {
-                const errorData = await response.json().catch(() => ({}));
-                console.error("[WhatsAppService] Erro Z-API:", response.statusText, errorData);
-                return false;
-            }
-
             return response.ok;
         } catch (error) {
-            console.error("[WhatsAppService] Erro inesperado:", error);
+            console.error("[WhatsAppService] Erro ao enviar mensagem:", error);
             return false;
         }
     },
@@ -89,9 +77,9 @@ export const whatsappService = {
         }
 
         try {
-            console.log("[WhatsAppService] Chamando send-document para:", params.phone);
+            console.log("[WhatsAppService] Chamando send-document via Base64 para:", params.phone);
             const response = await fetch(
-                `https://api.z-api.io/instances/${config.instanceId}/token/${config.token}/send-document`,
+                `https://api.z-api.io/instances/${config.instanceId}/token/${config.token}/send-document/${params.extension}`,
                 {
                     method: "POST",
                     headers: {
@@ -101,8 +89,9 @@ export const whatsappService = {
                     body: JSON.stringify({
                         phone: params.phone,
                         document: params.document,
-                        fileName: params.fileName,
-                        extension: params.extension
+                        fileName: params.fileName.endsWith(`.${params.extension}`) 
+                            ? params.fileName 
+                            : `${params.fileName}.${params.extension}`
                     }),
                 }
             );
@@ -116,3 +105,4 @@ export const whatsappService = {
         }
     }
 };
+// Sincronizando arquivo...

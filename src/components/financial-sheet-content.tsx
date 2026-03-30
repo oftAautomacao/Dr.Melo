@@ -9,7 +9,9 @@ import { User, Calendar, Phone, Shield, FlaskConical } from "lucide-react";
 import { Toaster, toast } from 'sonner';
 import { ENVIRONMENT } from "../../ambiente";
 import Link from 'next/link';
-import { ref, onValue, type DataSnapshot } from "firebase/database";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import { whatsappService } from "@/lib/whatsapp-service";
 import type {
   AppointmentFirebaseRecord,
   AICategorization,
@@ -96,6 +98,10 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
   const [appointmentToReschedule, setAppointmentToReschedule] = useState<CalendarAppointment | undefined>(undefined);
   const [cancelReason, setCancelReason] = useState("");
 
+  const normalizeFileName = (str: string) => {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+  };
+
   useEffect(() => {
     const storedPathBase = localStorage.getItem("FIREBASE_PATH_BASE") as "DRM" | "OFT/45" | null;
     if (storedPathBase) setSelectedUnit(storedPathBase);
@@ -153,76 +159,80 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     const bairro = unitConfig?.[unit]?.bairro;
     const locationString = bairro ? `${unitName} - ${bairro}` : unitName;
 
-    const patientListString = appointmentsForMonth.map(app => {
-      const name = app.nomePaciente || "Paciente sem nome";
-      const cpf = (app as any).cpf ? `, CPF: ${(app as any).cpf}` : "";
+    // 1. Criar o documento PDF
+    const doc = new jsPDF();
+    
+    // Título do Relatório
+    doc.setFontSize(18);
+    doc.text(`Relatório de Faturamento - ${locationString}`, 14, 20);
+    doc.setFontSize(12);
+    doc.text(`Período: ${selectedMonth}`, 14, 30);
+
+    // 2. Preparar os dados da tabela
+    const head = [['Data', 'Nome', 'Convenio', 'Exames', 'Realizou (S/N)']];
+    const body: any[] = [];
+
+    appointmentsForMonth.forEach(app => {
       const date = new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-      const time = app.horario;
+      const name = app.nomePaciente || "Não informado";
       const convenio = app.convenio || "Não informado";
+      const exames = app.exames || [];
 
-      return `* ${name}${cpf}, ${date} às ${time}, ${convenio}`;
-    }).join('\n');
-
-    const message = `Olá, tudo bem?\n\nEsses são os pacientes vindos do Dr. Melo que foram realmente atendidos na ${locationString}:\n\n${patientListString}`;
-
-    let apiCredentials: { id: string; token: string; };
-    let phoneNumber: string;
-
-    if (ENVIRONMENT === "teste") {
-      apiCredentials = {
-        id: "3B74CE9AFF0D20904A9E9E548CC778EF",
-        token: "A8F754F1402CAE3625D5D578",
-      };
-      phoneNumber = "5521971938840";
-      toast.info(`AMBIENTE DE TESTE: Mensagem para ${phoneNumber} sendo enviada.`);
-
-    } else { // Ambiente de PRODUÇÃO
-      phoneNumber = "5521984934862";
-      if (selectedUnit === "DRM") {
-        apiCredentials = {
-          id: "3D460A6CB6DA10A09FAD12D00F179132",
-          token: "1D2897F0A38EEEC81D2F66EE",
-        };
-      } else if (selectedUnit === "OFT/45") {
-        apiCredentials = {
-          id: "39C7A89881E470CC246252059E828D91",
-          token: "B1CA83DE10E84496AECE8028",
-        };
+      if (exames.length === 0) {
+        body.push([date, name, convenio, "Nenhum exame", ""]);
       } else {
-        toast.error("Unidade de produção não reconhecida. Não é possível enviar a mensagem.");
-        return;
+        exames.forEach((exame, index) => {
+          if (index === 0) {
+            body.push([date, name, convenio, exame, ""]);
+          } else {
+            // Linhas extras do mesmo paciente com campos principais em branco
+            body.push(["", "", "", exame, ""]);
+          }
+        });
       }
-    }
+    });
+
+    // 3. Gerar a tabela
+    autoTable(doc, {
+      head: head,
+      body: body,
+      startY: 40,
+      styles: { fontSize: 10, cellPadding: 3 },
+      headStyles: { fillColor: [0, 82, 204], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [245, 245, 245] },
+      margin: { top: 40 },
+    });
+
+    // 4. Converter para Base64 (Data URI completo)
+    const pdfOutput = doc.output('datauristring');
+    const base64Content = pdfOutput; 
+
+    const fileName = `Faturamento_${normalizeFileName(unitName)}_${normalizeFileName(selectedMonth)}`;
+    const phoneNumber = ENVIRONMENT === "teste" ? "5521971938840" : "5521984934862";
 
     try {
-      const response = await fetch(
-        `https://api.z-api.io/instances/${apiCredentials.id}/token/${apiCredentials.token}/send-text`,
+      toast.loading("Gerando e enviando PDF...");
+      
+      const success = await whatsappService.sendDocument(
         {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Client-Token": "Fe948ba6a317942849b010c88cd9e6105S",
-          },
-          body: JSON.stringify({ phone: phoneNumber, message: message }),
-        }
+          phone: phoneNumber,
+          document: base64Content,
+          fileName: fileName,
+          extension: "pdf"
+        },
+        selectedUnit as "DRM" | "OFT/45",
+        ENVIRONMENT === "teste" ? "teste" : "producao"
       );
 
-      if (!response.ok) {
-        let errorData;
-        try {
-          errorData = await response.json();
-        } catch (e) {
-          errorData = { error: 'Não foi possível ler a resposta de erro da API.' }
-        }
-        toast.error(`Erro ao enviar mensagem: ${errorData?.error || response.statusText}`);
-        console.error("Erro Z-API:", response.statusText, errorData);
-        return;
+      toast.dismiss();
+      if (success) {
+        toast.success("PDF enviado com sucesso!");
+      } else {
+        toast.error("Erro ao enviar o PDF via WhatsApp.");
       }
-
-      toast.success("Mensagem enviada com sucesso!");
-
     } catch (err) {
-      toast.error("Ocorreu um erro inesperado ao tentar enviar a mensagem.");
+      toast.dismiss();
+      toast.error("Ocorreu um erro inesperado ao tentar enviar o PDF.");
       console.error("Erro no envio:", err);
     }
   };

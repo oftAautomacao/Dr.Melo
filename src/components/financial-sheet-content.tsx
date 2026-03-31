@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { whatsappService } from "@/lib/whatsapp-service";
+import { LOGO_OFT_BASE64, LOGO_DRM_BASE64 } from "@/lib/logo-base64";
 import type {
   AppointmentFirebaseRecord,
   AICategorization,
@@ -162,11 +163,17 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     // 1. Criar o documento PDF
     const doc = new jsPDF();
     
+    // Adicionar o Logo usando formato Data URI completo
+    const isDRM = getFirebasePathBase() === "DRM";
+    const selectedLogoBase64 = isDRM ? LOGO_DRM_BASE64 : LOGO_OFT_BASE64;
+    const imgData = "data:image/png;base64," + selectedLogoBase64;
+    doc.addImage(imgData, 'PNG', 14, 10, 48, 14);
+    
     // Título do Relatório
     doc.setFontSize(18);
-    doc.text(`Relatório de Faturamento - ${locationString}`, 14, 20);
+    doc.text(`Relatório de Faturamento - ${locationString}`, 14, 34);
     doc.setFontSize(12);
-    doc.text(`Período: ${selectedMonth}`, 14, 30);
+    doc.text(`Período: ${selectedMonth}`, 14, 41);
 
     // 2. Preparar os dados da tabela
     const head = [['Data', 'Nome', 'Convenio', 'Exames', 'Realizou (S/N)']];
@@ -207,11 +214,11 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     autoTable(doc, {
       head: head,
       body: body,
-      startY: 40,
+      startY: 48,
       theme: 'plain', // Usamos plain para controlar as cores manualmente via estilos de célula
       styles: { fontSize: 9, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.1 },
       headStyles: { fillColor: [0, 82, 204], textColor: [255, 255, 255], fontStyle: 'bold' },
-      margin: { top: 40 },
+      margin: { top: 48 },
     });
 
     // 4. Converter para Base64 (Data URI completo)
@@ -219,6 +226,10 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     const base64Content = pdfOutput; 
 
     const fileName = `Faturamento_${normalizeFileName(unitName)}_${normalizeFileName(selectedMonth)}`;
+    
+    // Baixar o arquivo no navegador do usuário
+    doc.save(`${fileName}.pdf`);
+
     const phoneNumber = ENVIRONMENT === "teste" ? "5521971938840" : "5521984934862";
 
     try {

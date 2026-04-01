@@ -89,9 +89,7 @@ export const whatsappService = {
                     body: JSON.stringify({
                         phone: params.phone,
                         document: params.document,
-                        fileName: params.fileName.endsWith(`.${params.extension}`) 
-                            ? params.fileName 
-                            : `${params.fileName}.${params.extension}`
+                        fileName: params.fileName
                     }),
                 }
             );

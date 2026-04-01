@@ -85,6 +85,7 @@ export interface CalendarAppointment {
   motivacao: string;
   unidade: string;
   telefone: string;
+  cpf?: string;
   Observacoes?: string;
   aiCategorization?: AICategorization;
 }
@@ -95,12 +96,13 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
   const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
   const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
   const [isNewAppointmentFormOpen, setIsNewAppointmentFormOpen] = useState(false);
+  const [isReportTypeDialogOpen, setIsReportTypeDialogOpen] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<CalendarAppointment | undefined>(undefined);
   const [appointmentToReschedule, setAppointmentToReschedule] = useState<CalendarAppointment | undefined>(undefined);
   const [cancelReason, setCancelReason] = useState("");
 
   const normalizeFileName = (str: string) => {
-    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_');
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/\//g, '_');
   };
 
   useEffect(() => {
@@ -131,6 +133,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
             motivacao: appointmentData.motivacao,
             unidade: unit,
             telefone: appointmentData.telefone,
+            cpf: appointmentData.cpf,
             Observacoes: appointmentData.Observacoes,
             aiCategorization: appointmentData.aiCategorization,
           });
@@ -150,11 +153,13 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     return differenceInYears(new Date(), date);
   };
 
-  const handleGenerateReport = async () => {
+  const handleGenerateReport = async (reportType: 'secretaria' | 'administrativo') => {
     if (!selectedUnit) {
       toast.error("Unidade não identificada. Não é possível enviar a mensagem.");
       return;
     }
+
+    setIsReportTypeDialogOpen(false);
 
     const unitName = unitConfig?.[unit]?.empresa ?? unit;
     const bairro = unitConfig?.[unit]?.bairro;
@@ -162,79 +167,216 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
     // 1. Criar o documento PDF
     const doc = new jsPDF();
-    
+
     // Adicionar o Logo usando formato Data URI completo
     const isDRM = getFirebasePathBase() === "DRM";
     const selectedLogoBase64 = isDRM ? LOGO_DRM_BASE64 : LOGO_OFT_BASE64;
     const imgData = "data:image/png;base64," + selectedLogoBase64;
-    doc.addImage(imgData, 'PNG', 14, 10, 48, 14);
-    
+    // Stretch image (only horizontally: width from 48 -> 68)
+    doc.addImage(imgData, 'PNG', 14, 10, 68, 14);
+
+    const reportTypeLabel = reportType === 'secretaria' ? 'Secretária' : 'Financeiro';
+
     // Título do Relatório
     doc.setFontSize(18);
-    doc.text(`Relatório de Faturamento - ${locationString}`, 14, 34);
+    const pdfTitle = reportType === 'secretaria' 
+      ? `Pacientes Agendados - ${locationString}` 
+      : `Pacientes Atendidos - ${locationString}`;
+
+    doc.text(pdfTitle, 14, 34);
     doc.setFontSize(12);
     doc.text(`Período: ${selectedMonth}`, 14, 41);
 
     // 2. Preparar os dados da tabela
-    const head = [['Data', 'Nome', 'Convenio', 'Exames', 'Realizou (S/N)']];
     const body: any[] = [];
-
     let isAlternatePatient = false;
-    appointmentsForMonth.forEach(app => {
-      const date = new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
-      const name = app.nomePaciente || "Não informado";
-      const convenio = app.convenio || "Não informado";
-      
-      const itens = app.exames || [];
-      const bgColor = isAlternatePatient ? [240, 248, 255] : [255, 255, 255]; // Azul muito claro alternado com branco
 
-      if (itens.length === 0) {
-        body.push([
-          { content: date, styles: { fillColor: bgColor } },
-          { content: name, styles: { fillColor: bgColor } },
-          { content: convenio, styles: { fillColor: bgColor } },
-          { content: "Nenhum procedimento", styles: { fillColor: bgColor } },
-          { content: "", styles: { fillColor: bgColor } }
-        ]);
-      } else {
+    if (reportType === 'secretaria') {
+      // ---- RELATÓRIO SECRETÁRIA ----
+      const head = [['Data', 'Nome', 'Convênio', 'Procedimentos', 'Realizou (S/N)', 'Data Atendimento']];
+
+      appointmentsForMonth.forEach(app => {
+        const dateStr = new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+        const dateFull = `${dateStr}\n${app.horario}`;
+        const nameRaw = app.nomePaciente || "Não informado";
+        const name = app.cpf ? `${nameRaw}\nCPF: ${app.cpf}` : nameRaw;
+        const convenio = app.convenio || "Não informado";
+        const itens = (app.exames && app.exames.length > 0) ? app.exames : ["Consulta"];
+        const bgColor: [number, number, number] = isAlternatePatient ? [240, 248, 255] : [255, 255, 255];
+
         itens.forEach((item, index) => {
           body.push([
-            { content: index === 0 ? date : "", styles: { fillColor: bgColor } },
+            { content: index === 0 ? dateFull : "", styles: { fillColor: bgColor } },
             { content: index === 0 ? name : "", styles: { fillColor: bgColor } },
             { content: index === 0 ? convenio : "", styles: { fillColor: bgColor } },
             { content: item, styles: { fillColor: bgColor } },
-            { content: "", styles: { fillColor: bgColor } }
+            { content: "", styles: { fillColor: bgColor } }, // Realizou
+            { content: "", styles: { fillColor: bgColor } }, // Data Atendimento
           ]);
         });
-      }
-      isAlternatePatient = !isAlternatePatient;
-    });
+        isAlternatePatient = !isAlternatePatient;
+      });
 
-    // 3. Gerar a tabela
-    autoTable(doc, {
-      head: head,
-      body: body,
-      startY: 48,
-      theme: 'plain', // Usamos plain para controlar as cores manualmente via estilos de célula
-      styles: { fontSize: 9, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.1 },
-      headStyles: { fillColor: [0, 82, 204], textColor: [255, 255, 255], fontStyle: 'bold' },
-      margin: { top: 48 },
-    });
+      autoTable(doc, {
+        head: head,
+        body: body,
+        startY: 48,
+        theme: 'plain',
+        styles: { fontSize: 9, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.1 },
+        headStyles: { fillColor: [0, 82, 204], textColor: [255, 255, 255], fontStyle: 'bold' },
+        margin: { top: 48 },
+      });
+
+    } else {
+      // ---- RELATÓRIO ADMINISTRATIVO ----
+      toast.loading("Buscando preços dos exames...");
+
+      // Buscar preços no Firebase — caminho dinâmico conforme a unidade
+      const DB_URL = "https://oftautomacao-9b427-default-rtdb.firebaseio.com";
+      const firebasePath = getFirebasePathBase(); // "DRM" ou "OFT/45"
+      let examesConfig: Record<string, { preco?: number; drMelo?: number; clinica?: number }> = {};
+      try {
+        const resp = await fetch(`${DB_URL}/${firebasePath}/agendamentoWhatsApp/configuracoes/exames.json`);
+        examesConfig = (await resp.json()) ?? {};
+      } catch (e) {
+        console.warn("Não foi possível buscar preços dos exames:", e);
+      }
+      const head = [['Data', 'Nome', 'Convênio', 'Procedimentos', 'Valor\nPaciente', 'Repasse\nDr. Melo', 'Margem\nClínica']];
+
+      let totalPaciente = 0;
+      let totalDrMelo = 0;
+      let totalClinica = 0;
+
+      appointmentsForMonth.forEach(app => {
+        const dateStr = new Date(app.dataAgendamento).toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+        const dateFull = `${dateStr}\n${app.horario}`;
+        const nameRaw = app.nomePaciente || "Não informado";
+        const name = app.cpf ? `${nameRaw}\nCPF: ${app.cpf}` : nameRaw;
+        const convenio = app.convenio || "Não informado";
+        const itens = (app.exames && app.exames.length > 0) ? app.exames : ["Consulta"];
+        const bgColor: [number, number, number] = isAlternatePatient ? [240, 248, 255] : [255, 255, 255];
+
+        const formatBRL = (v: number | undefined) =>
+          v != null ? v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "-";
+
+        const isParticular = convenio.trim().toLowerCase() === "particular";
+
+        if (isParticular) {
+          // Particular: busca preços individuais no Firebase
+          itens.forEach((item, index) => {
+            const cfg = examesConfig[item];
+            const isIncluso = item.toLowerCase().includes("(incluso na consulta)");
+            
+            const precoPaciente = isIncluso ? 0 : cfg?.preco;
+            const precoDrMelo = isIncluso ? 0 : cfg?.drMelo;
+            const precoClinica = isIncluso ? 0 : cfg?.clinica;
+
+            if (precoPaciente != null) totalPaciente += precoPaciente;
+            if (precoDrMelo != null) totalDrMelo += precoDrMelo;
+            if (precoClinica != null) totalClinica += precoClinica;
+
+            body.push([
+              { content: index === 0 ? dateFull : "", styles: { fillColor: bgColor } },
+              { content: index === 0 ? name : "", styles: { fillColor: bgColor } },
+              { content: index === 0 ? convenio : "", styles: { fillColor: bgColor } },
+              { content: item, styles: { fillColor: bgColor } },
+              { content: formatBRL(precoPaciente), styles: { fillColor: bgColor, halign: 'right' } },
+              { content: formatBRL(precoDrMelo), styles: { fillColor: bgColor, halign: 'right' } },
+              { content: formatBRL(precoClinica), styles: { fillColor: bgColor, halign: 'right' } },
+            ]);
+          });
+        } else {
+          // Plano de saúde: cobrança fixa de R$ 30 para Dr. Melo no 1º exame; demais ficam em branco
+          const PLANO_DRM_FIXO = 30;
+          totalDrMelo += PLANO_DRM_FIXO;
+
+          itens.forEach((item, index) => {
+            const isFirst = index === 0;
+            body.push([
+              { content: isFirst ? dateFull : "", styles: { fillColor: bgColor } },
+              { content: isFirst ? name : "", styles: { fillColor: bgColor } },
+              { content: isFirst ? convenio : "", styles: { fillColor: bgColor } },
+              { content: item, styles: { fillColor: bgColor } },
+              // Paciente paga 0 (plano cobre)
+              { content: "0,00", styles: { fillColor: bgColor, halign: 'right' } },
+              // Dr. Melo recebe R$30 fixo apenas no primeiro exame; demais zerado
+              { content: isFirst ? formatBRL(PLANO_DRM_FIXO) : "0,00", styles: { fillColor: bgColor, halign: 'right' } },
+              // Clínica recebe 0 (plano)
+              { content: "0,00", styles: { fillColor: bgColor, halign: 'right' } },
+            ]);
+          });
+        }
+        isAlternatePatient = !isAlternatePatient;
+      });
+
+      // Linha de totais
+      const totalBgColor: [number, number, number] = [230, 240, 255];
+      body.push([
+        { content: "TOTAL", colSpan: 4, styles: { fillColor: totalBgColor, fontStyle: 'bold', halign: 'right' } },
+        { content: `R$ ${totalPaciente.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, styles: { fillColor: totalBgColor, fontStyle: 'bold', halign: 'right' } },
+        { content: `R$ ${totalDrMelo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, styles: { fillColor: totalBgColor, fontStyle: 'bold', halign: 'right' } },
+        { content: `R$ ${totalClinica.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, styles: { fillColor: totalBgColor, fontStyle: 'bold', halign: 'right' } },
+      ]);
+
+      autoTable(doc, {
+        head: head,
+        body: body,
+        startY: 48,
+        theme: 'plain',
+        styles: { fontSize: 8, cellPadding: 2.5, lineColor: [200, 200, 200], lineWidth: 0.1 },
+        headStyles: { fillColor: [0, 82, 204], textColor: [255, 255, 255], fontStyle: 'bold' },
+        columnStyles: {
+          4: { halign: 'right' },
+          5: { halign: 'right' },
+          6: { halign: 'right' },
+        },
+        margin: { top: 48 },
+      });
+
+      // 4. Adicionar caixa de destaque para o repasse total (na direita)
+      const finalY = (doc as any).lastAutoTable.finalY || 100;
+      doc.setDrawColor(0, 82, 204);
+      doc.setLineWidth(0.5);
+      doc.rect(116, finalY + 10, 80, 20); // Caixa na direita
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0, 82, 204);
+      doc.text(`Total do Repasse: R$ ${totalDrMelo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 120, finalY + 22);
+      doc.setTextColor(0, 0, 0); // Reset colors
+      doc.setFont("helvetica", "normal");
+    }
 
     // 4. Converter para Base64 (Data URI completo)
     const pdfOutput = doc.output('datauristring');
-    const base64Content = pdfOutput; 
+    const base64Content = pdfOutput;
 
-    const fileName = `Faturamento_${normalizeFileName(unitName)}_${normalizeFileName(selectedMonth)}`;
+    // Formatar Mês/Ano para o nome do arquivo (ex: "Março de 2026" -> "202603")
+    const parts = selectedMonth.split(" de ");
+    let anoMesFormatado = "";
+    if (parts.length === 2) {
+      const [mesNome, ano] = parts;
+      const mesIdx = MESES.indexOf(mesNome);
+      const mesNum = (mesIdx + 1).toString().padStart(2, "0");
+      anoMesFormatado = `${ano}${mesNum}`;
+    } else {
+      // Fallback
+      anoMesFormatado = normalizeFileName(selectedMonth);
+    }
+
+    const unitNameNorm = normalizeFileName(unitName);
     
-    // Baixar o arquivo no navegador do usuário
-    doc.save(`${fileName}.pdf`);
+    const fileName = reportType === 'secretaria' 
+      ? `Dr.Melo_Fat_${unitNameNorm}_${anoMesFormatado}`
+      : `Dr.Melo_Fin_${unitNameNorm}_${anoMesFormatado}`;
+
+    // Baixar o arquivo no navegador do usuário (removido a pedido)
+    // doc.save(`${fileName}.pdf`);
 
     const phoneNumber = ENVIRONMENT === "teste" ? "5521971938840" : "5521984934862";
 
     try {
       toast.loading("Gerando e enviando PDF...");
-      
+
       const success = await whatsappService.sendDocument(
         {
           phone: phoneNumber,
@@ -258,6 +400,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       console.error("Erro no envio:", err);
     }
   };
+
 
   const availableMonths = useMemo(() => {
     const unitData = patientData[unit];
@@ -294,9 +437,29 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
             ))}
           </SelectContent>
         </Select>
-        <Button onClick={handleGenerateReport}>Gerar Relatório</Button>
+        <Button onClick={() => setIsReportTypeDialogOpen(true)}>Gerar Relatório</Button>
         <Button onClick={() => setIsNewAppointmentFormOpen(true)}>Agendar</Button>
       </div>
+
+      {/* ---------------- TIPO DE RELATÓRIO ---------------- */}
+      <Dialog open={isReportTypeDialogOpen} onOpenChange={setIsReportTypeDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Tipo de Relatório</DialogTitle>
+            <DialogDescription>
+              Selecione para quem enviar o relatório de faturamento do mês de {selectedMonth}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-4 py-4">
+            <Button onClick={() => handleGenerateReport('secretaria')} variant="outline" className="w-full text-left justify-start">
+              Para a Secretária
+            </Button>
+            <Button onClick={() => handleGenerateReport('administrativo')} variant="outline" className="w-full text-left justify-start">
+              Para o financeiro
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="mt-4">
         {appointmentsForMonth.length > 0 ? (

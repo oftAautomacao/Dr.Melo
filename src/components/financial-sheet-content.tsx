@@ -366,8 +366,8 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     const unitNameNorm = normalizeFileName(unitName);
     
     const fileName = reportType === 'secretaria' 
-      ? `Dr.Melo_Fat_${unitNameNorm}_${anoMesFormatado}`
-      : `Dr.Melo_Fin_${unitNameNorm}_${anoMesFormatado}`;
+      ? `Dr.Melo_Age_${unitNameNorm}_${anoMesFormatado}`
+      : `Dr.Melo_Atend_${unitNameNorm}_${anoMesFormatado}`;
 
     // Baixar o arquivo no navegador do usuário (removido a pedido)
     // doc.save(`${fileName}.pdf`);

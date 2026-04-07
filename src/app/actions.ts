@@ -224,19 +224,23 @@ export async function saveAppointmentAction(
 
     const pathBase = `/${firebaseBase}/agendamentoWhatsApp/operacional`;
     const agBase = `${pathBase}/consultasAgendadas`;
+    const convBase = `${pathBase}/conversas`;
     const updates: Record<string, any> = {};
 
-    updates[`${agBase}/${idxNode}/${setor}/${datePath}/${timePath}`] = {
+    const appointmentDataToSave = {
       ...appointmentRecord,
       obs: [v.observacoes || ""],
       ...(Object.keys(precos).length > 0 ? { precos } : {}),
     };
 
-    updates[`${agBase}/telefones/${phone}/${datePath}/${timePath}`] = {
-      ...appointmentRecord,
-      obs: [v.observacoes || ""],
-      ...(Object.keys(precos).length > 0 ? { precos } : {}),
-    };
+    updates[`${agBase}/${idxNode}/${setor}/${datePath}/${timePath}`] = appointmentDataToSave;
+    updates[`${agBase}/telefones/${phone}/${datePath}/${timePath}`] = appointmentDataToSave;
+
+    // --- TERCEIRO LOCAL (CONVERSAS) - APENAS DRM ---
+    if (isDRMBase(firebaseBase)) {
+      const cleanPhone = phone.replace(/\D/g, "");
+      updates[`${convBase}/${cleanPhone}/pacientesAgendados/${datePath}/${timePath}`] = appointmentDataToSave;
+    }
 
     const dbInstance = getDatabaseInstance(environment);
     await update(ref(dbInstance), updates);
@@ -476,6 +480,15 @@ export async function cancelAppointment(
     updates[`${agBase}/telefones/${phone}/${data}/${hora}`] = null;
     updates[`${agBase}/${idxNode}/${setor}/${data}/${hora}`] = null;
 
+    // 3) TERCEIRO LOCAL (CONVERSAS) - APENAS DRM
+    if (isDRMBase(firebaseBase)) {
+      const convBase = `${pathBase}/conversas`;
+      const cleanPhone = phone.replace(/\D/g, "");
+      // Move de 'agendados' para 'cancelados' dentro do nó de conversas
+      updates[`${convBase}/${cleanPhone}/pacientesAgendados/${data}/${hora}`] = null;
+      updates[`${convBase}/${cleanPhone}/pacientesCancelados/${data}/${hora}`] = dataToSave;
+    }
+
     console.log("CANCEL_DEBUG: updates object:", JSON.stringify(updates, null, 2));
 
     await update(ref(dbInstance), updates);
@@ -552,6 +565,15 @@ export async function restoreAppointment(
     // Remover de consultasCanceladas
     updates[`${cancelBase}/telefones/${phone}/${data}/${hora}`] = null;
     updates[`${cancelBase}/${idxNode}/${setor}/${data}/${hora}`] = null;
+
+    // TERCEIRO LOCAL (CONVERSAS) - APENAS DRM
+    if (isDRMBase(firebaseBase)) {
+      const convBase = `${firebaseBase}/agendamentoWhatsApp/operacional/conversas`;
+      const cleanPhone = phone.replace(/\D/g, "");
+      // Restaura em 'agendados' e remove de 'cancelados' dentro do nó de conversas
+      updates[`${convBase}/${cleanPhone}/pacientesAgendados/${data}/${hora}`] = appointmentRecord;
+      updates[`${convBase}/${cleanPhone}/pacientesCancelados/${data}/${hora}`] = null;
+    }
 
     await update(ref(dbInstance), updates);
 

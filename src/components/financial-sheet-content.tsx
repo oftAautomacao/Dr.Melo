@@ -287,11 +287,14 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
             if (precoDrMelo != null) totalDrMelo += precoDrMelo;
             if (precoClinica != null) totalClinica += precoClinica;
 
+            // Remove o sufixo "(incluso na consulta)" do nome exibido no PDF
+            const displayItem = item.replace(/\s*\(incluso na consulta\)/gi, "").trim();
+
             body.push([
               { content: index === 0 ? dateFull : "", styles: { fillColor: bgColor } },
               { content: index === 0 ? name : "", styles: { fillColor: bgColor } },
               { content: index === 0 ? convenio : "", styles: { fillColor: bgColor } },
-              { content: item, styles: { fillColor: bgColor } },
+              { content: displayItem, styles: { fillColor: bgColor } },
               { content: formatBRL(precoPaciente), styles: { fillColor: bgColor, halign: 'right' } },
               { content: formatBRL(precoDrMelo), styles: { fillColor: bgColor, halign: 'right' } },
               { content: formatBRL(precoClinica), styles: { fillColor: bgColor, halign: 'right' } },
@@ -304,11 +307,13 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
           itens.forEach((item, index) => {
             const isFirst = index === 0;
+            // Remove o sufixo "(incluso na consulta)" do nome exibido no PDF
+            const displayItem = item.replace(/\s*\(incluso na consulta\)/gi, "").trim();
             body.push([
               { content: isFirst ? dateFull : "", styles: { fillColor: bgColor } },
               { content: isFirst ? name : "", styles: { fillColor: bgColor } },
               { content: isFirst ? convenio : "", styles: { fillColor: bgColor } },
-              { content: item, styles: { fillColor: bgColor } },
+              { content: displayItem, styles: { fillColor: bgColor } },
               // Paciente paga 0 (plano cobre)
               { content: "0,00", styles: { fillColor: bgColor, halign: 'right' } },
               // Dr. Melo recebe R$30 fixo apenas no primeiro exame; demais zerado

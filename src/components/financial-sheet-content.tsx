@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { User, Calendar, Phone, Shield, FlaskConical } from "lucide-react";
+import { User, Calendar, Phone, Shield, FlaskConical, ClipboardCheck, DollarSign } from "lucide-react";
 import { Toaster, toast } from 'sonner';
 import { ENVIRONMENT } from "../../ambiente";
 import Link from 'next/link';
@@ -275,7 +275,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
             // Se esse campo existir no Firebase e tiver um valor válido (não nulo, não vazio),
             // ele sobrescreve o drMelo padrão APENAS para esse exame nessa unidade.
             const unitKey = app.unidade; // ex: "oftalmoRecreio"
-            const unitSpecificDrMelo = cfg?.[unitKey];
+            const unitSpecificDrMelo = (cfg as Record<string, any>)?.[unitKey];
             const precoDrMelo = isIncluso
               ? 0
               : unitSpecificDrMelo != null &&
@@ -455,20 +455,35 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
       {/* ---------------- TIPO DE RELATÓRIO ---------------- */}
       <Dialog open={isReportTypeDialogOpen} onOpenChange={setIsReportTypeDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle>Tipo de Relatório</DialogTitle>
-            <DialogDescription>
-              Selecione para quem enviar o relatório de faturamento do mês de {selectedMonth}.
+            <DialogTitle className="text-lg font-bold text-gray-800">Gerar Relatório</DialogTitle>
+            <DialogDescription className="text-sm text-gray-500">
+              Escolha o tipo de relatório para <span className="font-medium text-gray-700">{selectedMonth}</span>.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex flex-col gap-4 py-4">
-            <Button onClick={() => handleGenerateReport('secretaria')} variant="outline" className="w-full text-left justify-start">
-              Para a Secretária
-            </Button>
-            <Button onClick={() => handleGenerateReport('administrativo')} variant="outline" className="w-full text-left justify-start">
-              Para o financeiro
-            </Button>
+          <div className="flex flex-col gap-2 py-2">
+            {/* Botão Validação */}
+            <button
+              onClick={() => handleGenerateReport('secretaria')}
+              className="group flex items-center gap-3 w-full rounded-lg border border-blue-100 bg-blue-50 hover:bg-blue-100 hover:border-blue-300 hover:shadow-sm transition-all duration-200 px-3 py-2.5 text-left cursor-pointer"
+            >
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 group-hover:bg-blue-200 transition-colors shrink-0">
+                <ClipboardCheck className="h-4 w-4 text-blue-600" />
+              </div>
+              <span className="text-sm font-semibold text-blue-800">Validação</span>
+            </button>
+
+            {/* Botão Cobrança */}
+            <button
+              onClick={() => handleGenerateReport('administrativo')}
+              className="group flex items-center gap-3 w-full rounded-lg border border-emerald-100 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 hover:shadow-sm transition-all duration-200 px-3 py-2.5 text-left cursor-pointer"
+            >
+              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-emerald-100 group-hover:bg-emerald-200 transition-colors shrink-0">
+                <DollarSign className="h-4 w-4 text-emerald-600" />
+              </div>
+              <span className="text-sm font-semibold text-emerald-800">Cobrança</span>
+            </button>
           </div>
         </DialogContent>
       </Dialog>

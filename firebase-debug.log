@@ -1,0 +1,46 @@
+[debug] [2026-04-09T19:48:16.905Z] ----------------------------------------------------------------------
+[debug] [2026-04-09T19:48:16.911Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2026-04-09T19:48:16.911Z] CLI Version:   14.12.0
+[debug] [2026-04-09T19:48:16.911Z] Platform:      win32
+[debug] [2026-04-09T19:48:16.912Z] Node Version:  v21.7.1
+[debug] [2026-04-09T19:48:16.912Z] Time:          Thu Apr 09 2026 16:48:16 GMT-0300 (Horário Padrão de Brasília)
+[debug] [2026-04-09T19:48:16.912Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-04-09T19:48:16.916Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-04-09T19:48:17.342Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-04-09T19:48:17.342Z] > authorizing via signed-in user (oftautomacao@gmail.com)
+[debug] [2026-04-09T19:48:17.342Z] [iam] checking project oftautomacao-9b427 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-04-09T19:48:17.343Z] Checked if tokens are valid: false, expires at: 1775670995958
+[debug] [2026-04-09T19:48:17.344Z] Checked if tokens are valid: false, expires at: 1775670995958
+[debug] [2026-04-09T19:48:17.344Z] > refreshing access token with scopes: []
+[debug] [2026-04-09T19:48:17.346Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-04-09T19:48:17.346Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-09T19:48:17.544Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-04-09T19:48:17.544Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-04-09T19:48:17.554Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/oftautomacao-9b427:testIamPermissions [none]
+[debug] [2026-04-09T19:48:17.554Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/oftautomacao-9b427:testIamPermissions x-goog-quota-user=projects/oftautomacao-9b427
+[debug] [2026-04-09T19:48:17.554Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/oftautomacao-9b427:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-04-09T19:48:17.680Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2026-04-09T19:48:17.680Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2026-04-09T19:48:18.466Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/oftautomacao-9b427:testIamPermissions 200
+[debug] [2026-04-09T19:48:18.466Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/oftautomacao-9b427:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}
+[debug] [2026-04-09T19:48:18.467Z] Checked if tokens are valid: true, expires at: 1775767696544
+[debug] [2026-04-09T19:48:18.467Z] Checked if tokens are valid: true, expires at: 1775767696544
+[debug] [2026-04-09T19:48:18.467Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/oftautomacao-9b427 [none]
+[debug] [2026-04-09T19:48:18.883Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/oftautomacao-9b427 200
+[debug] [2026-04-09T19:48:18.883Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/oftautomacao-9b427 {"projectId":"oftautomacao-9b427","projectNumber":"755832525715","displayName":"OftAutomacao","name":"projects/oftautomacao-9b427","resources":{"hostingSite":"oftautomacao-9b427","realtimeDatabaseInstance":"oftautomacao-9b427-default-rtdb","locationId":"us-central"},"state":"ACTIVE","etag":"1_eb94fee2-91d9-4eb2-bae2-105b17a4b139"}
+[debug] [2026-04-09T19:48:25.285Z] Checked if tokens are valid: true, expires at: 1775767696544
+[debug] [2026-04-09T19:48:25.285Z] Checked if tokens are valid: true, expires at: 1775767696544
+[debug] [2026-04-09T19:48:25.286Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/oftautomacao-9b427/sites pageToken=&pageSize=10
+[debug] [2026-04-09T19:48:26.765Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/oftautomacao-9b427/sites 200
+[debug] [2026-04-09T19:48:26.765Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/oftautomacao-9b427/sites {"sites":[{"name":"projects/oftautomacao-9b427/sites/oftautomacao-9b427","defaultUrl":"https://oftautomacao-9b427.web.app","type":"DEFAULT_SITE"}]}
+[debug] [2026-04-09T19:48:26.770Z] Checked if tokens are valid: true, expires at: 1775767696544
+[debug] [2026-04-09T19:48:26.770Z] Checked if tokens are valid: true, expires at: 1775767696544
+[debug] [2026-04-09T19:48:26.770Z] >>> [apiv2][query] GET https://firebasehosting.googleapis.com/v1beta1/projects/oftautomacao-9b427/sites 
+[debug] [2026-04-09T19:48:27.276Z] <<< [apiv2][status] GET https://firebasehosting.googleapis.com/v1beta1/projects/oftautomacao-9b427/sites 200
+[debug] [2026-04-09T19:48:27.276Z] <<< [apiv2][body] GET https://firebasehosting.googleapis.com/v1beta1/projects/oftautomacao-9b427/sites {"sites":[{"name":"projects/oftautomacao-9b427/sites/oftautomacao-9b427","defaultUrl":"https://oftautomacao-9b427.web.app","type":"DEFAULT_SITE"}]}
+[debug] [2026-04-09T19:48:27.276Z] Checked if tokens are valid: true, expires at: 1775767696544
+[debug] [2026-04-09T19:48:27.276Z] Checked if tokens are valid: true, expires at: 1775767696544
+[debug] [2026-04-09T19:48:27.276Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/oftautomacao-9b427/webApps/-/config [none]
+[debug] [2026-04-09T19:48:28.318Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/oftautomacao-9b427/webApps/-/config 200
+[debug] [2026-04-09T19:48:28.318Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/oftautomacao-9b427/webApps/-/config {"projectId":"oftautomacao-9b427","appId":"1:755832525715:web:bd1b2e946d003611b94e66","databaseURL":"https://oftautomacao-9b427-default-rtdb.firebaseio.com","storageBucket":"oftautomacao-9b427.appspot.com","locationId":"us-central","apiKey":"AIzaSyDseoXikJofokNkYoU-Sm6wf_N9EIZbmrs","authDomain":"oftautomacao-9b427.firebaseapp.com","messagingSenderId":"755832525715","measurementId":"G-57P28HMNXZ","projectNumber":"755832525715","version":"2"}

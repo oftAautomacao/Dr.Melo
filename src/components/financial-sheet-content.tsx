@@ -266,10 +266,22 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
           itens.forEach((item, index) => {
             const cfg = examesConfig[item];
             const isIncluso = item.toLowerCase().includes("(incluso na consulta)");
-            
+
             const precoPaciente = isIncluso ? 0 : cfg?.preco;
-            const precoDrMelo = isIncluso ? 0 : cfg?.drMelo;
             const precoClinica = isIncluso ? 0 : cfg?.clinica;
+
+            // Verifica se existe um preço diferenciado para a unidade deste agendamento.
+            // O nó do exame pode conter campos extras com o nome da unidade (ex: "oftalmoRecreio").
+            // Se esse campo existir no Firebase e tiver um valor válido (não nulo, não vazio),
+            // ele sobrescreve o drMelo padrão APENAS para esse exame nessa unidade.
+            const unitKey = app.unidade; // ex: "oftalmoRecreio"
+            const unitSpecificDrMelo = cfg?.[unitKey];
+            const precoDrMelo = isIncluso
+              ? 0
+              : unitSpecificDrMelo != null &&
+                String(unitSpecificDrMelo).trim() !== ""
+              ? Number(unitSpecificDrMelo)
+              : cfg?.drMelo;
 
             if (precoPaciente != null) totalPaciente += precoPaciente;
             if (precoDrMelo != null) totalDrMelo += precoDrMelo;

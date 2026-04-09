@@ -187,7 +187,28 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     doc.setFontSize(12);
     doc.text(`Período: ${selectedMonth}`, 14, 41);
 
-    // 2. Preparar os dados da tabela
+    // 2. Buscar preços no Firebase globalmente (necessário para descobrir itens inclusos)
+    toast.loading("Processando exames...");
+    const DB_URL = "https://oftautomacao-9b427-default-rtdb.firebaseio.com";
+    const firebasePath = getFirebasePathBase(); // "DRM" ou "OFT/45"
+    let examesConfig: Record<string, { preco?: number | string; drMelo?: number | string; clinica?: number | string }> = {};
+    try {
+      const resp = await fetch(`${DB_URL}/${firebasePath}/agendamentoWhatsApp/configuracoes/exames.json`);
+      examesConfig = (await resp.json()) ?? {};
+    } catch (e) {
+      console.warn("Não foi possível buscar preços dos exames:", e);
+    }
+    toast.dismiss();
+
+    const isItemIncluso = (itemName: string) => {
+      // Checa se o texto (incluso na consulta) está no próprio nome
+      if (itemName.toLowerCase().includes("(incluso na consulta)")) return true;
+      // Checa se o Firebase retornou a string indicando "incluso" no preço
+      const cfg = examesConfig[itemName];
+      return (typeof cfg?.preco === 'string' && cfg.preco.toLowerCase().includes('incluso'));
+    };
+
+    // 3. Preparar os dados da tabela
     const body: any[] = [];
     let isAlternatePatient = false;
 
@@ -201,7 +222,15 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
         const nameRaw = app.nomePaciente || "Não informado";
         const name = app.cpf ? `${nameRaw}\nCPF: ${app.cpf}` : nameRaw;
         const convenio = app.convenio || "Não informado";
-        const itens = (app.exames && app.exames.length > 0) ? app.exames : ["Consulta"];
+        let itens = (app.exames && app.exames.length > 0) ? [...app.exames] : ["Consulta"];
+        
+        // Se o paciente possui um item incluso na consulta, mas a consulta em si não foi registrada, adicionamos ela automaticamente
+        const hasIncluso = itens.some(item => isItemIncluso(item));
+        const hasConsulta = itens.some(item => item.toLowerCase().trim() === "consulta");
+        
+        if (hasIncluso && !hasConsulta) {
+          itens = ["Consulta", ...itens];
+        }
         const bgColor: [number, number, number] = isAlternatePatient ? [240, 248, 255] : [255, 255, 255];
 
         itens.forEach((item, index) => {
@@ -229,18 +258,6 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
     } else {
       // ---- RELATÓRIO ADMINISTRATIVO ----
-      toast.loading("Buscando preços dos exames...");
-
-      // Buscar preços no Firebase — caminho dinâmico conforme a unidade
-      const DB_URL = "https://oftautomacao-9b427-default-rtdb.firebaseio.com";
-      const firebasePath = getFirebasePathBase(); // "DRM" ou "OFT/45"
-      let examesConfig: Record<string, { preco?: number; drMelo?: number; clinica?: number }> = {};
-      try {
-        const resp = await fetch(`${DB_URL}/${firebasePath}/agendamentoWhatsApp/configuracoes/exames.json`);
-        examesConfig = (await resp.json()) ?? {};
-      } catch (e) {
-        console.warn("Não foi possível buscar preços dos exames:", e);
-      }
       const head = [['Data', 'Nome', 'Convênio', 'Procedimentos', 'Valor\nPaciente', 'Repasse\nDr. Melo', 'Margem\nClínica']];
 
       let totalPaciente = 0;
@@ -253,7 +270,15 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
         const nameRaw = app.nomePaciente || "Não informado";
         const name = app.cpf ? `${nameRaw}\nCPF: ${app.cpf}` : nameRaw;
         const convenio = app.convenio || "Não informado";
-        const itens = (app.exames && app.exames.length > 0) ? app.exames : ["Consulta"];
+        let itens = (app.exames && app.exames.length > 0) ? [...app.exames] : ["Consulta"];
+        
+        // Verifica se há item incluso usando a nova subfunção baseada no config do Firebase
+        const hasIncluso = itens.some(item => isItemIncluso(item));
+        const hasConsulta = itens.some(item => item.toLowerCase().trim() === "consulta");
+        
+        if (hasIncluso && !hasConsulta) {
+          itens = ["Consulta", ...itens];
+        }
         const bgColor: [number, number, number] = isAlternatePatient ? [240, 248, 255] : [255, 255, 255];
 
         const formatBRL = (v: number | undefined) =>

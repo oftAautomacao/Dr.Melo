@@ -179,8 +179,8 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
     // Título do Relatório
     doc.setFontSize(18);
-    const pdfTitle = reportType === 'secretaria' 
-      ? `Pacientes Agendados - ${locationString}` 
+    const pdfTitle = reportType === 'secretaria'
+      ? `Pacientes Agendados - ${locationString}`
       : `Pacientes Atendidos - ${locationString}`;
 
     doc.text(pdfTitle, 14, 34);
@@ -267,27 +267,40 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
             const cfg = examesConfig[item];
             const isIncluso = item.toLowerCase().includes("(incluso na consulta)");
 
-            const precoPaciente = isIncluso ? 0 : cfg?.preco;
-            const precoClinica = isIncluso ? 0 : cfg?.clinica;
+            // Sub-função para limpar os valores recebidos do Firebase
+            // Se vier o texto "incluso na consulta" dentro do botão de preço, transforma em 0.
+            const parseVal = (v: any): number | undefined => {
+              if (v == null || v === "") return undefined;
+              if (typeof v === 'string') {
+                const s = v.trim().toLowerCase();
+                if (s.includes('incluso')) return 0;
+                const num = parseFloat(s.replace(',', '.'));
+                return isNaN(num) ? undefined : num;
+              }
+              const n = Number(v);
+              return isNaN(n) ? undefined : n;
+            };
 
-            // Verifica se existe um preço diferenciado para a unidade deste agendamento.
-            // O nó do exame pode conter campos extras com o nome da unidade (ex: "oftalmoRecreio").
-            // Se esse campo existir no Firebase e tiver um valor válido (não nulo, não vazio),
-            // ele sobrescreve o drMelo padrão APENAS para esse exame nessa unidade.
+            const valPreco = cfg?.preco;
+            const valClinica = cfg?.clinica;
+            
+            // Lógica do Dr. Melo específica por Unidade
             const unitKey = app.unidade; // ex: "oftalmoRecreio"
             const unitSpecificDrMelo = (cfg as Record<string, any>)?.[unitKey];
-            const precoDrMelo = isIncluso
-              ? 0
-              : unitSpecificDrMelo != null &&
-                String(unitSpecificDrMelo).trim() !== ""
-              ? Number(unitSpecificDrMelo)
+            const valDrMelo = (unitSpecificDrMelo != null && String(unitSpecificDrMelo).trim() !== "") 
+              ? unitSpecificDrMelo 
               : cfg?.drMelo;
 
+            const precoPaciente = isIncluso ? 0 : parseVal(valPreco);
+            const precoDrMelo = isIncluso ? 0 : parseVal(valDrMelo);
+            const precoClinica = isIncluso ? 0 : parseVal(valClinica);
+
+            // Se for número válido, soma nos totais globais
             if (precoPaciente != null) totalPaciente += precoPaciente;
             if (precoDrMelo != null) totalDrMelo += precoDrMelo;
             if (precoClinica != null) totalClinica += precoClinica;
 
-            // Remove o sufixo "(incluso na consulta)" do nome exibido no PDF
+            // Remove o sufixo "(incluso na consulta)" do nome do item a ser exibido
             const displayItem = item.replace(/\s*\(incluso na consulta\)/gi, "").trim();
 
             body.push([
@@ -307,7 +320,6 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
           itens.forEach((item, index) => {
             const isFirst = index === 0;
-            // Remove o sufixo "(incluso na consulta)" do nome exibido no PDF
             const displayItem = item.replace(/\s*\(incluso na consulta\)/gi, "").trim();
             body.push([
               { content: isFirst ? dateFull : "", styles: { fillColor: bgColor } },
@@ -351,7 +363,15 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       });
 
       // 4. Adicionar caixa de destaque para o repasse total (na direita)
-      const finalY = (doc as any).lastAutoTable.finalY || 100;
+      let finalY = (doc as any).lastAutoTable.finalY || 100;
+      
+      // Verifica se há sobra de espaço na página para a caixa final (precisa de ~35 de margem)
+      const pageHeight = doc.internal.pageSize.getHeight();
+      if (finalY + 35 > pageHeight) {
+        doc.addPage();
+        finalY = 20; // Começa a caixa na parte superior da nova página
+      }
+
       doc.setDrawColor(0, 82, 204);
       doc.setLineWidth(0.5);
       doc.rect(116, finalY + 10, 80, 20); // Caixa na direita
@@ -381,8 +401,8 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     }
 
     const unitNameNorm = normalizeFileName(unitName);
-    
-    const fileName = reportType === 'secretaria' 
+
+    const fileName = reportType === 'secretaria'
       ? `Dr.Melo_Age_${unitNameNorm}_${anoMesFormatado}`
       : `Dr.Melo_Atend_${unitNameNorm}_${anoMesFormatado}`;
 

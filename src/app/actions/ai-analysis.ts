@@ -92,7 +92,7 @@ export async function extractAppointmentFromImageAction(
     - nomePaciente (Nome completo)
     - dataNascimento (Formato DD/MM/AAAA)
     - cpf (Apenas números)
-    - unidade (Nome da clínica/unidade que foi ESCOLHIDA ou CONFIRMADA pelo paciente. Se houver nomes entre parênteses ou bairros como 'Meier (Ciom)', extraia o nome completo e o bairro, ex: 'Meier Ciom')
+    - unidade (Nome exato da clínica/unidade que foi ESCOLHIDA ou CONFIRMADA. ATENÇÃO: Preste atenção tanto no NOME da clínica quanto no BAIRRO em conjunto para não confundi-las (ex: diferencie rigorosamente "Oftalmoday Tijuca" e "Kids 360 Tijuca" caso ambos estejam na Tijuca). Não se baseie apenas no bairro; identifique qual é a clínica correta. Se houver nomes entre parênteses ou bairros, una-os, ex: 'Meier Ciom')
     - dataAgendamento (Formato AAAA-MM-DD da data ESCOLHIDA ou CONFIRMADA. Se o texto disser "09/mar", infira o ano corrente 2026, pois hoje é março de 2026)
     - horario (Formato HH:MM do horário ESCOLHIDO ou CONFIRMADO)
     - telefone (Apenas números, incluindo 55 e DDD. Se não houver 55, assuma o do Brasil)

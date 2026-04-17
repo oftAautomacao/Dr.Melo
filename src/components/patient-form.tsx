@@ -799,18 +799,30 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
             // Mapeamento de Unidade (Otimista e Robusto)
             if (result.unidade && unidadesList.length > 0) {
               const resUnidade = result.unidade.toLowerCase();
-              const matched = unidadesList.find(u => {
+              let matched = unidadesList.find(u => {
                 const uNome = u.nome?.toLowerCase() || "";
                 const uId = u.id.toLowerCase();
-                
-                // Match exato ou inclusão direta
-                if (uNome === resUnidade || uId === resUnidade) return true;
-                if (uNome.includes(resUnidade) || resUnidade.includes(uNome)) return true;
-                
-                // Match por palavras-chave (ex: "Meier", "Ciom", "Tijuca")
-                const tokens = resUnidade.split(/[\s()\-]+/).filter(t => t.length > 2);
-                return tokens.some(t => uNome.includes(t) || uId.includes(t));
+                return uNome === resUnidade || uId === resUnidade || uNome.includes(resUnidade) || resUnidade.includes(uNome);
               });
+
+              if (!matched) {
+                // Match por maior similaridade de tokens
+                const tokens = resUnidade.split(/[\s()\-]+/).filter(t => t.length > 2);
+                let highestScore = 0;
+                unidadesList.forEach(u => {
+                  const uNome = u.nome?.toLowerCase() || "";
+                  const uId = u.id.toLowerCase();
+                  let score = 0;
+                  tokens.forEach(t => {
+                    if (uNome.includes(t) || uId.includes(t)) score += 1;
+                  });
+                  if (score > highestScore) {
+                    highestScore = score;
+                    matched = u;
+                  }
+                });
+              }
+
               if (matched) form.setValue("local", matched.id);
             }
 

@@ -52,10 +52,12 @@ import {
   Sparkle,
   Eraser,
   Undo2,
+  Search,
 } from "lucide-react";
 import WhatsAppIcon from "@/components/ui/whatsapp-icon";
 import InternalChatIcon from "@/components/ui/internal-chat-icon";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import {
   fetchHolidays,
   isHoliday as checkIsHoliday,
@@ -74,6 +76,7 @@ import {
 } from "@/components/ui/dialog";
 import { PatientForm } from "@/components/patient-form";
 import { cancelAppointment, restoreAppointment } from "@/app/actions";
+import { PatientSearchSheet, PatientSearchResult } from "@/components/patient-search-sheet";
 
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import { ENVIRONMENT } from "../../ambiente";
@@ -166,6 +169,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
   initialDay,
 }) => {
   const { toast } = useToast();
+  const router = useRouter();
   /* ----------------------------- ESTADOS ----------------------------- */
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
     if (initialDay) {
@@ -195,6 +199,20 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
   const [appointmentToRestore, setAppointmentToRestore] =
     useState<CalendarAppointment | undefined>(undefined);
   const [dontSendSecretaryMessage, setDontSendSecretaryMessage] = useState(true);
+
+  const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
+
+  const handleSearchSelect = (record: PatientSearchResult) => {
+    setIsSearchDialogOpen(false);
+    
+    if (record.status === 'agendado') {
+      router.push(`/visualizar-agendamentos?unidade=${record.unidade}&dia=${record.dataAgendamento}`);
+      return;
+    }
+    
+    setSelectedUnit(record.unidade);
+    setSelectedDate(parseISO(record.dataAgendamento));
+  };
 
 
 
@@ -446,6 +464,11 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                     })}`
                     : "Selecione uma data"}
                 </h3>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="hover:bg-red-100" onClick={() => setIsSearchDialogOpen(true)}>
+                    <Search className="h-6 w-6 text-red-700" />
+                  </Button>
+                </div>
               </div>
 
               {/* Área Rolável */}
@@ -699,6 +722,12 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <PatientSearchSheet
+        isOpen={isSearchDialogOpen}
+        onClose={() => setIsSearchDialogOpen(false)}
+        onSelect={handleSearchSelect}
+      />
     </>
   );
 };

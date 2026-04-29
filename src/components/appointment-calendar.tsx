@@ -53,10 +53,12 @@ import {
   Eraser,
   CalendarPlus,
   Copy,
+  Search,
 } from "lucide-react";
 
 import InternalChatIcon from "@/components/ui/internal-chat-icon";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import {
   fetchHolidays,
   isHoliday as checkIsHoliday,
@@ -75,6 +77,7 @@ import {
 } from "@/components/ui/dialog";
 import { PatientForm } from "@/components/patient-form";
 import { cancelAppointment } from "@/app/actions";
+import { PatientSearchSheet, PatientSearchResult } from "@/components/patient-search-sheet";
 
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import { ENVIRONMENT } from "../../ambiente";
@@ -167,6 +170,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   initialDay,
 }) => {
   const { toast } = useToast();
+  const router = useRouter();
   /* ----------------------------- ESTADOS ----------------------------- */
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
     if (initialDay) {
@@ -193,12 +197,10 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   const [selectedDateHolidayInfo, setSelectedDateHolidayInfo] =
     useState<Holiday | undefined>();
 
-  const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] =
-    useState(false);
-
+  const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
   const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
-  const [isNewAppointmentDialogOpen, setIsNewAppointmentDialogOpen] =
-    useState(false);
+  const [isNewAppointmentDialogOpen, setIsNewAppointmentDialogOpen] = useState(false);
+  const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
 
   const [appointmentToCancel, setAppointmentToCancel] =
     useState<CalendarAppointment | undefined>(undefined);
@@ -209,6 +211,18 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   const [cancelReason, setCancelReason] = useState("Não compareceu à consulta");
   const [dontSendSecretaryMessage, setDontSendSecretaryMessage] =
     useState(true);
+
+  const handleSearchSelect = (record: PatientSearchResult) => {
+    setIsSearchDialogOpen(false);
+    
+    if (record.status === 'cancelado') {
+      router.push(`/cancelamentos?unidade=${record.unidade}&dia=${record.dataAgendamento}`);
+      return;
+    }
+    
+    setSelectedUnit(record.unidade);
+    setSelectedDate(parseISO(record.dataAgendamento));
+  };
 
   /* -- estados para autopreencher/limpar -- */
   const [autoFillKey, setAutoFillKey] = useState(0);
@@ -528,12 +542,16 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                     : "Selecione uma data"}
                 </h3>
 
-                {/* Botão de Adicionar Agendamento */}
-                {selectedDate && dateFnsIsValid(selectedDate) && !selectedDateHolidayInfo && getDay(selectedDate) !== 0 && (
-                  <Button variant="ghost" size="icon" className="hover:bg-blue-100" onClick={() => setIsNewAppointmentDialogOpen(true)}>
-                    <PlusCircle className="h-8 w-8 text-primary" />
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="icon" className="hover:bg-blue-100" onClick={() => setIsSearchDialogOpen(true)}>
+                    <Search className="h-6 w-6 text-primary" />
                   </Button>
-                )}
+                  {selectedDate && dateFnsIsValid(selectedDate) && !selectedDateHolidayInfo && getDay(selectedDate) !== 0 && (
+                    <Button variant="ghost" size="icon" className="hover:bg-blue-100" onClick={() => setIsNewAppointmentDialogOpen(true)}>
+                      <PlusCircle className="h-8 w-8 text-primary" />
+                    </Button>
+                  )}
+                </div>
               </div>
 
               {/* Área Rolável */}
@@ -946,6 +964,12 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           </ScrollArea>
         </DialogContent>
       </Dialog>
+      
+      <PatientSearchSheet
+        isOpen={isSearchDialogOpen}
+        onClose={() => setIsSearchDialogOpen(false)}
+        onSelect={handleSearchSelect}
+      />
     </>
   );
 };

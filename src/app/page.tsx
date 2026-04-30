@@ -4,7 +4,7 @@ import SidebarLayout from "@/components/layout/sidebar-layout";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Building2 } from "lucide-react";
+import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Building2, UserX } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
@@ -80,6 +80,9 @@ interface CardData {
   topFaixas?: { name: string; count: number; value: number }[]; // For age breakdown
   topExames?: { name: string; count: number; value: number }[]; // For exam breakdown
   topUnidades?: { name: string; count: number; value: number }[]; // For unit breakdown
+  ratingSum?: number;
+  ratingCount?: number;
+  noShows?: number;
 }
 
 /* =============================================================
@@ -482,15 +485,19 @@ export default function Home() {
       // Logic for "Unidades" + "Convenio" + "All" => Show Top 3 Convenios per Unit
       if (filterCategory === 'convenio' && filterValue === 'all') {
         const unitConvenios: Record<string, Record<string, { count: number, value: number }>> = {};
-        const unitCounts: Record<string, { count: number, value: number }> = {};
+        const unitCounts: Record<string, { count: number, value: number, ratingSum: number, ratingCount: number, noShows: number }> = {};
 
         appointments.forEach(app => {
           const u = app._unit;
           const c = app.convenio || "Não informado";
 
-          if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0 };
+          if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0, ratingSum: 0, ratingCount: 0, noShows: 0 };
           unitCounts[u].count += 1;
           unitCounts[u].value += app._value;
+
+          const sat = app.pesquisaSatisfacao;
+          if (sat?.estrelas) { unitCounts[u].ratingSum += Number(sat.estrelas) || 0; unitCounts[u].ratingCount += 1; }
+          if (sat?.botao === 'naoCompareceu' || sat?.naoCompareceu === true || app.botao === 'naoCompareceu' || app.naoCompareceu === true) unitCounts[u].noShows += 1;
 
           if (!unitConvenios[u]) unitConvenios[u] = {};
           if (!unitConvenios[u][c]) unitConvenios[u][c] = { count: 0, value: 0 };
@@ -510,6 +517,9 @@ export default function Home() {
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
+            ratingSum: unitCounts[unit].ratingSum,
+            ratingCount: unitCounts[unit].ratingCount,
+            noShows: unitCounts[unit].noShows,
             icon: <Building2 className="h-5 w-5 text-blue-500" />,
             topConvenios: top3
           };
@@ -519,15 +529,19 @@ export default function Home() {
       // Logic for "Unidades" + "Faixa Etaria" + "All" => Show Age Breakdown per Unit
       if (filterCategory === 'faixaEtaria' && filterValue === 'all') {
         const unitFaixas: Record<string, Record<string, { count: number, value: number }>> = {};
-        const unitCounts: Record<string, { count: number, value: number }> = {};
+        const unitCounts: Record<string, { count: number, value: number, ratingSum: number, ratingCount: number, noShows: number }> = {};
 
         appointments.forEach(app => {
           const u = app._unit;
           const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
-          if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0 };
+          if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0, ratingSum: 0, ratingCount: 0, noShows: 0 };
           unitCounts[u].count += 1;
           unitCounts[u].value += app._value;
+
+          const sat = app.pesquisaSatisfacao;
+          if (sat?.estrelas) { unitCounts[u].ratingSum += Number(sat.estrelas) || 0; unitCounts[u].ratingCount += 1; }
+          if (sat?.botao === 'naoCompareceu' || sat?.naoCompareceu === true || app.botao === 'naoCompareceu' || app.naoCompareceu === true) unitCounts[u].noShows += 1;
 
           if (!unitFaixas[u]) unitFaixas[u] = {};
           if (!unitFaixas[u][bucket]) unitFaixas[u][bucket] = { count: 0, value: 0 };
@@ -548,6 +562,9 @@ export default function Home() {
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
+            ratingSum: unitCounts[unit].ratingSum,
+            ratingCount: unitCounts[unit].ratingCount,
+            noShows: unitCounts[unit].noShows,
             icon: <Building2 className="h-5 w-5 text-blue-500" />,
             topFaixas: faixas
           };
@@ -557,13 +574,17 @@ export default function Home() {
       // Logic for "Unidades" + "Exame" + "All" => Show Top 3 Exams per Unit
       if (filterCategory === 'exame' && filterValue === 'all') {
         const unitExames: Record<string, Record<string, { count: number, value: number }>> = {};
-        const unitCounts: Record<string, { count: number, value: number }> = {};
+        const unitCounts: Record<string, { count: number, value: number, ratingSum: number, ratingCount: number, noShows: number }> = {};
 
         appointments.forEach(app => {
           const u = app._unit;
-          if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0 };
+          if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0, ratingSum: 0, ratingCount: 0, noShows: 0 };
           unitCounts[u].count += 1;
           unitCounts[u].value += app._value;
+
+          const sat = app.pesquisaSatisfacao;
+          if (sat?.estrelas) { unitCounts[u].ratingSum += Number(sat.estrelas) || 0; unitCounts[u].ratingCount += 1; }
+          if (sat?.botao === 'naoCompareceu' || sat?.naoCompareceu === true || app.botao === 'naoCompareceu' || app.naoCompareceu === true) unitCounts[u].noShows += 1;
 
           if (!unitExames[u]) unitExames[u] = {};
           if (Array.isArray(app.exames)) {
@@ -587,6 +608,9 @@ export default function Home() {
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
+            ratingSum: unitCounts[unit].ratingSum,
+            ratingCount: unitCounts[unit].ratingCount,
+            noShows: unitCounts[unit].noShows,
             icon: <Building2 className="h-5 w-5 text-blue-500" />,
             topExames: top3
           };
@@ -594,11 +618,15 @@ export default function Home() {
       }
 
       // Default Logic (Count only)
-      const counts: Record<string, { count: number, value: number }> = {};
+      const counts: Record<string, { count: number, value: number, ratingSum: number, ratingCount: number, noShows: number }> = {};
       appointments.forEach(app => {
-        if (!counts[app._unit]) counts[app._unit] = { count: 0, value: 0 };
+        if (!counts[app._unit]) counts[app._unit] = { count: 0, value: 0, ratingSum: 0, ratingCount: 0, noShows: 0 };
         counts[app._unit].count += 1;
         counts[app._unit].value += app._value;
+
+        const sat = app.pesquisaSatisfacao;
+        if (sat?.estrelas) { counts[app._unit].ratingSum += Number(sat.estrelas) || 0; counts[app._unit].ratingCount += 1; }
+        if (sat?.botao === 'naoCompareceu' || sat?.naoCompareceu === true || app.botao === 'naoCompareceu' || app.naoCompareceu === true) counts[app._unit].noShows += 1;
       });
 
       // Always sort by Count Descending (as requested for List View consistency)
@@ -610,6 +638,9 @@ export default function Home() {
         subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
         count: counts[unit].count,
         value: counts[unit].value,
+        ratingSum: counts[unit].ratingSum,
+        ratingCount: counts[unit].ratingCount,
+        noShows: counts[unit].noShows,
         icon: <Building2 className="h-5 w-5 text-blue-500" />
       }));
     }
@@ -1454,7 +1485,18 @@ export default function Home() {
                           <CardHeader className="p-0 pb-1 flex flex-row items-start justify-between space-y-0 w-full">
                             <div className="flex flex-col truncate pr-2">
                               <span className="text-sm font-semibold text-blue-700 truncate" title={item.title}>{item.title}</span>
-                              <span className="text-[10px] text-gray-500 truncate">{item.subtitle}</span>
+                              <span className="text-[11px] text-gray-500 truncate">{item.subtitle}</span>
+                              {statType === "unidades" && (
+                                <div className="flex flex-row items-center gap-3 mt-1.5 text-[11px] font-semibold">
+                                  <span title="Faltas" className="flex items-center gap-1 text-red-600">
+                                    <UserX className="w-3.5 h-3.5" />
+                                    {item.noShows || 0}
+                                  </span>
+                                  <span title="Média de Avaliações" className="flex items-center gap-1 text-yellow-600">
+                                    ⭐ {item.ratingCount ? (item.ratingSum! / item.ratingCount!).toFixed(1) : "-"}
+                                  </span>
+                                </div>
+                              )}
                             </div>
 
                             {/* Default Home Actions: Render ONLY if Unidades + Simple */}

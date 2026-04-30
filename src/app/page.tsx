@@ -1213,11 +1213,6 @@ export default function Home() {
         {/* Top section: Header, Logo, and Mode Toggle */}
         <section className="w-full flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-6">
           <div className="flex flex-col items-start gap-4">
-            {selectedUnit === "OFT/45" ? (
-              <Image src="/images/logo pequena.png" alt="OFT Logo" width={150} height={60} layout="intrinsic" />
-            ) : (
-              <Image src="/images/image1.png" alt="Dr. Melo Logo" width={200} height={80} />
-            )}
 
             {/* Dashboard Mode Toggle */}
             <button

@@ -1,5 +1,6 @@
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 
 import { Home, CalendarDays, PlusCircle, CalendarX } from "lucide-react"; // Importando ícones
 import { MessageSquareText, Settings, BarChart, Download } from "lucide-react"; // Importando ícone de mensagem, configurações e download
@@ -16,8 +17,12 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }
     <div className="flex min-h-screen">
       {/* Sidebar - Changed background to dark blue and text to white */}
       <div className="w-64 bg-blue-900 text-white flex flex-col">
-        <div className="p-4 text-xl font-bold border-b border-gray-700">
-          {unit === 'OFT/45' ? 'Menu - Oftalmoday' : 'Menu - Dr. Melo'} {/* Condicional para o texto do menu */}
+        <div className={`flex justify-center items-center border-b border-gray-700 bg-white ${unit === 'OFT/45' ? 'py-1' : 'p-2'}`}>
+          {unit === 'OFT/45' ? (
+            <Image src="/images/logo lobo.jpg" alt="OFT Logo" width={120} height={48} className="object-contain" />
+          ) : (
+            <Image src="/images/image1.png" alt="Dr. Melo Logo" width={150} height={60} className="object-contain" />
+          )}
         </div>
         <nav className="flex flex-col p-4 space-y-2">
           <Link href="/" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">

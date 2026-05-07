@@ -15,7 +15,7 @@ export default function BuscaHorarios() {
   const {
     loading, searching, results,
     conveniosList, procedimentosList, subplanosMap, examesMetadata, feriadosData,
-    buscar, gerarResposta,
+    buscar, gerarResposta, getNextDiscoveryDate,
   } = useBuscaHorarios();
 
   const [convenio, setConvenio] = useState("");
@@ -31,6 +31,12 @@ export default function BuscaHorarios() {
   const selectedDatesStrings = useMemo(() => {
     return selectedDateObjects.map(d => format(d, "yyyy-MM-dd"));
   }, [selectedDateObjects]);
+
+  const nextDiscoveryDate = useMemo(() => {
+    // Find the soonest date for a unit not yet in results
+    const shownUnits = new Set(results?.map(r => r.unidade) || []);
+    return getNextDiscoveryDate(procedimentos, Array.from(shownUnits), selectedDatesStrings);
+  }, [procedimentos, results, getNextDiscoveryDate, selectedDatesStrings]);
 
   const hasSubplanos = convenio && subplanosMap[convenio]?.length > 0;
 
@@ -253,11 +259,27 @@ export default function BuscaHorarios() {
 
           {/* Section 4: Calendário Estilizado (Highlight month, bg, holidays) */}
           <div className="bg-card rounded-xl shadow-sm border p-4">
-            <div className="flex items-center gap-2 mb-4 border-b pb-2">
-              <CalendarIcon className="h-5 w-5 text-primary" />
-              <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Datas da Busca</h2>
+            <div className="flex items-center justify-between mb-4 border-b pb-2">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="h-5 w-5 text-primary" />
+                <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Datas da Busca</h2>
+              </div>
+              {procedimentos.length > 0 && (
+                <div className="flex items-center gap-1.5 animate-pulse">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500"></div>
+                  <span className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Opções Alternativas</span>
+                </div>
+              )}
             </div>
             
+            {procedimentos.length > 0 && nextDiscoveryDate && (
+              <div className="mb-3 px-2 py-1.5 bg-emerald-50/50 border border-emerald-100 rounded-lg">
+                <p className="text-[10px] text-emerald-800 font-bold leading-tight">
+                  💡 A <span className="text-emerald-600 border-b border-emerald-500">próxima data disponível</span> com uma unidade que não apareceu acima é dia <span className="font-black">{nextDiscoveryDate.split('-').slice(1).reverse().join('/')}</span>.
+                </p>
+              </div>
+            )}
+
             <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 shadow-inner">
               <CalendarUI
                 mode="multiple"
@@ -271,16 +293,18 @@ export default function BuscaHorarios() {
                   nav_button: "h-6 w-6 bg-primary-foreground/20 hover:bg-primary-foreground/40 text-primary-foreground border-transparent",
                   table: "w-full border-collapse",
                   head_cell: "text-primary/50 font-black uppercase text-[10px] w-9",
-                  day: "h-9 w-9 p-0 font-bold aria-selected:opacity-100 rounded-lg hover:bg-primary/10 transition-all",
+                  day: "h-9 w-9 p-0 font-bold aria-selected:opacity-100 rounded-lg hover:bg-primary/10 transition-all relative",
                   day_selected: "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105 z-10 hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
                 }}
                 modifiers={{
                   holiday: holidayDates,
                   sunday: (d: Date) => getDay(d) === 0,
+                  discovery: (d: Date) => format(d, "yyyy-MM-dd") === nextDiscoveryDate,
                 }}
                 modifiersClassNames={{
                   holiday: "bg-amber-500 text-white rounded-lg font-black shadow-sm",
                   sunday: "text-rose-500 font-bold",
+                  discovery: "text-emerald-700 border-b-2 border-emerald-500 rounded-none",
                 }}
                 disabled={[
                   { before: new Date() }

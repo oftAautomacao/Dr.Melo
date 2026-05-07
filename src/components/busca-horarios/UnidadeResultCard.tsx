@@ -115,6 +115,23 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
               })}
             </div>
           )}
+
+          {/* Subplanos Aceitos */}
+          {result.subplanosAceitos && result.subplanosAceitos.length > 0 && (
+            <div className="pt-2 border-t border-gray-50 mt-2">
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                <CheckCircle2 className="h-2.5 w-2.5 text-blue-400" />
+                Planos Aceitos
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {result.subplanosAceitos.map(sp => (
+                  <span key={sp} className="px-2 py-0.5 rounded bg-blue-50/50 text-blue-700 text-[9px] font-black border border-blue-100 shadow-sm">
+                    {sp}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Slots Col */}

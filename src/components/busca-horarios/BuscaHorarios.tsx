@@ -70,8 +70,20 @@ export default function BuscaHorarios() {
   };
 
   const handleBuscar = () => {
-    if (!convenio || selectedDatesStrings.length === 0) return;
+    // Search is allowed if either a convenio is selected OR procedures are selected
+    if (!convenio && procedimentos.length === 0) return;
     buscar({ convenio, subplano, procedimentos, periodo, selectedDates: selectedDatesStrings });
+  };
+
+  const handleLimpar = () => {
+    setConvenio("");
+    setSubplano("");
+    setProcedimentos([]);
+    setPeriodo("Ambos");
+    setSelectedDateObjects([]);
+    // To clear results, we need to call a clear function in the hook or set results to null
+    // Assuming 'buscar' with empty params or a new clear function
+    buscar({ convenio: "", subplano: "", procedimentos: [], periodo: "Ambos", selectedDates: [] });
   };
 
   const examPrices = useMemo(() => {
@@ -332,15 +344,25 @@ export default function BuscaHorarios() {
             )}
           </div>
 
-          <button
-            onClick={handleBuscar}
-            disabled={!convenio || selectedDatesStrings.length === 0 || searching}
-            className="w-full flex items-center justify-center gap-2 py-4 rounded-xl font-black text-xs text-primary-foreground transition-all uppercase tracking-widest
-              bg-primary hover:bg-primary/90 shadow-xl shadow-primary/10 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none active:scale-[0.98]"
-          >
-            {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-            {searching ? "BUSCANDO..." : "BUSCAR"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={handleLimpar}
+              disabled={searching}
+              className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-black text-xs text-gray-500 transition-all uppercase tracking-widest
+                bg-gray-100 hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50"
+            >
+              <X className="h-4 w-4" /> LIMPAR
+            </button>
+            <button
+              onClick={handleBuscar}
+              disabled={searching || (!convenio && procedimentos.length === 0)}
+              className="flex-[2] flex items-center justify-center gap-2 py-4 rounded-xl font-black text-xs text-primary-foreground transition-all uppercase tracking-widest
+                bg-primary hover:bg-primary/90 shadow-xl shadow-primary/10 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none active:scale-[0.98]"
+            >
+              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {searching ? "BUSCANDO..." : "BUSCAR"}
+            </button>
+          </div>
         </div>
 
         {/* Right Column: Results */}
@@ -360,6 +382,17 @@ export default function BuscaHorarios() {
             </div>
           ) : (
             <div className="space-y-4 pb-12">
+              {selectedDatesStrings.length === 0 && (
+                <div className="bg-primary/5 border border-primary/10 rounded-xl p-3 flex items-center gap-3">
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Clock className="h-4 w-4 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black text-primary uppercase tracking-wider">Modo Descoberta Ativo</h3>
+                    <p className="text-[10px] text-muted-foreground font-medium">Mostrando a vaga mais próxima disponível em cada unidade encontrada.</p>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-4">
                 {results.map(unit => (
                   <UnidadeResultCard key={unit.unidade} result={unit} procedimentos={procedimentos} />

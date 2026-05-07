@@ -258,6 +258,7 @@ export function useBuscaHorarios() {
       const todayStr = formatDateKey(now);
 
       const unitResults: UnitResult[] = [];
+      const isDateLessSearch = selectedDates.length === 0;
 
       for (const [unitName, turnos] of Object.entries(turnosByUnit)) {
         const unitConfig = unidadesConfig[unitName] || {};
@@ -267,12 +268,26 @@ export function useBuscaHorarios() {
           dayTurnoMap[t.diaDaSemana].push(t);
         });
 
-        const sortedDates = [...selectedDates].sort();
-        const startStr = sortedDates[0];
-        const endStr = sortedDates[sortedDates.length - 1];
+        const horariosDisponiveis: DaySlots[] = [];
+        
+        // Determine which dates to check
+        let datesToCheck: string[] = [];
+        if (isDateLessSearch) {
+          // Check next 30 days
+          const now = new Date();
+          for (let i = 0; i < 30; i++) {
+            const d = new Date(now);
+            d.setDate(now.getDate() + i);
+            datesToCheck.push(formatDateKey(d));
+          }
+        } else {
+          datesToCheck = [...selectedDates].sort();
+        }
+
+        const startStr = datesToCheck[0];
+        const endStr = datesToCheck[datesToCheck.length - 1];
         
         let scheduledData: Record<string, any> = {};
-        
         try {
           const unitRef = ref(db, `/DRM/agendamentoWhatsApp/operacional/consultasAgendadas/unidades/${unitName}`);
           const q = query(unitRef, orderByKey(), startAt(startStr), endAt(endStr));
@@ -280,9 +295,7 @@ export function useBuscaHorarios() {
           if (snap.exists()) scheduledData = snap.val();
         } catch (e) {}
 
-        const horariosDisponiveis: DaySlots[] = [];
-        
-        for (const dateStr of sortedDates) {
+        for (const dateStr of datesToCheck) {
           if (dateStr < todayStr) continue;
           
           const [y, m, d] = dateStr.split('-').map(Number);
@@ -323,6 +336,9 @@ export function useBuscaHorarios() {
                   dateLabel: formatDateLabel(currentDate),
                   slots: allSlots,
                 });
+                
+                // If it's a date-less search, we only want the FIRST available date for each unit
+                if (isDateLessSearch) break;
               }
             }
           }
@@ -335,6 +351,16 @@ export function useBuscaHorarios() {
           });
         }
 
+        // Calculate accepted subplans for this unit
+        let subplanosAceitos: string[] = [];
+        if (convenio && !isParticular && !subplano) {
+          Object.values(subplanosData).forEach((sp: any) => {
+            if (sp.convenio === convenio && sp[unitName] === 'Sim') {
+              subplanosAceitos.push(sp.subplano);
+            }
+          });
+        }
+
         if (horariosDisponiveis.length > 0) {
           unitResults.push({
             unidade: unitName,
@@ -344,6 +370,7 @@ export function useBuscaHorarios() {
             telefone: unitConfig.telefoneUnidade?.toString() || unitConfig.telefone?.toString() || '',
             whatsApp: unitConfig.whatsApp?.toString() || '',
             procedimentosAceitos: procAceitos,
+            subplanosAceitos: [...new Set(subplanosAceitos)].sort(),
             horariosDisponiveis,
           });
         }

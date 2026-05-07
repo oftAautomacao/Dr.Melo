@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { ref, onValue, get, query, orderByKey, startAt, endAt } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
+import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import { ENVIRONMENT } from "../../ambiente";
 
 // ----- Constants -----
@@ -104,7 +105,8 @@ export function useBuscaHorarios() {
   // Load config data from Firebase on mount
   useEffect(() => {
     const db = getDatabaseInstance(ENVIRONMENT);
-    const basePath = '/DRM/agendamentoWhatsApp/configuracoes';
+    const base = getFirebasePathBase();
+    const basePath = `${base}/agendamentoWhatsApp/configuracoes`;
     let loaded = 0;
     const totalToLoad = 7;
     const checkDone = () => { loaded++; if (loaded >= totalToLoad) setLoading(false); };
@@ -121,8 +123,17 @@ export function useBuscaHorarios() {
     const off4 = onValue(ref(db, `${basePath}/datasBloqueadas`), s => {
       setDatasBloqueadas(s.exists() ? s.val() : {}); checkDone();
     });
-    const off5 = onValue(ref(db, `${basePath}/feriados`), s => {
-      setFeriadosData(s.exists() ? s.val() : {}); checkDone();
+    const off5 = onValue(ref(db, `${basePath}/feriados`), (snap) => {
+      const data = snap.val() || {};
+      const processed: Record<string, string> = {};
+      Object.values(data).forEach((h: any) => {
+        if (h && h.data) {
+          const dStr = h.data.split('T')[0];
+          processed[dStr] = h.nome || h.name || "Feriado";
+        }
+      });
+      setFeriadosData(processed);
+      checkDone();
     });
     const off6 = onValue(ref(db, `${basePath}/convenios`), s => {
       setConveniosData(s.exists() ? s.val() : {}); checkDone();
@@ -193,9 +204,7 @@ export function useBuscaHorarios() {
       }
     }
     // Check holidays
-    if (feriadosData) {
-      if (Object.values(feriadosData).some((v: any) => v === dateStr || v?.data === dateStr)) return true;
-    }
+    if (feriadosData && feriadosData[dateStr]) return true;
     return false;
   }, [datasBloqueadas, feriadosData]);
 

@@ -5,7 +5,7 @@ import { useBuscaHorarios } from "@/hooks/useBuscaHorarios";
 import { UnidadeResultCard } from "./UnidadeResultCard";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { ptBR } from "date-fns/locale";
-import { format, getDay } from "date-fns";
+import { format, getDay, parseISO, isValid, startOfDay } from "date-fns";
 import { 
   Search, Plus, X, Loader2, Clock, Sun, Moon, SunMoon, 
   AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy 
@@ -14,7 +14,7 @@ import {
 export default function BuscaHorarios() {
   const {
     loading, searching, results,
-    conveniosList, procedimentosList, subplanosMap, examesMetadata,
+    conveniosList, procedimentosList, subplanosMap, examesMetadata, feriadosData,
     buscar, gerarResposta,
   } = useBuscaHorarios();
 
@@ -33,6 +33,18 @@ export default function BuscaHorarios() {
   }, [selectedDateObjects]);
 
   const hasSubplanos = convenio && subplanosMap[convenio]?.length > 0;
+
+  // Process holidays for modifiers using startOfDay for better matching
+  const holidayDates = useMemo(() => {
+    if (!feriadosData || typeof feriadosData !== 'object') return [];
+    return Object.keys(feriadosData).map((dStr) => {
+      // Handle "YYYY-MM-DD" or "YYYY-MM-DDTHH:mm:ss..."
+      const datePart = dStr.split('T')[0];
+      const [y, m, d] = datePart.split("-").map(Number);
+      if (!y || !m || !d) return null;
+      return startOfDay(new Date(y, m - 1, d));
+    }).filter(Boolean) as Date[];
+  }, [feriadosData]);
 
   const filteredProcs = useMemo(() => {
     const search = procSearch.toLowerCase();
@@ -110,7 +122,7 @@ export default function BuscaHorarios() {
           </div>
           <h1 className="text-xl font-black text-foreground uppercase tracking-tight">Busca de Horários</h1>
         </div>
-        <div className="text-[10px] text-primary font-black uppercase tracking-widest bg-primary/10 px-2 py-1 rounded">MÚLTIPLA SELEÇÃO</div>
+        <div className="text-[10px] text-primary font-black uppercase tracking-widest bg-primary/10 px-2 py-1 rounded">CALENDÁRIO ATIVO</div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
@@ -230,25 +242,36 @@ export default function BuscaHorarios() {
             </div>
           </div>
 
-          {/* Section 4: Calendário (Matching AppointmentCalendar) */}
+          {/* Section 4: Calendário Estilizado (Highlight month, bg, holidays) */}
           <div className="bg-card rounded-xl shadow-sm border p-4">
             <div className="flex items-center gap-2 mb-4 border-b pb-2">
               <CalendarIcon className="h-5 w-5 text-primary" />
               <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Datas da Busca</h2>
             </div>
             
-            <div className="flex justify-center">
+            <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 shadow-inner">
               <CalendarUI
                 mode="multiple"
                 selected={selectedDateObjects}
                 onSelect={(dates) => setSelectedDateObjects(dates || [])}
                 locale={ptBR}
-                className="rounded-md border shadow-inner bg-muted/30"
+                className="rounded-md mx-auto"
+                classNames={{
+                  caption: "flex justify-center pt-2 relative items-center bg-primary text-primary-foreground rounded-lg p-2 mb-4 shadow-md",
+                  caption_label: "text-xs font-black uppercase tracking-widest",
+                  nav_button: "h-6 w-6 bg-primary-foreground/20 hover:bg-primary-foreground/40 text-primary-foreground border-transparent",
+                  table: "w-full border-collapse",
+                  head_cell: "text-primary/50 font-black uppercase text-[10px] w-9",
+                  day: "h-9 w-9 p-0 font-bold aria-selected:opacity-100 rounded-lg hover:bg-primary/10 transition-all",
+                  day_selected: "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105 z-10 hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                }}
                 modifiers={{
+                  holiday: holidayDates,
                   sunday: (d: Date) => getDay(d) === 0,
                 }}
                 modifiersClassNames={{
-                  sunday: "bg-primary/10 text-primary rounded-full",
+                  holiday: "bg-amber-500 text-white rounded-lg font-black shadow-sm",
+                  sunday: "text-rose-500 font-bold",
                 }}
                 disabled={[
                   { before: new Date() }
@@ -261,12 +284,12 @@ export default function BuscaHorarios() {
                 <div className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-2 px-1">
                   Selecionados ({selectedDatesStrings.length})
                 </div>
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1 scrollbar-thin">
                   {selectedDatesStrings.sort().map(d => (
-                    <span key={d} className="text-[10px] bg-primary text-primary-foreground px-2 py-1 rounded-lg font-black flex items-center gap-1.5 shadow-sm">
+                    <span key={d} className="text-[10px] bg-primary text-primary-foreground px-2 py-1 rounded-lg font-black flex items-center gap-1.5 shadow-sm animate-in fade-in zoom-in duration-200">
                       {d.split('-').slice(1).reverse().join('/')}
                       <X 
-                        className="h-3 w-3 cursor-pointer hover:text-destructive-foreground/70" 
+                        className="h-3 w-3 cursor-pointer hover:text-rose-200" 
                         onClick={() => setSelectedDateObjects(prev => prev.filter(obj => format(obj, "yyyy-MM-dd") !== d))} 
                       />
                     </span>
@@ -293,7 +316,7 @@ export default function BuscaHorarios() {
             <div className="bg-card border-2 border-dashed border-primary/10 rounded-2xl h-full min-h-[400px] flex flex-col items-center justify-center text-primary/20 p-12">
               <CalendarIcon className="h-20 w-20 mb-4 opacity-10" />
               <p className="text-sm font-black uppercase tracking-widest text-center">
-                Selecione as datas no calendário<br/>oficial ao lado
+                Selecione as datas no calendário
               </p>
             </div>
           ) : results.length === 0 ? (

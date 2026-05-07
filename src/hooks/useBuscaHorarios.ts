@@ -29,8 +29,7 @@ export interface SearchParams {
   subplano: string;
   procedimentos: string[];
   periodo: 'Manha' | 'Tarde' | 'Ambos';
-  startDate: string; // YYYY-MM-DD
-  endDate: string;   // YYYY-MM-DD
+  selectedDates: string[]; // YYYY-MM-DD
 }
 
 export interface DaySlots {
@@ -206,7 +205,7 @@ export function useBuscaHorarios() {
     setResults(null);
 
     try {
-      const { convenio, subplano, procedimentos, periodo, startDate: startStrParam, endDate: endStrParam } = params;
+      const { convenio, subplano, procedimentos, periodo, selectedDates } = params;
       const isParticular = convenio === 'Particular';
       const turnosArr = Object.values(turnosCriterios) as any[];
 
@@ -245,20 +244,9 @@ export function useBuscaHorarios() {
         turnosByUnit[turno.unidade].push(turno);
       });
 
-      // Dates parsing (local)
-      const [sy, sm, sd] = startStrParam.split('-').map(Number);
-      const [ey, em, ed] = endStrParam.split('-').map(Number);
-      const startDate = new Date(sy, sm - 1, sd);
-      const endDate = new Date(ey, em - 1, ed);
-
       const db = getDatabaseInstance(ENVIRONMENT);
       const now = new Date();
-      const today = new Date(now);
-      today.setHours(0, 0, 0, 0);
-
-      // Protect against past dates
-      if (startDate < today) startDate.setTime(today.getTime());
-      if (endDate < startDate) endDate.setTime(startDate.getTime());
+      const todayStr = formatDateKey(now);
 
       const unitResults: UnitResult[] = [];
 
@@ -270,8 +258,10 @@ export function useBuscaHorarios() {
           dayTurnoMap[t.diaDaSemana].push(t);
         });
 
-        const startStr = formatDateKey(startDate);
-        const endStr = formatDateKey(endDate);
+        const sortedDates = [...selectedDates].sort();
+        const startStr = sortedDates[0];
+        const endStr = sortedDates[sortedDates.length - 1];
+        
         let scheduledData: Record<string, any> = {};
         
         try {
@@ -282,12 +272,14 @@ export function useBuscaHorarios() {
         } catch (e) {}
 
         const horariosDisponiveis: DaySlots[] = [];
-        const currentDate = new Date(startDate);
         
-        while (currentDate <= endDate) {
-          const dateStr = formatDateKey(currentDate);
+        for (const dateStr of sortedDates) {
+          if (dateStr < todayStr) continue;
+          
+          const [y, m, d] = dateStr.split('-').map(Number);
+          const currentDate = new Date(y, m - 1, d);
           const dayName = DAY_MAP[currentDate.getDay()];
-          const isToday = dateStr === formatDateKey(now);
+          const isToday = dateStr === todayStr;
 
           if (dayName !== 'Domingo' && !isDateBlocked(dateStr, unitName)) {
             const dayTurnos = dayTurnoMap[dayName];
@@ -325,7 +317,6 @@ export function useBuscaHorarios() {
               }
             }
           }
-          currentDate.setDate(currentDate.getDate() + 1);
         }
 
         const procAceitos: Record<string, boolean> = {};
@@ -383,6 +374,7 @@ export function useBuscaHorarios() {
     procedimentosList,
     subplanosMap,
     examesMetadata,
+    feriadosData,
     buscar,
     gerarResposta,
   };

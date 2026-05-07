@@ -375,6 +375,57 @@ export function useBuscaHorarios() {
     }).join('\n\n');
   }, []);
 
+  // Helper to calculate the SOONEST date where a NEW unit offers specific procedures
+  const getNextDiscoveryDate = useCallback((selectedProcs: string[], excludeUnits: string[] = [], excludeDates: string[] = []) => {
+    if (selectedProcs.length === 0) return null;
+    
+    const excludeSet = new Set(excludeUnits);
+    const excludeDatesSet = new Set(excludeDates);
+    const dayToNum: Record<string, number> = {
+      'Domingo': 0, '2aFeira': 1, '3aFeira': 2, '4aFeira': 3,
+      '5aFeira': 4, '6aFeira': 5, 'Sabado': 6
+    };
+
+    // 1. Find all possible days of week for discovery units
+    const discoveryDaysOfWeek = new Set<number>();
+    const unitsByDay: Record<number, string[]> = {};
+
+    Object.values(turnosCriterios).forEach((turno: any) => {
+      if (excludeSet.has(turno.unidade)) return;
+      const matchesAll = selectedProcs.every(p => turno[p] === 'Sim');
+      if (matchesAll) {
+        const num = dayToNum[turno.diaDaSemana];
+        if (num !== undefined) {
+          discoveryDaysOfWeek.add(num);
+          if (!unitsByDay[num]) unitsByDay[num] = [];
+          unitsByDay[num].push(turno.unidade);
+        }
+      }
+    });
+
+    if (discoveryDaysOfWeek.size === 0) return null;
+
+    // 2. Find the soonest date matching one of these days, excluding already selected dates
+    const now = new Date();
+    for (let i = 0; i < 31; i++) { // Check up to 30 days ahead
+      const checkDate = new Date(now);
+      checkDate.setDate(now.getDate() + i);
+      const dateStr = formatDateKey(checkDate);
+
+      // Skip if date is already selected by the user
+      if (excludeDatesSet.has(dateStr)) continue;
+
+      const dow = checkDate.getDay();
+      if (discoveryDaysOfWeek.has(dow)) {
+        const unitsOnThisDay = unitsByDay[dow];
+        const hasValidUnit = unitsOnThisDay.some(u => !isDateBlocked(dateStr, u));
+        if (hasValidUnit) return dateStr;
+      }
+    }
+
+    return null;
+  }, [turnosCriterios, isDateBlocked]);
+
   return {
     loading,
     searching,
@@ -386,5 +437,6 @@ export function useBuscaHorarios() {
     feriadosData,
     buscar,
     gerarResposta,
+    getNextDiscoveryDate,
   };
 }

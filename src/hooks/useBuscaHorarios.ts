@@ -24,6 +24,11 @@ const DAY_LABELS: Record<string, string> = {
 const MONTH_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 // ----- Types -----
+export interface SearchParams {
+  convenio: string;
+  subplano: string;
+  procedimentos: string[];
+  periodo: 'Manha' | 'Tarde' | 'Ambos';
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
 }
@@ -202,6 +207,7 @@ export function useBuscaHorarios() {
 
     try {
       const { convenio, subplano, procedimentos, periodo, startDate: startStrParam, endDate: endStrParam } = params;
+      const isParticular = convenio === 'Particular';
       const turnosArr = Object.values(turnosCriterios) as any[];
 
       // Step 1: Filter turnos by convênio

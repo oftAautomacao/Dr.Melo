@@ -210,6 +210,15 @@ export default function BuscaHorarios() {
                 </div>
               ))}
             </div>
+
+            {convenio === "Particular" && procedimentos.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-dashed flex justify-between items-center px-1">
+                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Total Estimado</span>
+                <span className="text-sm font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                  R$ {examPrices.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Section 3: Critérios */}

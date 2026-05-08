@@ -58,6 +58,7 @@ export interface UnitResult {
   procedimentosAceitos: Record<string, boolean>;
   horariosDisponiveis: DaySlots[];
   subplanosAceitos?: string[];
+  examesDisponiveis?: string[];
 }
 
 // ----- Helpers -----
@@ -371,6 +372,14 @@ export function useBuscaHorarios() {
           });
         }
 
+        // Calculate all exams available in this unit
+        const examesDisponiveisSet = new Set<string>();
+        turnos.forEach(turno => {
+          procedimentosList.forEach(p => {
+            if (turno[p] === 'Sim') examesDisponiveisSet.add(p);
+          });
+        });
+
         if (horariosDisponiveis.length > 0) {
           unitResults.push({
             unidade: unitName,
@@ -381,6 +390,7 @@ export function useBuscaHorarios() {
             whatsApp: unitConfig.whatsApp?.toString() || '',
             procedimentosAceitos: procAceitos,
             subplanosAceitos: [...new Set(subplanosAceitos)].sort(),
+            examesDisponiveis: Array.from(examesDisponiveisSet).sort(),
             horariosDisponiveis,
           });
         }

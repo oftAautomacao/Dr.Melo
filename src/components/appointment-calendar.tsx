@@ -814,16 +814,16 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="send-secretary-message"
-                checked={dontSendSecretaryMessage}
+                checked={!dontSendSecretaryMessage}
                 onCheckedChange={(checked) =>
-                  setDontSendSecretaryMessage(Boolean(checked))
+                  setDontSendSecretaryMessage(!checked)
                 }
               />
               <Label
                 htmlFor="send-secretary-message"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                Não enviar mensagem para secretária
+                Enviar mensagem para a secretária
               </Label>
             </div>
           </div>

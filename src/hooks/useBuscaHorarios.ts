@@ -31,6 +31,7 @@ export interface SearchParams {
   procedimentos: string[];
   periodo: 'Manha' | 'Tarde' | 'Ambos';
   selectedDates: string[]; // YYYY-MM-DD
+  unidade?: string;
 }
 
 export interface DaySlots {
@@ -56,6 +57,7 @@ export interface UnitResult {
   whatsApp: string;
   procedimentosAceitos: Record<string, boolean>;
   horariosDisponiveis: DaySlots[];
+  subplanosAceitos?: string[];
 }
 
 // ----- Helpers -----
@@ -214,9 +216,14 @@ export function useBuscaHorarios() {
     setResults(null);
 
     try {
-      const { convenio, subplano, procedimentos, periodo, selectedDates } = params;
+      const { convenio, subplano, procedimentos, periodo, selectedDates, unidade } = params;
       const isParticular = convenio === 'Particular';
-      const turnosArr = Object.values(turnosCriterios) as any[];
+      let turnosArr = Object.values(turnosCriterios) as any[];
+
+      // Step 0: Filter by specific unit if provided
+      if (unidade) {
+        turnosArr = turnosArr.filter(turno => turno.unidade === unidade);
+      }
 
       // Step 1: Filter turnos by convênio
       let filteredTurnos = turnosArr.filter(turno => {
@@ -453,12 +460,21 @@ export function useBuscaHorarios() {
     return null;
   }, [turnosCriterios, isDateBlocked]);
 
+  const unidadesList = useMemo(() => {
+    const units = new Set<string>();
+    Object.values(turnosCriterios).forEach((t: any) => {
+      if (t.unidade) units.add(t.unidade);
+    });
+    return Array.from(units).sort();
+  }, [turnosCriterios]);
+
   return {
     loading,
     searching,
     results,
     conveniosList,
     procedimentosList,
+    unidadesList,
     subplanosMap,
     examesMetadata,
     feriadosData,

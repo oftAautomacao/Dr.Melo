@@ -8,17 +8,18 @@ import { ptBR } from "date-fns/locale";
 import { format, getDay, parseISO, isValid, startOfDay } from "date-fns";
 import { 
   Search, Plus, X, Loader2, Clock, Sun, Moon, SunMoon, 
-  AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy 
+  AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy, MapPin
 } from "lucide-react";
 
 export default function BuscaHorarios() {
   const {
     loading, searching, results,
-    conveniosList, procedimentosList, subplanosMap, examesMetadata, feriadosData,
+    conveniosList, procedimentosList, unidadesList, subplanosMap, examesMetadata, feriadosData,
     buscar, gerarResposta, getNextDiscoveryDate,
   } = useBuscaHorarios();
 
   const [convenio, setConvenio] = useState("");
+  const [selectedUnidade, setSelectedUnidade] = useState("");
   const [subplano, setSubplano] = useState("");
   const [procedimentos, setProcedimentos] = useState<string[]>([]);
   const [periodo, setPeriodo] = useState<"Manha" | "Tarde" | "Ambos">("Ambos");
@@ -72,18 +73,19 @@ export default function BuscaHorarios() {
   const handleBuscar = () => {
     // Search is allowed if either a convenio is selected OR procedures are selected
     if (!convenio && procedimentos.length === 0) return;
-    buscar({ convenio, subplano, procedimentos, periodo, selectedDates: selectedDatesStrings });
+    buscar({ convenio, subplano, procedimentos, periodo, selectedDates: selectedDatesStrings, unidade: selectedUnidade });
   };
 
   const handleLimpar = () => {
     setConvenio("");
+    setSelectedUnidade("");
     setSubplano("");
     setProcedimentos([]);
     setPeriodo("Ambos");
     setSelectedDateObjects([]);
     // To clear results, we need to call a clear function in the hook or set results to null
     // Assuming 'buscar' with empty params or a new clear function
-    buscar({ convenio: "", subplano: "", procedimentos: [], periodo: "Ambos", selectedDates: [] });
+    buscar({ convenio: "", subplano: "", procedimentos: [], periodo: "Ambos", selectedDates: [], unidade: "" });
   };
 
   const examPrices = useMemo(() => {
@@ -147,34 +149,49 @@ export default function BuscaHorarios() {
         {/* Left Column: Filters */}
         <div className="md:col-span-4 space-y-3">
           
-          {/* Section 1: Planos */}
+
+          {/* Section 2: Planos & Convênios */}
           <div className="bg-card rounded-xl shadow-sm border p-5">
             <div className="flex items-center gap-2 mb-3 border-b pb-2">
               <CheckCircle2 className="h-5 w-5 text-primary" />
               <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Planos & Convênios</h2>
             </div>
+            
             <div className="space-y-3">
-              <div>
-                <label className="block text-[11px] font-black text-muted-foreground uppercase mb-1 ml-1">Convênio</label>
+              {/* Convênio */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                  Operadora
+                </label>
                 <select
                   value={convenio}
-                  onChange={e => { setConvenio(e.target.value); setSubplano(""); }}
-                  className="w-full rounded-lg border border-input px-3 py-2 text-sm font-bold bg-muted hover:bg-card transition-colors outline-none cursor-pointer"
+                  onChange={(e) => {
+                    setConvenio(e.target.value);
+                    setSubplano("");
+                  }}
+                  className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all"
                 >
-                  <option value="">-- Selecione --</option>
-                  {conveniosList.map(c => <option key={c} value={c}>{c}</option>)}
+                  <option value="">Selecione o Convênio</option>
+                  {conveniosList.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
                 </select>
               </div>
+
               {hasSubplanos && (
-                <div>
-                  <label className="block text-[11px] font-black text-muted-foreground uppercase mb-1 ml-1">Subplano</label>
+                <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                    Subplano Específico
+                  </label>
                   <select
                     value={subplano}
-                    onChange={e => setSubplano(e.target.value)}
-                    className="w-full rounded-lg border border-input px-3 py-2 text-sm font-bold bg-muted hover:bg-card transition-colors outline-none cursor-pointer"
+                    onChange={(e) => setSubplano(e.target.value)}
+                    className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all"
                   >
                     <option value="">Todos os subplanos</option>
-                    {subplanosMap[convenio]?.map(sp => <option key={sp} value={sp}>{sp}</option>)}
+                    {subplanosMap[convenio]?.map(sp => (
+                      <option key={sp} value={sp}>{sp}</option>
+                    ))}
                   </select>
                 </div>
               )}
@@ -245,8 +262,26 @@ export default function BuscaHorarios() {
               <Clock className="h-5 w-5 text-amber-500" />
               <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Critérios de Busca</h2>
             </div>
-            <div>
-              <label className="block text-[11px] font-black text-muted-foreground uppercase mb-2 ml-1">Turno Preferencial</label>
+            <div className="space-y-4">
+              {/* Unidade (Opcional) */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                  <MapPin className="h-3 w-3 text-primary" /> Unidade (Opcional)
+                </label>
+                <select
+                  value={selectedUnidade}
+                  onChange={(e) => setSelectedUnidade(e.target.value)}
+                  className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all"
+                >
+                  <option value="">Todas as Unidades</option>
+                  {unidadesList.map(unit => (
+                    <option key={unit} value={unit}>{unit.replace(/([A-Z])/g, ' $1').trim()}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-black text-muted-foreground uppercase mb-2 ml-1">Turno Preferencial</label>
               <div className="grid grid-cols-3 gap-1.5">
                 {([
                   { val: "Manha" as const, icon: <Sun className="h-4 w-4" />, label: "Manhã" },
@@ -268,6 +303,7 @@ export default function BuscaHorarios() {
               </div>
             </div>
           </div>
+        </div>
 
           {/* Section 4: Calendário Estilizado (Highlight month, bg, holidays) */}
           <div className="bg-card rounded-xl shadow-sm border p-4">

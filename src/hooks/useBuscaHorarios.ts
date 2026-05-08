@@ -225,14 +225,17 @@ export function useBuscaHorarios() {
         turnosArr = turnosArr.filter(turno => turno.unidade === unidade);
       }
 
-      // Step 1: Filter turnos by convênio
-      let filteredTurnos = turnosArr.filter(turno => {
-        if (isParticular) return turno['Particular'] === 'Sim';
-        return turno[convenio] === 'Sim';
-      });
+      // Step 1: Filter turnos by convênio (only if convenio is provided)
+      let filteredTurnos = turnosArr;
+      if (convenio) {
+        filteredTurnos = turnosArr.filter(turno => {
+          if (isParticular) return turno['Particular'] === 'Sim';
+          return turno[convenio] === 'Sim';
+        });
+      }
 
-      // Step 2: Subplano filtering
-      if (!isParticular && subplano) {
+      // Step 2: Subplano filtering (only if convenio is provided)
+      if (convenio && !isParticular && subplano) {
         const spEntry = Object.values(subplanosData).find(
           (sp: any) => sp.convenio === convenio && sp.subplano === subplano
         ) as any;

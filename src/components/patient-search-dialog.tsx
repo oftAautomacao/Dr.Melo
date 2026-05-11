@@ -112,12 +112,13 @@ export function PatientSearchDialog({
     }, [isOpen]);
 
     const filteredPatients = useMemo(() => {
-        if (!searchTerm || searchTerm.length < 2) return [];
+        if (!searchTerm || searchTerm.trim().length < 2) return [];
 
-        const lowerTerm = searchTerm.toLowerCase();
+        const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        const lowerTerm = normalize(searchTerm);
         // Filtrar records
         const matches = allRecords.filter(r => 
-            r.nomePaciente.toLowerCase().includes(lowerTerm) || 
+            normalize(r.nomePaciente).includes(lowerTerm) || 
             r.telefone.replace(/\D/g, '').includes(searchTerm.replace(/\D/g, ''))
         );
 

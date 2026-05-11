@@ -112,15 +112,16 @@ export function PatientSearchSheet({
     }, [isOpen]);
 
     const filteredRecords = useMemo(() => {
-        if (!searchTerm || searchTerm.length < 2) return [];
+        if (!searchTerm || searchTerm.trim().length < 2) return [];
 
-        const lowerTerm = searchTerm.toLowerCase();
+        const normalize = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+        const lowerTerm = normalize(searchTerm);
         
         // Filtro exato para nome ou telefone (telefone apenas números)
         const termNumbersOnly = searchTerm.replace(/\D/g, '');
         
         const matches = allRecords.filter(r => {
-            const matchesName = r.nomePaciente.toLowerCase().includes(lowerTerm);
+            const matchesName = normalize(r.nomePaciente).includes(lowerTerm);
             const matchesPhone = termNumbersOnly && r.telefone.replace(/\D/g, '').includes(termNumbersOnly);
             return matchesName || matchesPhone;
         });

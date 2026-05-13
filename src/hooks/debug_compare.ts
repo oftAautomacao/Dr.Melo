@@ -23,7 +23,8 @@ async function debugData() {
     const turnos = Object.values(data).filter((t: any) => t.unidade === u);
     console.log(`\nUnit: ${u}`);
     if (turnos.length > 0) {
-      console.log("  Sample Keys with Sim:", Object.keys(turnos[0]).filter(k => turnos[0][k] === 'Sim').filter(k => k.toLowerCase().includes("retina") || k.toLowerCase().includes("ultra")));
+      const firstTurno = turnos[0] as Record<string, any>;
+      console.log("  Sample Keys with Sim:", Object.keys(firstTurno).filter(k => firstTurno[k] === 'Sim').filter(k => k.toLowerCase().includes("retina") || k.toLowerCase().includes("ultra")));
     }
   });
 }

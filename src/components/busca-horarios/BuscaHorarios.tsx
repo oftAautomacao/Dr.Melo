@@ -10,6 +10,7 @@ import {
   Search, Plus, X, Loader2, Clock, Sun, Moon, SunMoon, 
   AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy, MapPin
 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function BuscaHorarios() {
   const {
@@ -246,12 +247,28 @@ export default function BuscaHorarios() {
               ))}
             </div>
 
-            {convenio === "Particular" && procedimentos.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-dashed flex justify-between items-center px-1">
-                <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Total Estimado</span>
-                <span className="text-sm font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-                  R$ {examPrices.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                </span>
+            {procedimentos.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-dashed space-y-2">
+                <div className="flex justify-between items-center px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Total</span>
+                    <button 
+                      onClick={() => {
+                        const text = examPrices.items.map(i => `- ${friendlyName(i.nome)}: ${i.label}`).join('\n') + 
+                                     `\n\n*Total: R$ ${examPrices.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*`;
+                        navigator.clipboard.writeText(text);
+                        toast.success("Orçamento copiado!");
+                      }}
+                      className="p-1 text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-md transition-all active:scale-90"
+                      title="Copiar Orçamento"
+                    >
+                      <Copy className="h-3 w-3" />
+                    </button>
+                  </div>
+                  <span className="text-sm font-black text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                    R$ {examPrices.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
               </div>
             )}
           </div>

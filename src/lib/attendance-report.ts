@@ -1,4 +1,4 @@
-﻿export type BillingUnitConfig = Record<string, { bairro?: string; empresa?: string }>;
+export type BillingUnitConfig = Record<string, { bairro?: string; empresa?: string }>;
 
 export function normalizeBillingText(value: string) {
   return value
@@ -66,7 +66,20 @@ export function getBillingAppointmentsForUnitMonth(
   const appointments: Array<Record<string, any>> = [];
 
   for (const dateStr in unitData) {
-    if (getBillingMonthLabel(dateStr) !== selectedMonth) continue;
+    const label = getBillingMonthLabel(dateStr); // Ex: "Abril de 2026"
+    if (!label) continue;
+    
+    // Extrai partes para comparação mais precisa
+    const [monthLabel, yearLabel] = label.split(" de ");
+    const [monthSelected, yearSelected] = selectedMonth.split(" de ");
+
+    if (yearLabel !== yearSelected) continue;
+
+    const normML = normalizeBillingText(monthLabel);
+    const normMS = normalizeBillingText(monthSelected);
+
+    // Se o mês for muito diferente, pula. Aceita "Abr" em "Abril" ou "Abri" em "Abril"
+    if (!normML.includes(normMS) && !normMS.includes(normML)) continue;
 
     const dayAppointments = unitData[dateStr];
     for (const time in dayAppointments) {

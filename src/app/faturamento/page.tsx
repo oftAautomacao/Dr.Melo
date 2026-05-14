@@ -43,6 +43,13 @@ export default function FaturamentoPage() {
     }
   }, [analysisResult, patientData, unitConfig]);
 
+  const handleReset = () => {
+    setAnalysisResult(null);
+    setManualUnit("all");
+    setManualMonth("");
+    setManualYear(new Date().getFullYear().toString());
+  };
+
   /* ---------- get unit from localStorage ---------- */
   useEffect(() => {
     const storedPathBase = localStorage.getItem("FIREBASE_PATH_BASE") as "DRM" | "OFT/45" | null;
@@ -78,16 +85,6 @@ export default function FaturamentoPage() {
     return getBillingAppointmentsForUnitMonth(manualUnit, targetMonthYear, patientData, unitConfig);
   }, [manualUnit, manualMonth, manualYear, patientData, unitConfig]);
 
-  const unitsAvailable = useMemo(() => Object.keys(patientData).sort(), [patientData]);
-  const yearsAvailable = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    return [
-      (currentYear - 1).toString(),
-      currentYear.toString(),
-      (currentYear + 1).toString()
-    ];
-  }, []);
-
   return (
     <SidebarLayout unit={selectedUnit}>
       <div className="max-w-[1600px] mx-auto space-y-8 animate-in fade-in duration-700">
@@ -118,6 +115,7 @@ export default function FaturamentoPage() {
             reportRows={reportData as AttendanceBillingRow[]}
             loading={loading}
             onAnalysisResult={setAnalysisResult}
+            onReset={handleReset}
             analysisReady={Boolean(manualUnit !== "all" && manualMonth && manualYear)}
           />
         </div>

@@ -71,6 +71,7 @@ interface AttendanceReviewPanelProps {
   reportRows: AttendanceBillingRow[];
   loading: boolean;
   onAnalysisResult?: (result: AttendanceReviewAnalysisResult) => void;
+  onReset?: () => void;
   analysisReady?: boolean;
 }
 
@@ -80,6 +81,7 @@ export function AttendanceReviewPanel({
   reportRows,
   loading,
   onAnalysisResult,
+  onReset,
   analysisReady = false,
 }: AttendanceReviewPanelProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -87,6 +89,7 @@ export function AttendanceReviewPanel({
   const [analysisResult, setAnalysisResult] = useState<AttendanceReviewAnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
   const [draftRows, setDraftRows] = useState<Record<string, DraftRow>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const validationKeyRef = useRef<string>("");
@@ -159,16 +162,7 @@ export function AttendanceReviewPanel({
     const nextDrafts: Record<string, DraftRow> = {};
     const usedIndexes = new Set<number>();
 
-    // Inicializa com valores atuais
-    for (const row of reportRows) {
-      const key = getRowKey(row);
-      nextDrafts[key] = {
-        realizou: row.realizouConsulta ?? "",
-        dataAtendimento: formatInputDate(row.dataAtendimento),
-      };
-    }
-
-    // Aplica o que a IA encontrou
+    // Aplica o que a IA encontrou sem resetar o que já existe
     for (const aiRow of result.rows) {
       const preferredIndex = typeof aiRow.matchedLineIndex === "number" ? aiRow.matchedLineIndex - 1 : -1;
       let targetIndex = -1;
@@ -222,7 +216,10 @@ export function AttendanceReviewPanel({
         notes: aiRow.notes,
       };
     }
-    setDraftRows(nextDrafts);
+    setDraftRows((prev) => ({
+      ...prev,
+      ...nextDrafts,
+    }));
   };
 
   const handleAnalyze = async () => {
@@ -234,23 +231,26 @@ export function AttendanceReviewPanel({
     const loadingToast = toast.loading("Lendo documento com IA...");
     try {
       const fileData = await fileToBase64(selectedFile);
-      const result = await analyzeAttendanceDocumentAction({
+      const analysisPromise = analyzeAttendanceDocumentAction({
         fileData,
         fileName: selectedFile.name,
         mimeType: selectedFile.type || "application/octet-stream",
       });
-      if (!result) {
-        toast.error("Não foi possível analisar o documento.");
-        return;
+
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000));
+      const result = await Promise.race([analysisPromise, timeoutPromise]);
+
+      if (result) {
+        setAnalysisResult(result);
+        onAnalysisResult?.(result);
+        toast.success("Documento analisado com sucesso.", { id: loadingToast });
+      } else {
+        toast.error("A leitura inicial demorou muito. Tente novamente.", { id: loadingToast });
       }
-      setAnalysisResult(result);
-      onAnalysisResult?.(result);
-      toast.success("Documento analisado com sucesso.");
     } catch (error) {
       console.error(error);
       toast.error("Falha ao analisar o documento.");
     } finally {
-      toast.dismiss(loadingToast);
       setIsAnalyzing(false);
     }
   };
@@ -300,7 +300,7 @@ export function AttendanceReviewPanel({
           convenio: row.convenio,
         }));
 
-        const result = await analyzeAttendanceValidationAction({
+        const validationPromise = analyzeAttendanceValidationAction({
           fileData,
           fileName: selectedFile.name,
           mimeType: selectedFile.type || "application/octet-stream",
@@ -310,9 +310,20 @@ export function AttendanceReviewPanel({
           rows: candidateRows,
         });
 
-        if (!active || !result) return;
+        const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000));
+        const result = await Promise.race([validationPromise, timeoutPromise]);
+
+        if (!active) return;
+        
+        // Marcamos a chave como processada independente do resultado para evitar loops
         validationKeyRef.current = validationKey;
-        toast.success("Cruzamento concluído.", { id: loadingToast });
+
+        if (result) {
+          applyAnalysisToDrafts(result);
+          toast.success("Cruzamento concluído.", { id: loadingToast });
+        } else {
+          toast.error("O cruzamento inicial demorou muito. Você pode tentar o Refino Manual.", { id: loadingToast });
+        }
       } catch (error) {
         console.error(error);
         toast.error("Falha no cruzamento.", { id: loadingToast });
@@ -322,7 +333,7 @@ export function AttendanceReviewPanel({
     };
     runValidation();
     return () => { active = false; };
-  }, [analysisResult, isValidating, reportRows, selectedFile]);
+  }, [analysisResult, reportRows, selectedFile]);
 
   const updateDraft = (row: AttendanceBillingRow, field: keyof DraftRow, value: string) => {
     const key = getRowKey(row);
@@ -344,6 +355,10 @@ export function AttendanceReviewPanel({
     autoFillKeyRef.current = "";
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl("");
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    onReset?.();
   };
 
   const handleRefinement = async () => {
@@ -376,7 +391,7 @@ export function AttendanceReviewPanel({
       return;
     }
 
-    setIsValidating(true);
+    setIsRefining(true);
     const loadingToast = toast.loading(`Refinando ${pendingRows.length} pacientes...`);
     try {
       const fileData = await fileToBase64(selectedFile);
@@ -388,7 +403,7 @@ export function AttendanceReviewPanel({
         pendingPatients: pendingRows,
       });
 
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 45000));
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000));
       const refinementResult = await Promise.race([refinementPromise, timeoutPromise]);
 
       if (refinementResult) {
@@ -401,7 +416,7 @@ export function AttendanceReviewPanel({
       console.error(error);
       toast.error("Erro no refinamento.", { id: loadingToast });
     } finally {
-      setIsValidating(false);
+      setIsRefining(false);
     }
   };
 
@@ -456,12 +471,12 @@ export function AttendanceReviewPanel({
                 {analysisResult && (
                   <Button 
                     onClick={handleRefinement} 
-                    disabled={isAnalyzing || isValidating} 
+                    disabled={isAnalyzing || isValidating || isRefining} 
                     variant="outline"
                     size="sm"
                     className="border-blue-200 text-blue-600 hover:bg-blue-50 h-8 px-4 rounded-lg text-[10px] font-bold uppercase"
                   >
-                    {isValidating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ScanSearch className="h-3 w-3 mr-1" />}
+                    {isRefining ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ScanSearch className="h-3 w-3 mr-1" />}
                     Refinar Pendentes
                   </Button>
                 )}

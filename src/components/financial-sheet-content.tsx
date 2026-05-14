@@ -55,6 +55,7 @@ import { cancelAppointment } from "@/app/actions";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import { Separator } from "./ui/separator";
 import { Label } from "@radix-ui/react-label";
+import { getBillingAppointmentsForUnitMonth } from "@/lib/attendance-report";
 
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -112,36 +113,22 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
   const appointmentsForMonth = useMemo(() => {
     if (!selectedMonth) return [];
-    const unitData = patientData[unit];
-    if (!unitData) return [];
-
-    const appointments: CalendarAppointment[] = [];
-    for (const dateStr in unitData) {
-      const monthName = obterNomeMes(dateStr);
-      if (monthName === selectedMonth) {
-        const dayAppointments = unitData[dateStr];
-        for (const time in dayAppointments) {
-          const appointmentData = dayAppointments[time];
-          appointments.push({
-            id: `${unit}-${dateStr}-${time}`,
-            nomePaciente: appointmentData.nomePaciente,
-            nascimento: appointmentData.nascimento,
-            dataAgendamento: dateStr,
-            horario: time,
-            convenio: appointmentData.convenio,
-            exames: appointmentData.exames || [],
-            motivacao: appointmentData.motivacao,
-            unidade: unit,
-            telefone: appointmentData.telefone,
-            cpf: appointmentData.cpf,
-            Observacoes: appointmentData.Observacoes,
-            aiCategorization: appointmentData.aiCategorization,
-          });
-        }
-      }
-    }
-    return appointments.sort((a, b) => a.dataAgendamento.localeCompare(b.dataAgendamento) || a.horario.localeCompare(b.horario));
-  }, [patientData, unit, selectedMonth]);
+    return getBillingAppointmentsForUnitMonth(unit, selectedMonth, patientData, unitConfig).map((appointment) => ({
+      id: `${appointment._unit}-${appointment._date}-${appointment._time}`,
+      nomePaciente: appointment.nomePaciente,
+      nascimento: appointment.nascimento,
+      dataAgendamento: appointment._date,
+      horario: appointment._time,
+      convenio: appointment.convenio,
+      exames: appointment.exames || [],
+      motivacao: appointment.motivacao,
+      unidade: appointment._unit,
+      telefone: appointment.telefone,
+      cpf: appointment.cpf,
+      Observacoes: appointment.Observacoes,
+      aiCategorization: appointment.aiCategorization,
+    }));
+  }, [patientData, unit, selectedMonth, unitConfig]);
 
   const calculateAge = (birthDate: string): number | null => {
     if (!birthDate) return null;

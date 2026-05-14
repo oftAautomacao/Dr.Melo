@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo, useEffect } from "react";
 import SidebarLayout from "@/components/layout/sidebar-layout";
@@ -10,17 +10,14 @@ import { getDatabaseInstance } from "@/lib/firebase";
 import { ENVIRONMENT } from "../../../ambiente";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import { ClipboardCheck, Loader2 } from "lucide-react";
+import { AttendanceReviewPanel } from "@/components/attendance-review-panel";
+import type { AttendanceBillingRow, AttendanceReviewAnalysisResult } from "@/types/attendance-review";
+import { getBillingAppointmentsForUnitMonth, resolveBillingUnitKey } from "@/lib/attendance-report";
 
-const MESES = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
-];
-
-const obterNomeMes = (dataStr: string) => {
-  const [ano, mes] = dataStr.split("-");
-  const idx = Number(mes) - 1;
-  return idx >= 0 && idx < 12 ? `${MESES[idx]} de ${ano}` : null;
-};
+  const MESES = [
+    "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+    "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  ];
 
 export default function FaturamentoPage() {
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
@@ -28,12 +25,20 @@ export default function FaturamentoPage() {
   const [unitConfig, setUnitConfig] = useState<Record<string, { bairro?: string; empresa?: string }>>({});
   const [loading, setLoading] = useState(true);
 
-  // Filters
-  const [filterUnit, setFilterUnit] = useState<string>("all");
-  const [filterMonth, setFilterMonth] = useState<string>("");
-  const [filterYear, setFilterYear] = useState<string>(new Date().getFullYear().toString());
+  const [analysisResult, setAnalysisResult] = useState<AttendanceReviewAnalysisResult | null>(null);
 
   const [examConfig, setExamConfig] = useState<Record<string, any>>({});
+  const filterUnit = analysisResult?.unidade || "all";
+  const filterMonth = analysisResult?.mes || "";
+  const filterYear = analysisResult?.ano || "";
+  const setFilterUnit = () => {};
+  const setFilterMonth = () => {};
+  const setFilterYear = () => {};
+  const unitsAvailable = useMemo(() => Object.keys(patientData).sort(), [patientData]);
+  const yearsAvailable = useMemo(() => {
+    const currentYear = new Date().getFullYear().toString();
+    return filterYear ? [filterYear, currentYear].filter((value, index, self) => self.indexOf(value) === index) : [currentYear];
+  }, [filterYear]);
 
   /* ---------- get unit from localStorage ---------- */
   useEffect(() => {
@@ -76,60 +81,19 @@ export default function FaturamentoPage() {
     return (typeof cfg?.preco === 'string' && cfg.preco.toLowerCase().includes('incluso'));
   };
 
-  // Initialize filterMonth to current month
-  useEffect(() => {
-    if (!filterMonth) {
-      const now = new Date();
-      setFilterMonth(MESES[now.getMonth()]);
-    }
-  }, [filterMonth]);
-
-  const unitsAvailable = useMemo(() => Object.keys(patientData).sort(), [patientData]);
-  
-  const yearsAvailable = useMemo(() => {
-    const years = new Set<string>();
-    for (const unit in patientData) {
-      for (const date in patientData[unit]) {
-        years.add(date.substring(0, 4));
-      }
-    }
-    const currentYear = new Date().getFullYear().toString();
-    years.add(currentYear);
-    return Array.from(years).sort((a, b) => b.localeCompare(a));
-  }, [patientData]);
-
   const reportData = useMemo(() => {
-    if (!filterMonth || !filterYear) return [];
+    if (!analysisResult?.mes || !analysisResult?.ano || !analysisResult?.unidade) return [];
 
-    const targetMonthYear = `${filterMonth} de ${filterYear}`;
-    const appointments: any[] = [];
+    const targetMonthYear = `${analysisResult.mes} de ${analysisResult.ano}`;
+    const matchedUnitKey = resolveBillingUnitKey(analysisResult.unidade, patientData, unitConfig);
+    if (!matchedUnitKey) return [];
 
-    const unitsToProcess = filterUnit === "all" ? unitsAvailable : [filterUnit];
+    return getBillingAppointmentsForUnitMonth(matchedUnitKey, targetMonthYear, patientData, unitConfig);
+  }, [analysisResult, patientData, unitConfig]);
 
-    unitsToProcess.forEach(unit => {
-      const unitData = patientData[unit];
-      if (!unitData) return;
-
-      for (const dateStr in unitData) {
-        if (obterNomeMes(dateStr) === targetMonthYear) {
-          const dayAppointments = unitData[dateStr];
-          for (const time in dayAppointments) {
-            const app = dayAppointments[time];
-            appointments.push({
-              ...app,
-              _unit: unit,
-              _date: dateStr,
-              _time: time,
-              _unitName: unitConfig[unit]?.empresa || unit,
-              _bairro: unitConfig[unit]?.bairro || ""
-            });
-          }
-        }
-      }
-    });
-
-    return appointments.sort((a, b) => a._date.localeCompare(b._date) || a._time.localeCompare(b._time));
-  }, [patientData, filterUnit, filterMonth, filterYear, unitsAvailable, unitConfig]);
+  const fillFiltersFromAnalysis = (result: AttendanceReviewAnalysisResult) => {
+    setAnalysisResult(result);
+  };
 
   return (
     <SidebarLayout unit={selectedUnit}>
@@ -137,12 +101,11 @@ export default function FaturamentoPage() {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <h1 className="text-3xl font-bold text-blue-900 flex items-center gap-2">
             <ClipboardCheck className="w-8 h-8" />
-            Faturamento - Relatório de Validação
+            Faturamento - RelatÃ³rio de ValidaÃ§Ã£o
           </h1>
         </div>
-
         {/* Filters */}
-        <Card className="bg-white/80 backdrop-blur shadow-sm border-blue-100">
+        <Card className="hidden bg-white/80 backdrop-blur shadow-sm border-blue-100">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg font-semibold text-blue-800">Filtros</CardTitle>
           </CardHeader>
@@ -150,26 +113,16 @@ export default function FaturamentoPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Unidade</label>
-                <Select value={filterUnit} onValueChange={setFilterUnit}>
-                  <SelectTrigger className="bg-white border-blue-200">
-                    <SelectValue placeholder="Selecione a Unidade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as Unidades</SelectItem>
-                    {unitsAvailable.map(u => (
-                      <SelectItem key={u} value={u}>
-                        {unitConfig[u]?.empresa || u} {unitConfig[u]?.bairro ? `- ${unitConfig[u]?.bairro}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="rounded-md border border-blue-200 bg-white px-3 py-2 text-sm text-slate-700">
+                  {filterUnit === "all" ? "Aguardando leitura do documento" : (unitConfig[filterUnit]?.empresa || filterUnit)}
+                </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">Mês</label>
+                <label className="text-xs font-bold text-blue-900 uppercase tracking-wider">MÃªs</label>
                 <Select value={filterMonth} onValueChange={setFilterMonth}>
                   <SelectTrigger className="bg-white border-blue-200">
-                    <SelectValue placeholder="Selecione o Mês" />
+                    <SelectValue placeholder="Selecione o MÃªs" />
                   </SelectTrigger>
                   <SelectContent>
                     {MESES.map(m => (
@@ -196,8 +149,21 @@ export default function FaturamentoPage() {
           </CardContent>
         </Card>
 
+        {(() => {
+          const reportRows = reportData as AttendanceBillingRow[];
+
+          return (
+          <AttendanceReviewPanel
+            reportRows={reportRows}
+            loading={loading}
+            onAnalysisResult={fillFiltersFromAnalysis}
+            analysisReady={Boolean(analysisResult?.unidade && analysisResult?.mes && analysisResult?.ano)}
+          />
+        );
+      })()}
+
         {/* Table Content */}
-        <Card className="bg-white shadow-md border-blue-100 overflow-hidden">
+        <Card className="hidden">
           <CardContent className="p-0">
             {loading ? (
               <div className="flex flex-col items-center justify-center p-20 gap-4">
@@ -206,7 +172,7 @@ export default function FaturamentoPage() {
               </div>
             ) : reportData.length === 0 ? (
               <div className="p-20 text-center">
-                <p className="text-gray-500 text-lg">Nenhum dado encontrado para o período e unidade selecionados.</p>
+                <p className="text-gray-500 text-lg">Nenhum dado encontrado para o perÃ­odo e unidade selecionados.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -216,7 +182,7 @@ export default function FaturamentoPage() {
                       <TableHead className="text-blue-900 font-bold">Data/Hora</TableHead>
                       <TableHead className="text-blue-900 font-bold">Unidade</TableHead>
                       <TableHead className="text-blue-900 font-bold">Nome do Paciente</TableHead>
-                      <TableHead className="text-blue-900 font-bold">Convênio</TableHead>
+                      <TableHead className="text-blue-900 font-bold">ConvÃªnio</TableHead>
                       <TableHead className="text-blue-900 font-bold">Procedimentos</TableHead>
                       <TableHead className="text-blue-900 font-bold text-center">Realizou (S/N)</TableHead>
                       <TableHead className="text-blue-900 font-bold text-center">Data Atendimento</TableHead>
@@ -249,11 +215,11 @@ export default function FaturamentoPage() {
                           </TableCell>
                           <TableCell className="font-medium text-gray-900">
                             <div className="flex flex-col">
-                              <span>{app.nomePaciente || "Não informado"}</span>
+                              <span>{app.nomePaciente || "NÃ£o informado"}</span>
                               {app.cpf && <span className="text-[10px] text-gray-500">CPF: {app.cpf}</span>}
                             </div>
                           </TableCell>
-                          <TableCell>{app.convenio || "Não informado"}</TableCell>
+                          <TableCell>{app.convenio || "NÃ£o informado"}</TableCell>
                           <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {procedimentos.map((proc: string, pIdx: number) => (
@@ -282,3 +248,4 @@ export default function FaturamentoPage() {
     </SidebarLayout>
   );
 }
+

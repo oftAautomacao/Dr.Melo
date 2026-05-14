@@ -82,6 +82,13 @@ export interface AppointmentFirebaseRecord {
   aiCategorization?: AICategorization;
   bairro?: string;
   enviarMsgSecretaria?: boolean;
+  realizouConsulta?: "S" | "N";
+  dataAtendimento?: string;
+  conferenciaFaturamento?: {
+    origem?: "manual" | "ia";
+    atualizadoEm?: string;
+    documento?: string;
+  };
 }
 
 export interface PatientData extends Omit<PatientFormData, 'dataNascimento' | 'dataAgendamento' | 'exames' | 'observacoes' | 'local' | 'horario'> {
@@ -99,4 +106,6 @@ export interface PatientData extends Omit<PatientFormData, 'dataNascimento' | 'd
   Observacoes?: string;
   aiCategorization?: AICategorization;
   bairro?: string;
+  realizouConsulta?: "S" | "N";
+  dataAtendimento?: string;
 }

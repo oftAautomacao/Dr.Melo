@@ -1,112 +1,210 @@
-import OpenAI from 'openai';
+﻿import OpenAI, { toFile } from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 
-// Inicializa o cliente OpenAI diretamente no servidor (não exposto ao cliente)
-// A verificação da chave ocorre aqui para falhar graciosamente se não estiver configurada
 const apiKey = process.env.OPENAI_API_KEY;
 
 let openai: OpenAI | null = null;
 
 if (apiKey) {
-    openai = new OpenAI({
-        apiKey: apiKey,
-    });
+  openai = new OpenAI({ apiKey });
 } else {
-    console.warn("AVISO: Chave da OpenAI não encontrada em OPENAI_API_KEY. O serviço de IA não funcionará corretamente.");
+  console.warn(
+    "AVISO: Chave da OpenAI nao encontrada em OPENAI_API_KEY. O servico de IA nao funcionara corretamente."
+  );
 }
 
-export type MessageRole = 'system' | 'user' | 'assistant';
+export type MessageRole = "system" | "user" | "assistant";
 
 export interface ChatMessage {
-    role: MessageRole;
-    content: string | any[];
+  role: MessageRole;
+  content: string | any[];
 }
 
-/**
- * Serviço genérico para interação com a OpenAI.
- * Este serviço deve ser usado apenas em Server Actions ou API Routes.
- */
 export const openaiService = {
-    /**
-     * Analisa uma conversa completa e retorna uma resposta estruturada (JSON se solicitado).
-     * @param messages Histórico de mensagens da conversa
-     * @param systemPrompt Instrução para a IA (contexto e objetivo)
-     * @param model Modelo a ser usado (default: gpt-4o-mini)
-     */
-    async analyzeConversation(
-        messages: ChatMessage[],
-        systemPrompt: string,
-        model: string = "gpt-4o-mini"
-    ): Promise<string | null> {
-        if (!openai) {
-            console.error("OpenAI client not initialized.");
-            return null;
-        }
-
-        try {
-            const response = await openai.chat.completions.create({
-                model: model,
-                messages: [
-                    { role: "system", content: systemPrompt },
-                    ...messages as any
-                ],
-                temperature: 0.3, // Temperatura baixa para análises mais objetivas
-            });
-
-            return response.choices[0].message.content;
-        } catch (error) {
-            console.error("Erro ao chamar OpenAI:", error);
-            return null;
-        }
-    },
-
-    /**
-     * Analisa um texto simples.
-     */
-    async analyzeText(
-        text: string,
-        prompt: string,
-        model: string = "gpt-4o-mini"
-    ): Promise<string | null> {
-        return this.analyzeConversation([{ role: "user", content: text }], prompt, model);
-    },
-
-    /**
-     * Analisa uma imagem em base64.
-     */
-    async analyzeImage(
-        base64Image: string,
-        prompt: string,
-        model: string = "gpt-4o"
-    ): Promise<string | null> {
-        if (!openai) {
-            console.error("OpenAI client not initialized.");
-            return null;
-        }
-
-        try {
-            const response = await openai.chat.completions.create({
-                model: model,
-                messages: [
-                    {
-                        role: "user",
-                        content: [
-                            { type: "text", text: prompt },
-                            {
-                                type: "image_url",
-                                image_url: {
-                                    url: `data:image/jpeg;base64,${base64Image}`,
-                                },
-                            },
-                        ],
-                    },
-                ],
-                max_tokens: 1000,
-            });
-
-            return response.choices[0].message.content;
-        } catch (error) {
-            console.error("Erro ao chamar OpenAI Vision:", error);
-            return null;
-        }
+  async analyzeConversation(
+    messages: ChatMessage[],
+    systemPrompt: string,
+    model: string = "gpt-4o-mini"
+  ): Promise<string | null> {
+    if (!openai) {
+      console.error("OpenAI client not initialized.");
+      return null;
     }
+
+    try {
+      const response = await openai.chat.completions.create({
+        model,
+        messages: [{ role: "system", content: systemPrompt }, ...(messages as any)],
+        temperature: 0.3,
+      });
+
+      return response.choices[0].message.content;
+    } catch (error) {
+      console.error("Erro ao chamar OpenAI:", error);
+      return null;
+    }
+  },
+
+  async analyzeText(
+    text: string,
+    prompt: string,
+    model: string = "gpt-4o-mini"
+  ): Promise<string | null> {
+    return this.analyzeConversation([{ role: "user", content: text }], prompt, model);
+  },
+
+  async analyzeImage(
+    base64Image: string,
+    prompt: string,
+    model: string = "gpt-4o"
+  ): Promise<string | null> {
+    if (!openai) {
+      console.error("OpenAI client not initialized.");
+      return null;
+    }
+
+    try {
+      const response = await openai.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${base64Image}`,
+                },
+              },
+            ],
+          },
+        ],
+        max_tokens: 1000,
+      });
+
+      return response.choices[0].message.content;
+    } catch (error) {
+      console.error("Erro ao chamar OpenAI Vision:", error);
+      return null;
+    }
+  },
+
+  async analyzeDocument(
+    base64File: string,
+    filename: string,
+    mimeType: string,
+    prompt: string,
+    model: string = "gpt-4o"
+  ): Promise<string | null> {
+    if (!openai) {
+      console.error("OpenAI client not initialized.");
+      return null;
+    }
+
+    try {
+      if (mimeType.startsWith("image/")) {
+        return this.analyzeImage(base64File, prompt, model);
+      }
+
+      const binary = Buffer.from(base64File, "base64");
+      const uploadFile = await toFile(binary, filename);
+      const fileInfo = await openai.files.create({
+        file: uploadFile,
+        purpose: "user_data",
+      });
+
+      const response = await openai.responses.create({
+        model,
+        input: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: prompt },
+              { type: "input_file", file_id: fileInfo.id },
+            ],
+          },
+        ],
+        store: false,
+      });
+
+      return response.output_text ?? null;
+    } catch (error) {
+      console.error("Erro ao chamar OpenAI Responses para arquivo:", error);
+      return null;
+    }
+  },
+
+  async analyzeDocumentParsed<T>(
+    base64File: string,
+    filename: string,
+    mimeType: string,
+    prompt: string,
+    schema: any,
+    responseName: string,
+    model: string = "gpt-4o"
+  ): Promise<T | null> {
+    if (!openai) {
+      console.error("OpenAI client not initialized.");
+      return null;
+    }
+
+    try {
+      const responseFormat = zodTextFormat(schema, responseName);
+
+      if (mimeType.startsWith("image/")) {
+        const response = await openai.responses.create({
+          model,
+          input: [
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: prompt },
+                {
+                  type: "input_image",
+                  image_url: `data:${mimeType};base64,${base64File}`,
+                  detail: "high",
+                },
+              ],
+            },
+          ],
+          text: { format: responseFormat },
+          store: false,
+        });
+
+        const content = response.output_text?.trim();
+        if (!content) return null;
+        return JSON.parse(content) as T;
+      }
+
+      const binary = Buffer.from(base64File, "base64");
+      const uploadFile = await toFile(binary, filename);
+      const fileInfo = await openai.files.create({
+        file: uploadFile,
+        purpose: "user_data",
+      });
+
+      const response = await openai.responses.create({
+        model,
+        input: [
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: prompt },
+              { type: "input_file", file_id: fileInfo.id },
+            ],
+          },
+        ],
+        text: { format: responseFormat },
+        store: false,
+      });
+
+      const content = response.output_text?.trim();
+      if (!content) return null;
+      return JSON.parse(content) as T;
+    } catch (error) {
+      console.error("Erro ao chamar OpenAI Responses parse para arquivo:", error);
+      return null;
+    }
+  },
 };

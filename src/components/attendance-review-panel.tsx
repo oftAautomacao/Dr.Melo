@@ -167,7 +167,7 @@ export function AttendanceReviewPanel({
 
   const groupedRows = useMemo(() => {
     return rowsWithDrafts.reduce<Array<(typeof rowsWithDrafts)[number][]>>((groups, item, index) => {
-      const chunkSize = 6;
+      const chunkSize = 1;
       if (index % chunkSize === 0) groups.push([]);
       groups[groups.length - 1].push(item);
       return groups;
@@ -476,7 +476,7 @@ export function AttendanceReviewPanel({
                 />
 
                 {selectedFile && (
-                  <div className="mt-4 grid gap-4 md:grid-cols-[1fr_220px]">
+                  <div className="mt-4">
                     <div className="rounded-lg border bg-slate-50 p-3">
                       <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
                         <FileText className="h-4 w-4 text-blue-600" />
@@ -497,7 +497,7 @@ export function AttendanceReviewPanel({
                         </Button>
                       </div>
                     </div>
-                    <div className="rounded-lg border bg-white p-3 text-xs text-slate-600">
+                    <div className="hidden rounded-lg border bg-white p-3 text-xs text-slate-600">
                       <div className="mb-2 flex items-center gap-2 font-semibold text-slate-800">
                         <ImageIcon className="h-4 w-4 text-slate-600" />
                         PrÃ©-visualizaÃ§Ã£o
@@ -525,6 +525,45 @@ export function AttendanceReviewPanel({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Card className="border-slate-200 bg-white">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-semibold text-slate-700">Pré-visualização</CardTitle>
+                </CardHeader>
+                <CardContent className="text-xs text-slate-600">
+                  <div className="mb-2 flex items-center gap-2 font-semibold text-slate-800">
+                    <ImageIcon className="h-4 w-4 text-slate-600" />
+                    Arquivo enviado
+                  </div>
+                  {selectedFile ? (
+                    <>
+                      {previewKind === "image" && previewUrl && (
+                        <img src={previewUrl} alt="Pré-visualização do documento" className="max-h-72 w-full rounded-md object-contain" />
+                      )}
+                      {previewKind === "pdf" && previewUrl && (
+                        <iframe src={previewUrl} className="h-72 w-full rounded-md border bg-slate-100" title="Pré-visualização PDF" />
+                      )}
+                      {previewKind === "other" && (
+                        <div className="flex h-72 items-center justify-center rounded-md border border-dashed bg-slate-50 text-center">
+                          <div>
+                            <FileText className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+                            <p className="font-medium text-slate-700">Documento anexado</p>
+                            <p className="mt-1 text-xs text-slate-500">A IA vai processar o conteúdo do arquivo.</p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="flex h-72 items-center justify-center rounded-md border border-dashed bg-slate-50 text-center">
+                      <div>
+                        <ImageIcon className="mx-auto mb-2 h-8 w-8 text-slate-400" />
+                        <p className="font-medium text-slate-700">Nenhum arquivo selecionado</p>
+                        <p className="mt-1 text-xs text-slate-500">A pré-visualização aparece aqui depois da seleção.</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="hidden border-slate-200 bg-white">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-semibold text-slate-700">Resumo da revisÃ£o</CardTitle>
                 </CardHeader>
@@ -629,7 +668,94 @@ export function AttendanceReviewPanel({
               <p className="font-medium text-slate-700">Nenhum agendamento encontrado para o perÃ­odo selecionado.</p>
             </div>
           ) : (
-            <div className="grid gap-4">
+            <>
+            <div className="overflow-x-auto">
+              <Table className="table-fixed text-xs">
+                <TableHeader className="bg-blue-50">
+                  <TableRow className="hover:bg-blue-50">
+                    <TableHead className="w-[12%] font-bold text-blue-900">Data/Hora</TableHead>
+                    <TableHead className="w-[12%] font-bold text-blue-900">Unidade</TableHead>
+                    <TableHead className="w-[20%] font-bold text-blue-900">Paciente</TableHead>
+                    <TableHead className="w-[12%] font-bold text-blue-900">Convênio</TableHead>
+                    <TableHead className="w-[16%] font-bold text-blue-900">Procedimentos</TableHead>
+                    <TableHead className="w-[10%] text-center font-bold text-blue-900">Realizou</TableHead>
+                    <TableHead className="w-[10%] text-center font-bold text-blue-900">Data atendimento</TableHead>
+                    <TableHead className="w-[8%] font-bold text-blue-900">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rowsWithDrafts.map(({ row, draft }) => (
+                    <TableRow key={getRowKey(row)} className="align-top hover:bg-blue-50/30">
+                      <TableCell className="whitespace-normal">
+                        <div className="font-medium text-slate-900">
+                          {new Date(row._date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                        </div>
+                        <div className="text-slate-500">{row._time}</div>
+                      </TableCell>
+                      <TableCell className="whitespace-normal">
+                        <div className="font-medium text-blue-800">{row._unitName}</div>
+                        {row._bairro && <div className="mt-1 text-[10px] uppercase tracking-tight text-slate-500">{row._bairro}</div>}
+                      </TableCell>
+                      <TableCell className="whitespace-normal">
+                        <div className="font-medium text-slate-900">{row.nomePaciente || "Não informado"}</div>
+                        {draft.aiPatientName && (
+                          <div className="mt-1 text-[11px] text-slate-500">
+                            Foto: <span className="font-medium text-slate-700">{draft.aiPatientName}</span>
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="whitespace-normal text-slate-700">
+                        {row.convenio || "Não informado"}
+                      </TableCell>
+                      <TableCell className="whitespace-normal">
+                        <div className="flex flex-wrap gap-1">
+                          {(row.exames?.length ? row.exames : ["Consulta"]).map((proc, idx) => (
+                            <span key={idx} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-700">
+                              {proc}
+                            </span>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Select
+                          value={draft.realizou || ""}
+                          onValueChange={(value) => updateDraft(row, "realizou", value)}
+                        >
+                          <SelectTrigger className="mx-auto h-9 w-20 border-slate-200 bg-white text-xs">
+                            <SelectValue placeholder="-" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="S">S</SelectItem>
+                            <SelectItem value="N">N</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Input
+                          type="date"
+                          value={formatInputDate(draft.dataAtendimento)}
+                          onChange={(event) => updateDraft(row, "dataAtendimento", event.target.value)}
+                          className="mx-auto h-9 min-w-0 max-w-[148px] border-slate-200 bg-white text-xs"
+                        />
+                      </TableCell>
+                      <TableCell className="whitespace-normal">
+                        <div className="flex flex-col gap-2">
+                          <Badge className={draft.matchedFrom ? "border border-blue-200 bg-blue-50 text-blue-800" : "border border-slate-200 bg-slate-100 text-slate-600"}>
+                            {draft.matchedFrom ? "IA" : "Pendente"}
+                          </Badge>
+                          <Badge className={getConfidenceBadge(draft.confidence)}>{draft.confidence || "manual"}</Badge>
+                          <div className="text-[11px] text-slate-500">
+                            {draft.matchedFrom ? `Origem: ${draft.matchedFrom}` : "Sem correspondência"}
+                          </div>
+                          {draft.notes && <div className="text-[11px] text-amber-700">{draft.notes}</div>}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="hidden grid gap-4">
               {groupedRows.map((group, groupIndex) => (
                 <div key={groupIndex} className="grid gap-4 xl:grid-cols-2">
                   {group.map(({ row, draft }) => (
@@ -720,6 +846,7 @@ export function AttendanceReviewPanel({
                 </div>
               ))}
             </div>
+            </>
           )}
         </CardContent>
       </Card>

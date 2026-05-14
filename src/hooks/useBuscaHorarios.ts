@@ -94,6 +94,7 @@ function formatDateKey(date: Date): string {
 // ----- Hook -----
 export function useBuscaHorarios() {
   const [turnosCriterios, setTurnosCriterios] = useState<Record<string, any>>({});
+  const [turnosCriteriosExcecoes, setTurnosCriteriosExcecoes] = useState<Record<string, any>>({});
   const [unidadesConfig, setUnidadesConfig] = useState<Record<string, any>>({});
   const [subplanosData, setSubplanosData] = useState<Record<string, any>>({});
   const [datasBloqueadas, setDatasBloqueadas] = useState<Record<string, any>>({});
@@ -111,11 +112,14 @@ export function useBuscaHorarios() {
     const base = getFirebasePathBase();
     const basePath = `${base}/agendamentoWhatsApp/configuracoes`;
     let loaded = 0;
-    const totalToLoad = 7;
+    const totalToLoad = 8;
     const checkDone = () => { loaded++; if (loaded >= totalToLoad) setLoading(false); };
 
     const off1 = onValue(ref(db, `${basePath}/turnosCriterios`), s => {
       setTurnosCriterios(s.exists() ? s.val() : {}); checkDone();
+    });
+    const offEx = onValue(ref(db, `${basePath}/turnosCriteriosExcecoes`), s => {
+      setTurnosCriteriosExcecoes(s.exists() ? s.val() : {}); checkDone();
     });
     const off2 = onValue(ref(db, `${basePath}/unidades`), s => {
       setUnidadesConfig(s.exists() ? s.val() : {}); checkDone();
@@ -157,7 +161,7 @@ export function useBuscaHorarios() {
       checkDone();
     });
 
-    return () => { off1(); off2(); off3(); off4(); off5(); off6(); off7(); };
+    return () => { off1(); offEx(); off2(); off3(); off4(); off5(); off6(); off7(); };
   }, []);
 
   // Derive convênio names from conveniosData
@@ -197,19 +201,56 @@ export function useBuscaHorarios() {
     return map;
   }, [subplanosData]);
 
-  // Check if a date is blocked for a unit or is a holiday
-  const isDateBlocked = useCallback((dateStr: string, unitName: string): boolean => {
-    // Check unit-specific blocked dates
+  // Check if a date/time is blocked for a unit
+  const getBlockInfo = useCallback((dateStr: string, unitName: string) => {
+    let isFullDay = false;
+    const blockedTimes: { start: string; end: string }[] = [];
+
+    // Check holidays
+    if (feriadosData && feriadosData[dateStr]) {
+      isFullDay = true;
+    }
+
+    // Check unit-specific blocked dates/times
     if (datasBloqueadas[unitName]) {
       const blocked = datasBloqueadas[unitName];
       if (typeof blocked === 'object') {
-        if (Object.values(blocked).some((v: any) => v === dateStr || v?.data === dateStr)) return true;
+        Object.values(blocked).forEach((v: any) => {
+          const vDate = typeof v === 'string' ? v : v?.data;
+          if (vDate === dateStr) {
+            if (v.horaInicio && v.horaFim) {
+              blockedTimes.push({ start: v.horaInicio, end: v.horaFim });
+            } else {
+              isFullDay = true;
+            }
+          }
+        });
       }
     }
-    // Check holidays
-    if (feriadosData && feriadosData[dateStr]) return true;
-    return false;
+
+    return { isFullDay, blockedTimes };
   }, [datasBloqueadas, feriadosData]);
+
+  const isTimeInBlockedRanges = (time: string, ranges: { start: string; end: string }[]) => {
+    if (!time || !ranges.length) return false;
+    const parts = time.split(':');
+    if (parts.length < 2) return false;
+    const [h, m] = parts.map(Number);
+    const timeVal = h * 60 + m;
+    
+    return ranges.some(range => {
+      if (!range.start || !range.end) return false;
+      const sParts = range.start.split(':');
+      const eParts = range.end.split(':');
+      if (sParts.length < 2 || eParts.length < 2) return false;
+      
+      const [sh, sm] = sParts.map(Number);
+      const [eh, em] = eParts.map(Number);
+      const startVal = sh * 60 + sm;
+      const endVal = eh * 60 + em;
+      return timeVal >= startVal && timeVal < endVal;
+    });
+  };
 
   // Main search function
   const buscar = useCallback(async (params: SearchParams) => {
@@ -245,11 +286,27 @@ export function useBuscaHorarios() {
         }
       }
 
-      // Step 3: Filter by procedures
+      // Step 3: Filter by procedures (with exceptions override)
       if (procedimentos.length > 0) {
-        filteredTurnos = filteredTurnos.filter(turno =>
-          procedimentos.every(proc => turno[proc] === 'Sim')
-        );
+        filteredTurnos = filteredTurnos.filter(turno => {
+          const unit = turno.unidade;
+          const day = turno.diaDaSemana;
+          const shift = turno.turno;
+          
+          // Try to find an exception for this unit/day/shift
+          // Exceptions are often keyed as 'Unidade_Dia_Turno' or similar in the user's patterns
+          const exKey = `${unit}_${day}_${shift}`;
+          const exception = turnosCriteriosExcecoes[exKey] || Object.values(turnosCriteriosExcecoes).find((ex: any) => 
+            ex.unidade === unit && ex.diaDaSemana === day && ex.turno === shift
+          );
+
+          return procedimentos.every(proc => {
+            if (exception && exception[proc] !== undefined) {
+              return exception[proc] === 'Sim';
+            }
+            return turno[proc] === 'Sim';
+          });
+        });
       }
 
       // Step 4: Filter by periodo
@@ -314,7 +371,9 @@ export function useBuscaHorarios() {
           const dayName = DAY_MAP[currentDate.getDay()];
           const isToday = dateStr === todayStr;
 
-          if (dayName !== 'Domingo' && !isDateBlocked(dateStr, unitName)) {
+          const blockInfo = getBlockInfo(dateStr, unitName);
+
+          if (dayName !== 'Domingo' && !blockInfo.isFullDay) {
             const dayTurnos = dayTurnoMap[dayName];
             if (dayTurnos && dayTurnos.length > 0) {
               let allSlots: string[] = [];
@@ -324,6 +383,11 @@ export function useBuscaHorarios() {
               });
 
               allSlots = [...new Set(allSlots)].sort();
+
+              // Apply time blocks (datasBloqueadas with horaInicio/horaFim)
+              if (blockInfo.blockedTimes.length > 0) {
+                allSlots = allSlots.filter(slot => !isTimeInBlockedRanges(slot, blockInfo.blockedTimes));
+              }
 
               if (isToday) {
                 const limitTime = new Date(now.getTime() + 3 * 60 * 60 * 1000);
@@ -372,11 +436,23 @@ export function useBuscaHorarios() {
           });
         }
 
-        // Calculate all exams available in this unit
+        // Calculate all exams available in this unit (considering exceptions)
         const examesDisponiveisSet = new Set<string>();
         turnos.forEach(turno => {
+          const unit = turno.unidade;
+          const day = turno.diaDaSemana;
+          const shift = turno.turno;
+          const exKey = `${unit}_${day}_${shift}`;
+          const exception = turnosCriteriosExcecoes[exKey] || Object.values(turnosCriteriosExcecoes).find((ex: any) => 
+            ex.unidade === unit && ex.diaDaSemana === day && ex.turno === shift
+          );
+
           procedimentosList.forEach(p => {
-            if (turno[p] === 'Sim') examesDisponiveisSet.add(p);
+            const isAccepted = (exception && exception[p] !== undefined) 
+              ? exception[p] === 'Sim' 
+              : turno[p] === 'Sim';
+              
+            if (isAccepted) examesDisponiveisSet.add(p);
           });
         });
 
@@ -408,7 +484,7 @@ export function useBuscaHorarios() {
     } finally {
       setSearching(false);
     }
-  }, [turnosCriterios, unidadesConfig, subplanosData, isDateBlocked]);
+  }, [turnosCriterios, turnosCriteriosExcecoes, unidadesConfig, subplanosData, getBlockInfo]);
 
   // Generate copyable response text
   const gerarResposta = useCallback((resultados: UnitResult[]): string => {
@@ -465,13 +541,13 @@ export function useBuscaHorarios() {
       const dow = checkDate.getDay();
       if (discoveryDaysOfWeek.has(dow)) {
         const unitsOnThisDay = unitsByDay[dow];
-        const hasValidUnit = unitsOnThisDay.some(u => !isDateBlocked(dateStr, u));
+        const hasValidUnit = unitsOnThisDay.some(u => !getBlockInfo(dateStr, u).isFullDay);
         if (hasValidUnit) return dateStr;
       }
     }
 
     return null;
-  }, [turnosCriterios, isDateBlocked]);
+  }, [turnosCriterios, getBlockInfo]);
 
   const unidadesList = useMemo(() => {
     const units = new Set<string>();

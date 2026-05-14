@@ -1,4 +1,4 @@
-﻿"use server";
+"use server";
 
 import { openaiService } from "@/lib/ai/openai-service";
 import type { AttendanceReviewAnalysisResult } from "@/types/attendance-review";
@@ -156,6 +156,52 @@ ${candidateRowsText}
     prompt,
     attendanceReviewValidationSchema,
     "attendance_review_validation",
+    "gpt-4o"
+  );
+}
+export async function analyzeAttendanceRefinementAction(params: {
+  fileData: string;
+  fileName: string;
+  mimeType: string;
+  unidade: string;
+  pendingPatients: Array<{
+    lineIndex: number;
+    patientName: string;
+    convenio?: string;
+  }>;
+}): Promise<AttendanceReviewAnalysisResult | null> {
+  if (!params.pendingPatients.length) return null;
+
+  const pendingText = params.pendingPatients
+    .map((p) => `- ID: ${p.lineIndex}, Nome: ${p.patientName}, Convênio: ${p.convenio ?? ""}`)
+    .join("\n");
+
+  const prompt = `
+Voce e um especialista em recuperacao de dados de faturamento medico.
+
+Sua missao e encontrar especificamente os pacientes abaixo, que nao foram localizados em uma busca inicial.
+Analise o documento com cuidado redobrado (olhe rodapes, cantos, linhas levemente ilegiveis ou abreviadas).
+
+UNIDADE: ${params.unidade}
+
+PACIENTES PARA LOCALIZAR:
+${pendingText}
+
+REGRAS:
+- Procure por nomes parciais, abreviacoes ou sobrenomes.
+- Se encontrar o paciente, informe o status "realizou" (S/N) e "dataAtendimento".
+- "matchedLineIndex" deve ser o ID fornecido acima.
+- Nao invente dados. Se nao achar mesmo apos busca profunda, use null.
+- Nao responda em markdown.
+`;
+
+  return openaiService.analyzeDocumentParsed<AttendanceReviewAnalysisResult>(
+    params.fileData,
+    params.fileName,
+    params.mimeType,
+    prompt,
+    attendanceReviewValidationSchema,
+    "attendance_review_refinement",
     "gpt-4o"
   );
 }

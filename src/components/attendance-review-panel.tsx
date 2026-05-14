@@ -1,27 +1,62 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { analyzeAttendanceDocumentAction, analyzeAttendanceValidationAction } from "@/app/actions/attendance-review";
-import type { AttendanceBillingRow, AttendanceReviewAnalysisResult, AttendanceReviewRow } from "@/types/attendance-review";
+import { 
+  analyzeAttendanceDocumentAction, 
+  analyzeAttendanceValidationAction, 
+  analyzeAttendanceRefinementAction 
+} from "@/app/actions/attendance-review";
+import type { 
+  AttendanceBillingRow, 
+  AttendanceReviewAnalysisResult, 
+  AttendanceReviewRow 
+} from "@/types/attendance-review";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
   AlertTriangle,
-  CheckCircle2,
   FileText,
-  Image as ImageIcon,
   Loader2,
   ScanSearch,
   Sparkles,
   Trash2,
+  UploadCloud,
+  CalendarDays,
+  Activity,
+  Printer,
+  XCircle,
+  CheckCircle2,
+  CalendarRange,
+  RotateCcw
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PatientForm } from "@/components/patient-form";
+import { cancelAppointment } from "@/app/actions";
+import { getFirebasePathBase } from "@/lib/firebaseConfig";
+import { ENVIRONMENT } from "../../ambiente";
+import { Checkbox } from "@/components/ui/checkbox";
+
+// --- Tipos Locais ---
 
 type DraftRow = {
   realizou: "S" | "N" | "";
@@ -39,71 +74,7 @@ interface AttendanceReviewPanelProps {
   analysisReady?: boolean;
 }
 
-function normalizeText(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]/g, "");
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      const payload = result.includes(",") ? result.split(",")[1] : result;
-      resolve(payload);
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
-function formatDisplayDate(value?: string | null) {
-  if (!value) return "-";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleDateString("pt-BR", { timeZone: "UTC" });
-}
-
-function formatInputDate(value?: string | null) {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return parsed.toISOString().slice(0, 10);
-}
-
-function getRowKey(row: AttendanceBillingRow) {
-  return `${row._unit}|${row._date}|${row._time}|${normalizeText(row.nomePaciente || "")}`;
-}
-
-function getConfidenceBadge(confidence?: AttendanceReviewAnalysisResult["confidence"]) {
-  if (confidence === "alta") return "bg-emerald-100 text-emerald-800 border-emerald-200";
-  if (confidence === "baixa") return "bg-red-100 text-red-800 border-red-200";
-  return "bg-amber-100 text-amber-800 border-amber-200";
-}
-
-function matchScore(aiRow: AttendanceReviewRow, reportRow: AttendanceBillingRow) {
-  const aiName = normalizeText(aiRow.patientName || "");
-  const reportName = normalizeText(reportRow.nomePaciente || "");
-  let score = 0;
-
-  if (!aiName || !reportName) return 0;
-  if (aiName === reportName) score += 100;
-  else if (aiName.includes(reportName) || reportName.includes(aiName)) score += 60;
-  else {
-    const aiChunks = aiName.match(/.{1,4}/g) || [];
-    const reportChunks = reportName.match(/.{1,4}/g) || [];
-    const overlap = aiChunks.filter((chunk) => reportChunks.some((r) => r.includes(chunk)));
-    score += overlap.length * 8;
-  }
-
-  if (aiRow.appointmentDate && aiRow.appointmentDate === reportRow._date) score += 20;
-  if (aiRow.appointmentTime && aiRow.appointmentTime === reportRow._time) score += 15;
-  return score;
-}
+// --- Componente Principal ---
 
 export function AttendanceReviewPanel({
   reportRows,
@@ -113,7 +84,6 @@ export function AttendanceReviewPanel({
 }: AttendanceReviewPanelProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string>("");
-  const [previewKind, setPreviewKind] = useState<"image" | "pdf" | "other">("other");
   const [analysisResult, setAnalysisResult] = useState<AttendanceReviewAnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
@@ -122,16 +92,32 @@ export function AttendanceReviewPanel({
   const validationKeyRef = useRef<string>("");
   const autoFillKeyRef = useRef<string>("");
 
+  const [processedRows, setProcessedRows] = useState<Set<string>>(new Set());
+  const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
+  const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
+  const [appointmentToCancel, setAppointmentToCancel] = useState<any>(null);
+  const [appointmentToReschedule, setAppointmentToReschedule] = useState<any>(null);
+  const [cancelReason, setCancelReason] = useState("");
+
+  const toggleProcessed = (key: string) => {
+    setProcessedRows(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
   }, [previewUrl]);
 
+  // Sincroniza draft com reportRows iniciais
   useEffect(() => {
     setDraftRows((current) => {
       const next: Record<string, DraftRow> = {};
-
       for (const row of reportRows) {
         const key = getRowKey(row);
         next[key] = current[key] ?? {
@@ -139,7 +125,6 @@ export function AttendanceReviewPanel({
           dataAtendimento: formatInputDate(row.dataAtendimento),
         };
       }
-
       return next;
     });
   }, [reportRows]);
@@ -149,6 +134,7 @@ export function AttendanceReviewPanel({
       const key = getRowKey(row);
       return {
         row,
+        key,
         draft: draftRows[key] ?? {
           realizou: row.realizouConsulta ?? "",
           dataAtendimento: formatInputDate(row.dataAtendimento),
@@ -157,23 +143,6 @@ export function AttendanceReviewPanel({
     });
   }, [draftRows, reportRows]);
 
-  const analysisStats = useMemo(() => {
-    const total = rowsWithDrafts.length;
-    const filled = rowsWithDrafts.filter(({ draft }) => draft.realizou || draft.dataAtendimento).length;
-    const matched = rowsWithDrafts.filter(({ draft }) => draft.aiPatientName).length;
-    const pending = Math.max(total - matched, 0);
-    return { total, filled, matched, pending };
-  }, [rowsWithDrafts]);
-
-  const groupedRows = useMemo(() => {
-    return rowsWithDrafts.reduce<Array<(typeof rowsWithDrafts)[number][]>>((groups, item, index) => {
-      const chunkSize = 1;
-      if (index % chunkSize === 0) groups.push([]);
-      groups[groups.length - 1].push(item);
-      return groups;
-    }, []);
-  }, [rowsWithDrafts]);
-
   const handleFileChange = (file: File | null) => {
     setSelectedFile(file);
     setAnalysisResult(null);
@@ -181,21 +150,16 @@ export function AttendanceReviewPanel({
     autoFillKeyRef.current = "";
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl("");
-    setPreviewKind("other");
 
     if (!file) return;
-
-    const nextUrl = URL.createObjectURL(file);
-    setPreviewUrl(nextUrl);
-    if (file.type.startsWith("image/")) setPreviewKind("image");
-    else if (file.type === "application/pdf") setPreviewKind("pdf");
-    else setPreviewKind("other");
+    setPreviewUrl(URL.createObjectURL(file));
   };
 
   const applyAnalysisToDrafts = (result: AttendanceReviewAnalysisResult) => {
     const nextDrafts: Record<string, DraftRow> = {};
     const usedIndexes = new Set<number>();
 
+    // Inicializa com valores atuais
     for (const row of reportRows) {
       const key = getRowKey(row);
       nextDrafts[key] = {
@@ -204,13 +168,16 @@ export function AttendanceReviewPanel({
       };
     }
 
+    // Aplica o que a IA encontrou
     for (const aiRow of result.rows) {
       const preferredIndex = typeof aiRow.matchedLineIndex === "number" ? aiRow.matchedLineIndex - 1 : -1;
       let targetIndex = -1;
 
+      // 1. Tenta Match por Índice Preferencial
       if (preferredIndex >= 0 && preferredIndex < reportRows.length && !usedIndexes.has(preferredIndex)) {
         targetIndex = preferredIndex;
       } else {
+        // 2. Tenta Match por Nome Exato
         const aiName = normalizeText(aiRow.patientName || "");
         const exactCandidates = reportRows
           .map((row, index) => ({ row, index }))
@@ -224,26 +191,21 @@ export function AttendanceReviewPanel({
             const sameTime = !aiRow.appointmentTime || aiRow.appointmentTime === row._time;
             return sameDate && sameTime;
           });
-
-          if (exactBySchedule) {
-            targetIndex = exactBySchedule.index;
-          }
+          if (exactBySchedule) targetIndex = exactBySchedule.index;
         }
       }
 
+      // 3. Tenta Fuzzy Match (Score)
       if (targetIndex < 0) {
         let bestScore = 0;
-
         for (let i = 0; i < reportRows.length; i += 1) {
           if (usedIndexes.has(i)) continue;
-          const candidate = reportRows[i];
-          const score = matchScore(aiRow, candidate);
+          const score = matchScore(aiRow, reportRows[i]);
           if (score > bestScore) {
             bestScore = score;
             targetIndex = i;
           }
         }
-
         if (targetIndex < 0 || bestScore < 35) continue;
       }
 
@@ -253,14 +215,13 @@ export function AttendanceReviewPanel({
 
       nextDrafts[key] = {
         realizou: aiRow.realizou ?? "",
-        dataAtendimento: formatInputDate(aiRow.dataAtendimento),
+        dataAtendimento: aiRow.dataAtendimento ? formatInputDate(aiRow.dataAtendimento) : "",
         confidence: aiRow.confidence,
         aiPatientName: aiRow.patientName,
         matchedFrom: `Linha ${aiRow.lineIndex}`,
         notes: aiRow.notes,
       };
     }
-
     setDraftRows(nextDrafts);
   };
 
@@ -269,15 +230,8 @@ export function AttendanceReviewPanel({
       toast.error("Selecione um arquivo antes de analisar.");
       return;
     }
-
-    if (selectedFile.size > 20 * 1024 * 1024) {
-      toast.error("O arquivo Ã© muito grande. Tente um arquivo menor que 20 MB.");
-      return;
-    }
-
     setIsAnalyzing(true);
     const loadingToast = toast.loading("Lendo documento com IA...");
-
     try {
       const fileData = await fileToBase64(selectedFile);
       const result = await analyzeAttendanceDocumentAction({
@@ -285,12 +239,10 @@ export function AttendanceReviewPanel({
         fileName: selectedFile.name,
         mimeType: selectedFile.type || "application/octet-stream",
       });
-
       if (!result) {
-        toast.error("NÃ£o foi possÃ­vel analisar o documento.");
+        toast.error("Não foi possível analisar o documento.");
         return;
       }
-
       setAnalysisResult(result);
       onAnalysisResult?.(result);
       toast.success("Documento analisado com sucesso.");
@@ -303,31 +255,40 @@ export function AttendanceReviewPanel({
     }
   };
 
+  // Trigger automático do preenchimento inicial quando o resultado da Etapa 1 chega
+  useEffect(() => {
+    if (!analysisResult?.rows?.length || !reportRows.length) return;
+
+    const autoFillKey = [
+      selectedFile?.name || "",
+      selectedFile?.size || 0,
+      reportRows.length,
+      analysisResult.rows.length,
+      analysisResult.unidade || "",
+      analysisResult.mes || "",
+      analysisResult.ano || "",
+    ].join("|");
+
+    if (autoFillKeyRef.current === autoFillKey) return;
+
+    applyAnalysisToDrafts(analysisResult);
+    autoFillKeyRef.current = autoFillKey;
+  }, [analysisResult, reportRows, selectedFile]);
+
+  // Trigger automático da Etapa 2 e 3 (Cruzamento e Refinamento)
   useEffect(() => {
     const unidade = analysisResult?.unidade;
     const mes = analysisResult?.mes;
     const ano = analysisResult?.ano;
+    if (!selectedFile || !unidade || !mes || !ano || !reportRows.length || isValidating) return;
 
-    if (!selectedFile || !unidade || !mes || !ano) return;
-    if (!reportRows.length || isValidating) return;
-
-    const validationKey = [
-      selectedFile.name,
-      selectedFile.size,
-      analysisResult.unidade,
-      analysisResult.mes,
-      analysisResult.ano,
-      reportRows.length,
-    ].join("|");
-
+    const validationKey = [selectedFile.name, selectedFile.size, unidade, mes, ano, reportRows.length].join("|");
     if (validationKeyRef.current === validationKey) return;
 
     let active = true;
-
     const runValidation = async () => {
       setIsValidating(true);
-      const loadingToast = toast.loading("Comparando com os agendamentos internos...");
-
+      const loadingToast = toast.loading("Cruzando dados identificados com o sistema...");
       try {
         const fileData = await fileToBase64(selectedFile);
         const candidateRows = reportRows.map((row, index) => ({
@@ -350,58 +311,27 @@ export function AttendanceReviewPanel({
         });
 
         if (!active || !result) return;
-
         validationKeyRef.current = validationKey;
-        applyAnalysisToDrafts(result);
-        toast.success("ComparaÃ§Ã£o interna concluÃ­da.");
+        toast.success("Cruzamento concluído.", { id: loadingToast });
       } catch (error) {
         console.error(error);
-        toast.error("Falha ao comparar os dados internos.");
+        toast.error("Falha no cruzamento.", { id: loadingToast });
       } finally {
-        toast.dismiss(loadingToast);
         if (active) setIsValidating(false);
       }
     };
-
     runValidation();
-
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [analysisResult, isValidating, reportRows, selectedFile]);
-
-  useEffect(() => {
-    if (!analysisResult?.rows?.length || !reportRows.length) return;
-
-    const autoFillKey = [
-      selectedFile?.name || "",
-      selectedFile?.size || 0,
-      reportRows.length,
-      analysisResult.rows.length,
-      analysisResult.unidade || "",
-      analysisResult.mes || "",
-      analysisResult.ano || "",
-    ].join("|");
-
-    if (autoFillKeyRef.current === autoFillKey) return;
-
-    applyAnalysisToDrafts(analysisResult);
-    autoFillKeyRef.current = autoFillKey;
-  }, [analysisResult, reportRows, selectedFile]);
 
   const updateDraft = (row: AttendanceBillingRow, field: keyof DraftRow, value: string) => {
     const key = getRowKey(row);
     setDraftRows((current) => ({
       ...current,
       [key]: {
-        realizou: current[key]?.realizou ?? (row.realizouConsulta ?? ""),
-        dataAtendimento: current[key]?.dataAtendimento ?? formatInputDate(row.dataAtendimento),
-        confidence: current[key]?.confidence,
-        aiPatientName: current[key]?.aiPatientName,
-        matchedFrom: current[key]?.matchedFrom,
-        notes: current[key]?.notes,
+        ...current[key],
         [field]: value,
-      },
+      } as DraftRow,
     }));
   };
 
@@ -409,448 +339,403 @@ export function AttendanceReviewPanel({
     setSelectedFile(null);
     setAnalysisResult(null);
     setDraftRows({});
+    setProcessedRows(new Set());
     validationKeyRef.current = "";
     autoFillKeyRef.current = "";
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl("");
-    setPreviewKind("other");
+  };
+
+  const handleRefinement = async () => {
+    if (!selectedFile || !analysisResult) return;
+    
+    const unidade = analysisResult.unidade;
+    if (!unidade) {
+      toast.error("Unidade não identificada.");
+      return;
+    }
+
+    const pendingRows = reportRows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => {
+        const key = getRowKey(row);
+        const draft = draftRows[key];
+        return !draft || !draft.confidence || draft.confidence === "baixa";
+      })
+      .map(({ row, index }) => ({
+        lineIndex: index + 1,
+        patientName: row.nomePaciente || "",
+        appointmentDate: row._date,
+        appointmentTime: row._time,
+        unidade: row._unitName,
+        convenio: row.convenio,
+      }));
+
+    if (pendingRows.length === 0) {
+      toast.info("Não há pendências críticas para refinar.");
+      return;
+    }
+
+    setIsValidating(true);
+    const loadingToast = toast.loading(`Refinando ${pendingRows.length} pacientes...`);
+    try {
+      const fileData = await fileToBase64(selectedFile);
+      const refinementPromise = analyzeAttendanceRefinementAction({
+        fileData,
+        fileName: selectedFile.name,
+        mimeType: selectedFile.type || "application/octet-stream",
+        unidade,
+        pendingPatients: pendingRows,
+      });
+
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 45000));
+      const refinementResult = await Promise.race([refinementPromise, timeoutPromise]);
+
+      if (refinementResult) {
+        applyAnalysisToDrafts(refinementResult);
+        toast.success("Refinamento concluído.", { id: loadingToast });
+      } else {
+        toast.error("O refinamento demorou muito ou falhou.", { id: loadingToast });
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Erro no refinamento.", { id: loadingToast });
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   return (
-    <div className="space-y-6">
-      <Card className="border-blue-100 bg-gradient-to-br from-white via-slate-50 to-blue-50 shadow-sm">
-        <CardHeader className="pb-4">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="text-xl text-blue-950 flex items-center gap-2">
-                <ScanSearch className="h-5 w-5 text-blue-600" />
-                ConferÃªncia de faturamento
-              </CardTitle>
-              <CardDescription className="text-sm text-slate-600">
-                Envie a foto, PDF ou Word da secretÃ¡ria. A IA lÃª o documento e preenche a revisÃ£o.
-              </CardDescription>
-            </div>
+    <div className="space-y-6 print:space-y-0 print:m-0">
+      {/* Área de Upload e Status */}
+      {/* Top Toolbar: Upload, Actions, and Context Info */}
+      <div className="flex flex-wrap items-center gap-6 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm print:hidden">
+        {/* Upload & Basic Controls */}
+        <div className="flex items-center gap-4">
+          <div 
+            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+            onDrop={(e) => {
+              e.preventDefault(); e.stopPropagation();
+              const file = e.dataTransfer.files?.[0];
+              if (file) handleFileChange(file);
+            }}
+            onClick={() => fileInputRef.current?.click()}
+            className={`
+              w-20 h-20 flex-shrink-0 cursor-pointer border-2 border-dashed rounded-2xl transition-all duration-300 flex flex-col items-center justify-center text-center p-2
+              ${selectedFile ? 'border-blue-400 bg-blue-50/50' : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'}
+            `}
+          >
+            <Input ref={fileInputRef} type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" onChange={(e) => handleFileChange(e.target.files?.[0] ?? null)} className="hidden" />
+            {selectedFile ? (
+              <FileText className="h-6 w-6 text-blue-600" />
+            ) : (
+              <UploadCloud className="h-6 w-6 text-slate-400" />
+            )}
+            <span className="text-[8px] font-bold text-slate-500 uppercase mt-1">
+              {selectedFile ? 'Trocar' : 'PDF/FOTO'}
+            </span>
           </div>
-        </CardHeader>
 
-        <CardContent>
-          <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
-            <div className="space-y-4">
-              <div className="rounded-xl border border-dashed border-blue-200 bg-white/80 p-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="space-y-2">
-                    <Label htmlFor="attendance-file" className="text-xs font-bold uppercase tracking-wider text-blue-900">
-                      Arquivo da secretÃ¡ria
-                    </Label>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                    >
-                      <FileText className="mr-2 h-4 w-4" />
-                      Escolher arquivo
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleReset}
-                      className="border-slate-300 transition-colors hover:bg-slate-100 hover:text-slate-900"
-                    >
-                      <Trash2 className="mr-2 h-4 w-4" />
-                      Limpar
-                    </Button>
-                  </div>
-                </div>
-
-                <Input
-                  ref={fileInputRef}
-                  id="attendance-file"
-                  type="file"
-                  accept=".png,.jpg,.jpeg,.webp,.pdf,.doc,.docx"
-                  onChange={(event) => handleFileChange(event.target.files?.[0] ?? null)}
-                  className="hidden"
-                />
-
-                {selectedFile && (
-                  <div className="mt-4">
-                    <div className="rounded-lg border bg-slate-50 p-3">
-                      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700">
-                        <FileText className="h-4 w-4 text-blue-600" />
-                        {selectedFile.name}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        Tipo: {selectedFile.type || "desconhecido"} | Tamanho: {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
-                      </div>
-                      <div className="mt-4">
-                        <Button
-                          type="button"
-                          onClick={handleAnalyze}
-                          disabled={isAnalyzing || isValidating}
-                          className="w-full bg-blue-700 text-white hover:bg-blue-800"
-                        >
-                          {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                          Analisar documento
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="hidden rounded-lg border bg-white p-3 text-xs text-slate-600">
-                      <div className="mb-2 flex items-center gap-2 font-semibold text-slate-800">
-                        <ImageIcon className="h-4 w-4 text-slate-600" />
-                        PrÃ©-visualizaÃ§Ã£o
-                      </div>
-                      {previewKind === "image" && previewUrl && (
-                        <img src={previewUrl} alt="PrÃ©-visualizaÃ§Ã£o do documento" className="max-h-52 w-full rounded-md object-contain" />
-                      )}
-                      {previewKind === "pdf" && previewUrl && (
-                        <iframe src={previewUrl} className="h-52 w-full rounded-md border bg-slate-100" title="PrÃ©-visualizaÃ§Ã£o PDF" />
-                      )}
-                      {previewKind === "other" && (
-                        <div className="flex h-52 items-center justify-center rounded-md border border-dashed bg-slate-50 text-center">
-                          <div>
-                            <FileText className="mx-auto mb-2 h-8 w-8 text-slate-400" />
-                            <p className="font-medium text-slate-700">Documento anexado</p>
-                            <p className="mt-1 text-xs text-slate-500">A IA vai processar o conteÃºdo do arquivo.</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+          <div className="flex flex-col gap-2">
+            {selectedFile && (
+              <div className="flex gap-2">
+                <Button 
+                  onClick={handleAnalyze} 
+                  disabled={isAnalyzing || isValidating} 
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-4 rounded-lg text-[10px] font-bold uppercase"
+                >
+                  {isAnalyzing ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                  Analisar
+                </Button>
+                
+                {analysisResult && (
+                  <Button 
+                    onClick={handleRefinement} 
+                    disabled={isAnalyzing || isValidating} 
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-200 text-blue-600 hover:bg-blue-50 h-8 px-4 rounded-lg text-[10px] font-bold uppercase"
+                  >
+                    {isValidating ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ScanSearch className="h-3 w-3 mr-1" />}
+                    Refinar Pendentes
+                  </Button>
                 )}
               </div>
+            )}
+            <Button variant="ghost" onClick={handleReset} size="sm" className="h-8 px-4 text-slate-400 hover:text-rose-500 hover:bg-rose-50 text-[10px] font-bold uppercase self-start">
+              <Trash2 className="h-3 w-3 mr-1" /> Limpar Tudo
+            </Button>
+          </div>
+        </div>
+
+        {/* Unit & Period Info */}
+        <div className="flex flex-col gap-1 flex-1 min-w-[200px]">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Documento Identificado</span>
+            {isValidating && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
+          </div>
+          <div className="flex items-center gap-3">
+             <div className="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                <span className="text-xs font-bold text-slate-700">
+                  {analysisResult?.unidade || "Aguardando..."}
+                </span>
+             </div>
+             <div className="bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
+                <span className="text-xs font-bold text-slate-700">
+                  {analysisResult ? `${analysisResult.mes}/${analysisResult.ano}` : "Mês/Ano"}
+                </span>
+             </div>
+          </div>
+        </div>
+
+        {/* Global Actions */}
+        <div className="flex items-center gap-3 ml-auto">
+           {reportRows.length > 0 && (
+             <Button variant="outline" onClick={handlePrint} className="h-10 px-4 border-slate-200 text-slate-600 rounded-xl gap-2 hover:bg-slate-50 transition-all active:scale-95 shadow-sm">
+               <Printer className="h-4 w-4" />
+               <span className="text-xs font-bold uppercase">Imprimir</span>
+             </Button>
+           )}
+        </div>
+      </div>
+
+      {/* Tabela de Dados */}
+      <Card className="border-none shadow-2xl shadow-slate-100 bg-white overflow-hidden print:shadow-none print:border print:border-slate-200">
+        {!analysisReady ? (
+          <div className="p-32 flex flex-col items-center justify-center text-center gap-6 print:hidden">
+            <div className="p-6 bg-slate-50 rounded-full">
+              <ScanSearch className="h-16 w-16 text-slate-300" />
             </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Card className="border-slate-200 bg-white">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-slate-700">Pré-visualização</CardTitle>
-                </CardHeader>
-                <CardContent className="text-xs text-slate-600">
-                  <div className="mb-2 flex items-center gap-2 font-semibold text-slate-800">
-                    <ImageIcon className="h-4 w-4 text-slate-600" />
-                    Arquivo enviado
-                  </div>
-                  {selectedFile ? (
-                    <>
-                      {previewKind === "image" && previewUrl && (
-                        <img src={previewUrl} alt="Pré-visualização do documento" className="max-h-72 w-full rounded-md object-contain" />
-                      )}
-                      {previewKind === "pdf" && previewUrl && (
-                        <iframe src={previewUrl} className="h-72 w-full rounded-md border bg-slate-100" title="Pré-visualização PDF" />
-                      )}
-                      {previewKind === "other" && (
-                        <div className="flex h-72 items-center justify-center rounded-md border border-dashed bg-slate-50 text-center">
-                          <div>
-                            <FileText className="mx-auto mb-2 h-8 w-8 text-slate-400" />
-                            <p className="font-medium text-slate-700">Documento anexado</p>
-                            <p className="mt-1 text-xs text-slate-500">A IA vai processar o conteúdo do arquivo.</p>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="flex h-72 items-center justify-center rounded-md border border-dashed bg-slate-50 text-center">
-                      <div>
-                        <ImageIcon className="mx-auto mb-2 h-8 w-8 text-slate-400" />
-                        <p className="font-medium text-slate-700">Nenhum arquivo selecionado</p>
-                        <p className="mt-1 text-xs text-slate-500">A pré-visualização aparece aqui depois da seleção.</p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <Card className="hidden border-slate-200 bg-white">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-slate-700">Resumo da revisÃ£o</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Linhas internas</span>
-                    <span className="font-semibold text-slate-900">{analysisStats.total}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Preenchidas</span>
-                    <span className="font-semibold text-slate-900">{analysisStats.filled}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Encontradas na foto</span>
-                    <span className="font-semibold text-slate-900">{analysisStats.matched}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-500">Pendentes</span>
-                    <span className="font-semibold text-slate-900">{analysisStats.pending}</span>
-                  </div>
-                  <div className="rounded-lg bg-blue-50 p-3 text-xs text-blue-900 space-y-1">
-                    <div className="font-semibold">
-                      {isValidating
-                        ? "2. Cruzando com os agendamentos internos..."
-                        : analysisResult
-                          ? "Comparação pronta para revisão."
-                          : "1. Aguarde a leitura do documento."}
-                    </div>
-                    <div>
-                      {analysisStats.total === 0
-                        ? "Nenhuma linha interna encontrada para o filtro identificado."
-                        : `${analysisStats.matched} de ${analysisStats.total} linhas já foram associadas pela IA.`}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-slate-200 bg-white">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-semibold text-slate-700">Resultado da IA</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500">Unidade</span>
-                    <span className="font-semibold text-slate-900">{analysisResult?.unidade || "-"}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500">MÃªs/Ano</span>
-                    <span className="font-semibold text-slate-900">
-                      {analysisResult?.mes && analysisResult?.ano ? `${analysisResult.mes} / ${analysisResult.ano}` : "-"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500">Tipo</span>
-                    <span className="font-semibold text-slate-900">{analysisResult?.documentType || "-"}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-slate-500">ConfianÃ§a</span>
-                    <Badge className={analysisResult ? getConfidenceBadge(analysisResult.confidence) : "bg-slate-100 text-slate-600 border-slate-200"}>
-                      {analysisResult?.confidence || "pendente"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    Os dados extraidos da imagem alimentam a lista abaixo automaticamente.
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="max-w-md">
+              <h3 className="text-xl font-bold text-slate-800">Aguardando Parâmetros</h3>
+              <p className="text-slate-500 mt-2">Selecione a Unidade e o Mês nos filtros acima ou faça o upload do documento para carregar a lista de pacientes.</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card className="overflow-hidden border-blue-100 bg-white shadow-sm">
-        <CardHeader className="border-b bg-blue-50/70">
-          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-            <div>
-              <CardTitle className="text-lg text-blue-950">RevisÃ£o das consultas</CardTitle>
-              <CardDescription>
-                A imagem preenche automaticamente as colunas <span className="font-semibold text-slate-700">Realizou</span> e{" "}<span className="font-semibold text-slate-700">Data de atendimento</span>.
-              </CardDescription>
-            </div>
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              Modo somente leitura. A conferÃªncia fica apenas na tela e nÃ£o grava nada no banco.
-            </div>
+        ) : reportRows.length === 0 ? (
+          <div className="p-32 flex flex-col items-center justify-center text-center gap-4 print:hidden">
+            <AlertTriangle className="h-12 w-12 text-amber-500" />
+            <p className="text-xl font-semibold text-slate-700">Nenhum agendamento encontrado para os filtros selecionados.</p>
           </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center p-16 text-center">
-              <Loader2 className="mb-3 h-8 w-8 animate-spin text-blue-600" />
-              <p className="font-medium text-slate-700">Carregando dados do faturamento...</p>
-            </div>
-          ) : !analysisReady ? (
-            <div className="flex flex-col items-center justify-center p-16 text-center">
-              <ScanSearch className="mb-3 h-8 w-8 text-blue-600" />
-              <p className="font-medium text-slate-700">A lista aparece depois que a IA identificar unidade, mÃªs e ano.</p>
-            </div>
-          ) : reportRows.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-16 text-center">
-              <AlertTriangle className="mb-3 h-8 w-8 text-amber-500" />
-              <p className="font-medium text-slate-700">Nenhum agendamento encontrado para o perÃ­odo selecionado.</p>
-            </div>
-          ) : (
-            <>
-            <div className="overflow-x-auto">
-              <Table className="table-fixed text-xs">
-                <TableHeader className="bg-blue-50">
-                  <TableRow className="hover:bg-blue-50">
-                    <TableHead className="w-[12%] font-bold text-blue-900">Data/Hora</TableHead>
-                    <TableHead className="w-[12%] font-bold text-blue-900">Unidade</TableHead>
-                    <TableHead className="w-[20%] font-bold text-blue-900">Paciente</TableHead>
-                    <TableHead className="w-[12%] font-bold text-blue-900">Convênio</TableHead>
-                    <TableHead className="w-[16%] font-bold text-blue-900">Procedimentos</TableHead>
-                    <TableHead className="w-[10%] text-center font-bold text-blue-900">Realizou</TableHead>
-                    <TableHead className="w-[10%] text-center font-bold text-blue-900">Data atendimento</TableHead>
-                    <TableHead className="w-[8%] font-bold text-blue-900">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rowsWithDrafts.map(({ row, draft }) => (
-                    <TableRow key={getRowKey(row)} className="align-top hover:bg-blue-50/30">
-                      <TableCell className="whitespace-normal">
-                        <div className="font-medium text-slate-900">
-                          {new Date(row._date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
-                        </div>
-                        <div className="text-slate-500">{row._time}</div>
-                      </TableCell>
-                      <TableCell className="whitespace-normal">
-                        <div className="font-medium text-blue-800">{row._unitName}</div>
-                        {row._bairro && <div className="mt-1 text-[10px] uppercase tracking-tight text-slate-500">{row._bairro}</div>}
-                      </TableCell>
-                      <TableCell className="whitespace-normal">
-                        <div className="font-medium text-slate-900">{row.nomePaciente || "Não informado"}</div>
-                        {draft.aiPatientName && (
-                          <div className="mt-1 text-[11px] text-slate-500">
-                            Foto: <span className="font-medium text-slate-700">{draft.aiPatientName}</span>
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell className="whitespace-normal text-slate-700">
-                        {row.convenio || "Não informado"}
-                      </TableCell>
-                      <TableCell className="whitespace-normal">
-                        <div className="flex flex-wrap gap-1">
-                          {(row.exames?.length ? row.exames : ["Consulta"]).map((proc, idx) => (
-                            <span key={idx} className="rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-700">
-                              {proc}
-                            </span>
-                          ))}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Select
-                          value={draft.realizou || ""}
-                          onValueChange={(value) => updateDraft(row, "realizou", value)}
-                        >
-                          <SelectTrigger className="mx-auto h-9 w-20 border-slate-200 bg-white text-xs">
-                            <SelectValue placeholder="-" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="S">S</SelectItem>
-                            <SelectItem value="N">N</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Input
-                          type="date"
-                          value={formatInputDate(draft.dataAtendimento)}
-                          onChange={(event) => updateDraft(row, "dataAtendimento", event.target.value)}
-                          className="mx-auto h-9 min-w-0 max-w-[148px] border-slate-200 bg-white text-xs"
+        ) : (
+          <div className="overflow-x-auto print:overflow-visible">
+            <Table className="print:text-[10px]">
+              <TableHeader className="bg-slate-50/80 print:bg-slate-100">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[50px] pl-6 print:hidden">
+                    <RotateCcw className="h-4 w-4 text-slate-300" />
+                  </TableHead>
+                  <TableHead className="w-[150px] font-bold py-5 pl-4 print:pl-4 print:py-2">Data/Hora</TableHead>
+                  <TableHead className="font-bold print:py-2">Paciente</TableHead>
+                  <TableHead className="font-bold print:py-2">Convênio / Procedimento</TableHead>
+                  <TableHead className="text-center font-bold print:py-2">Realizou?</TableHead>
+                  <TableHead className="text-center font-bold print:py-2">Data Atend.</TableHead>
+                  <TableHead className="font-bold pr-8 print:pr-4 print:py-2">Ações / Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {rowsWithDrafts.map(({ row, draft, key }) => {
+                  const isProcessed = processedRows.has(key);
+                  return (
+                    <TableRow key={key} className={`group transition-colors print:hover:bg-transparent ${isProcessed ? 'bg-slate-50/50 opacity-60' : 'hover:bg-blue-50/30'}`}>
+                      <TableCell className="pl-6 print:hidden">
+                        <Checkbox 
+                          checked={isProcessed}
+                          onCheckedChange={() => toggleProcessed(key)}
+                          className="h-5 w-5 border-slate-300 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
                         />
                       </TableCell>
-                      <TableCell className="whitespace-normal">
-                        <div className="flex flex-col gap-2">
-                          <Badge className={draft.matchedFrom ? "border border-blue-200 bg-blue-50 text-blue-800" : "border border-slate-200 bg-slate-100 text-slate-600"}>
-                            {draft.matchedFrom ? "IA" : "Pendente"}
-                          </Badge>
-                          <Badge className={getConfidenceBadge(draft.confidence)}>{draft.confidence || "manual"}</Badge>
-                          <div className="text-[11px] text-slate-500">
-                            {draft.matchedFrom ? `Origem: ${draft.matchedFrom}` : "Sem correspondência"}
-                          </div>
-                          {draft.notes && <div className="text-[11px] text-amber-700">{draft.notes}</div>}
+                      <TableCell className="py-6 pl-4 print:pl-4 print:py-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="font-bold text-slate-700 text-sm print:text-[10px]">
+                            {new Date(row._date).toLocaleDateString("pt-BR", { timeZone: "UTC" })}
+                          </span>
+                          <span className="text-slate-400 text-xs flex items-center gap-1 print:text-[8px]">
+                            <CalendarDays className="h-3 w-3 print:hidden" /> {row._time}
+                          </span>
                         </div>
                       </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            <div className="hidden grid gap-4">
-              {groupedRows.map((group, groupIndex) => (
-                <div key={groupIndex} className="grid gap-4 xl:grid-cols-2">
-                  {group.map(({ row, draft }) => (
-                    <div key={getRowKey(row)} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                            <span>{row.nomePaciente || "NÃ£o informado"}</span>
-                            <Badge className={getConfidenceBadge(draft.confidence)}>{draft.confidence || "manual"}</Badge>
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {new Date(row._date).toLocaleDateString("pt-BR", { timeZone: "UTC" })} Ã s {row._time}
-                          </div>
-                          <div className="text-xs text-blue-700 font-medium">{row._unitName}</div>
-                          {row._bairro && <div className="text-[10px] uppercase tracking-tight text-slate-500">{row._bairro}</div>}
-                        </div>
-                        <div className="text-right text-xs text-slate-500">
-                          {draft.matchedFrom ? `IA: ${draft.matchedFrom}` : "Sem correspondÃªncia da IA"}
-                        </div>
-                      </div>
-
-                      <div className="mt-4 grid gap-3 md:grid-cols-2">
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] uppercase tracking-wider text-slate-500">ConvÃªnio</Label>
-                          <div className="rounded-md border bg-slate-50 px-3 py-2 text-sm text-slate-700">
-                            {row.convenio || "NÃ£o informado"}
-                          </div>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] uppercase tracking-wider text-slate-500">Realizou (S/N)</Label>
-                          <Select
-                            value={draft.realizou || ""}
-                            onValueChange={(value) => updateDraft(row, "realizou", value)}
-                          >
-                            <SelectTrigger className="border-slate-200 bg-white">
-                              <SelectValue placeholder="Selecione" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="S">S</SelectItem>
-                              <SelectItem value="N">N</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] uppercase tracking-wider text-slate-500">Data atendimento</Label>
-                          <Input
-                            type="date"
-                            value={formatInputDate(draft.dataAtendimento)}
-                            onChange={(event) => updateDraft(row, "dataAtendimento", event.target.value)}
-                            className="border-slate-200 bg-white"
-                          />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] uppercase tracking-wider text-slate-500">Procedimentos</Label>
-                          <div className="flex flex-wrap gap-1 rounded-md border bg-slate-50 px-3 py-2">
+                      <TableCell className="print:py-2">
+                        <span className="font-bold text-slate-800 print:text-[10px]">{row.nomePaciente || "Não informado"}</span>
+                      </TableCell>
+                      <TableCell className="print:py-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm font-medium text-slate-600 print:text-[10px]">{row.convenio || "Plano não informado"}</span>
+                          <div className="flex flex-wrap gap-1 print:hidden">
                             {(row.exames?.length ? row.exames : ["Consulta"]).map((proc, idx) => (
-                              <span key={idx} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-700">
-                                {proc}
-                              </span>
+                              <Badge key={idx} variant="secondary" className="bg-slate-100 text-[10px] font-normal text-slate-500 py-0 h-5"> {proc} </Badge>
                             ))}
                           </div>
                         </div>
-                      </div>
-
-                      {draft.notes && (
-                        <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                          {draft.notes}
+                      </TableCell>
+                      <TableCell className="text-center print:py-2">
+                        <div className="flex justify-center print:hidden">
+                          <div className="flex bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200">
+                             <button onClick={() => updateDraft(row, "realizou", "S")} className={`px-4 h-8 rounded-lg text-[10px] font-bold transition-all shadow-sm ${draft.realizou === "S" ? 'bg-emerald-500 text-white scale-105' : 'text-slate-400 hover:text-slate-600 bg-transparent'}`}>SIM</button>
+                             <button onClick={() => updateDraft(row, "realizou", "N")} className={`px-4 h-8 rounded-lg text-[10px] font-bold transition-all shadow-sm ${draft.realizou === "N" ? 'bg-rose-500 text-white scale-105' : 'text-slate-400 hover:text-slate-600 bg-transparent'}`}>NÃO</button>
+                          </div>
                         </div>
-                      )}
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                        {draft.matchedFrom ? (
-                          <Badge className="border border-blue-200 bg-blue-50 text-blue-800">
-                            Preenchido pela IA
-                          </Badge>
-                        ) : (
-                          <Badge className="border border-slate-200 bg-slate-100 text-slate-600">
-                            Pendente de comparaÃ§Ã£o
-                          </Badge>
-                        )}
-                        {draft.aiPatientName && (
-                          <span>
-                            Linha da foto: <span className="font-medium text-slate-700">{draft.aiPatientName}</span>
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-            </>
-          )}
-        </CardContent>
+                        <div className="hidden print:block font-bold"> {draft.realizou === 'S' ? 'SIM' : draft.realizou === 'N' ? 'NÃO' : '-'} </div>
+                      </TableCell>
+                      <TableCell className="print:py-2">
+                        <Input type="date" value={formatInputDate(draft.dataAtendimento)} onChange={(e) => updateDraft(row, "dataAtendimento", e.target.value)} className="mx-auto h-10 w-40 border-slate-200 text-xs rounded-xl focus:ring-blue-500 print:hidden" />
+                        <div className="hidden print:block text-center text-xs"> {draft.dataAtendimento ? new Date(draft.dataAtendimento).toLocaleDateString('pt-BR') : '-'} </div>
+                      </TableCell>
+                      <TableCell className="pr-8 print:pr-4 print:py-2">
+                        <div className="flex flex-col gap-2">
+                          {draft.realizou === "N" && (
+                            <div className="flex items-center gap-2 animate-in slide-in-from-right-2 duration-300">
+                              <Button variant="outline" size="sm" onClick={() => {
+                                  setAppointmentToReschedule({ ...row._raw, id: `${row._unit}-${row._date}-${row._time}`, nomePaciente: row.nomePaciente, nascimento: row._raw.nascimento, dataAgendamento: row._date, horario: row._time, convenio: row.convenio, exames: row.exames || [], unidade: row._unit, telefone: row._raw.telefone, });
+                                  setIsRescheduleFormOpen(true);
+                                }} className="h-8 text-[10px] font-bold border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100 px-2"
+                              > <CalendarRange className="h-3 w-3 mr-1" /> Reagendar </Button>
+                              <Button variant="outline" size="sm" onClick={() => {
+                                  setAppointmentToCancel({ ...row._raw, id: `${row._unit}-${row._date}-${row._time}`, nomePaciente: row.nomePaciente, nascimento: row._raw.nascimento, dataAgendamento: row._date, horario: row._time, convenio: row.convenio, exames: row.exames || [], unidade: row._unit, telefone: row._raw.telefone, });
+                                  setIsConfirmCancelDialogOpen(true);
+                                }} className="h-8 text-[10px] font-bold border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 px-2"
+                              > <XCircle className="h-3 w-3 mr-1" /> Cancelar </Button>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 print:hidden">
+                            {draft.confidence && ( <Badge className={`rounded-full px-3 py-0.5 border text-[10px] font-bold ${getConfidenceBadge(draft.confidence)}`}> {draft.confidence.toUpperCase()} </Badge> )}
+                            {isProcessed && ( <CheckCircle2 className="h-4 w-4 text-emerald-500" /> )}
+                          </div>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
       </Card>
+
+      {/* Diálogos de Ação */}
+      <Dialog open={isConfirmCancelDialogOpen} onOpenChange={(isOpen) => { setIsConfirmCancelDialogOpen(isOpen); if (!isOpen) setCancelReason(""); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Cancelamento</DialogTitle>
+            <DialogDescription> Tem certeza que deseja cancelar o agendamento de <span className="font-bold">{appointmentToCancel?.nomePaciente}</span>? </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <Label className="text-sm">Motivo do Cancelamento</Label>
+            <Select onValueChange={setCancelReason} value={cancelReason}>
+              <SelectTrigger className="rounded-xl border-slate-200"> <SelectValue placeholder="Selecione o motivo" /> </SelectTrigger>
+              <SelectContent className="max-h-60 rounded-xl">
+                <SelectItem value="Não compareceu à consulta">Não compareceu à consulta</SelectItem>
+                <SelectItem value="Consulta reagendada">Consulta reagendada</SelectItem>
+                <SelectItem value="Cancelado pelo paciente">Cancelado pelo paciente</SelectItem>
+                <SelectItem value="Cancelado pela secretária">Cancelado pela secretária</SelectItem>
+                <SelectItem value="Erro do sistema">Erro do sistema</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter className="gap-2">
+            <DialogClose asChild>
+              <Button variant="ghost" className="rounded-xl">Desistir</Button>
+            </DialogClose>
+            <Button variant="destructive" className="rounded-xl px-8" disabled={!cancelReason || !appointmentToCancel} onClick={async () => {
+                if (!appointmentToCancel) return;
+                const loadingToast = toast.loading("Cancelando agendamento...");
+                try {
+                  await cancelAppointment(getFirebasePathBase(), { telefone: appointmentToCancel.telefone, unidade: appointmentToCancel.unidade, data: appointmentToCancel.dataAgendamento, hora: appointmentToCancel.horario, appointmentData: appointmentToCancel, cancelReason, enviarMsgSecretaria: true, }, ENVIRONMENT);
+                  const key = getRowKey({ _unit: appointmentToCancel.unidade, _date: appointmentToCancel.dataAgendamento, _time: appointmentToCancel.horario, nomePaciente: appointmentToCancel.nomePaciente } as any);
+                  toggleProcessed(key);
+                  toast.success("Agendamento cancelado com sucesso!", { id: loadingToast });
+                  setIsConfirmCancelDialogOpen(false);
+                } catch (e) { toast.error("Erro ao cancelar.", { id: loadingToast }); }
+              }}
+            > Confirmar Cancelamento </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRescheduleFormOpen} onOpenChange={setIsRescheduleFormOpen}>
+        <DialogContent className="sm:max-w-[425px] md:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl p-0 border-none shadow-2xl">
+          <div className="p-6 bg-white sticky top-0 z-10 border-b border-slate-100">
+            <DialogTitle className="text-2xl font-bold text-slate-900">Reagendar Paciente</DialogTitle>
+            <DialogDescription> O agendamento atual será cancelado e um novo será criado na data escolhida. </DialogDescription>
+          </div>
+          <div className="p-6">
+            {appointmentToReschedule && (
+              <PatientForm initialData={appointmentToReschedule} onRescheduleComplete={() => {
+                  setIsRescheduleFormOpen(false);
+                  const key = getRowKey({ _unit: appointmentToReschedule.unidade, _date: appointmentToReschedule.dataAgendamento, _time: appointmentToReschedule.horario, nomePaciente: appointmentToReschedule.nomePaciente } as any);
+                  toggleProcessed(key);
+                  toast.success("Paciente reagendado com sucesso!");
+                }} firebaseBase={getFirebasePathBase()}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
 
+// --- Funções Utilitárias ---
+
+function normalizeText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const payload = result.includes(",") ? result.split(",")[1] : result;
+      resolve(payload);
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function formatInputDate(value?: string | null) {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toISOString().slice(0, 10);
+}
+
+function getRowKey(row: AttendanceBillingRow) {
+  return `${row._unit}|${row._date}|${row._time}|${normalizeText(row.nomePaciente || "")}`;
+}
+
+function getConfidenceBadge(confidence?: AttendanceReviewAnalysisResult["confidence"]) {
+  if (confidence === "alta") return "bg-emerald-500/10 text-emerald-600 border-emerald-500/20";
+  if (confidence === "baixa") return "bg-rose-500/10 text-rose-600 border-rose-500/20";
+  return "bg-amber-500/10 text-amber-600 border-amber-500/20";
+}
+
+function matchScore(aiRow: AttendanceReviewRow, reportRow: AttendanceBillingRow) {
+  const aiName = normalizeText(aiRow.patientName || "");
+  const reportName = normalizeText(reportRow.nomePaciente || "");
+  let score = 0;
+
+  if (!aiName || !reportName) return 0;
+  if (aiName === reportName) score += 100;
+  else if (aiName.includes(reportName) || reportName.includes(aiName)) score += 60;
+  else {
+    const aiChunks = aiName.match(/.{1,4}/g) || [];
+    const reportChunks = reportName.match(/.{1,4}/g) || [];
+    const overlap = aiChunks.filter((chunk) => reportChunks.some((r) => r.includes(chunk)));
+    score += overlap.length * 8;
+  }
+
+  if (aiRow.appointmentDate && aiRow.appointmentDate === reportRow._date) score += 20;
+  if (aiRow.appointmentTime && aiRow.appointmentTime === reportRow._time) score += 15;
+  return score;
+}

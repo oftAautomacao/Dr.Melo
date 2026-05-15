@@ -20,8 +20,7 @@ const MESES = [
 
 export default function FaturamentoPage() {
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
-  const [activePatients, setActivePatients] = useState<Record<string, any>>({});
-  const [cancelledPatients, setCancelledPatients] = useState<Record<string, any>>({});
+  const [patientData, setPatientData] = useState<Record<string, Record<string, any>>>({});
   const [unitConfig, setUnitConfig] = useState<Record<string, { bairro?: string; empresa?: string }>>({});
   const [loading, setLoading] = useState(true);
 
@@ -36,13 +35,13 @@ export default function FaturamentoPage() {
   useEffect(() => {
     if (analysisResult) {
       if (analysisResult.unidade) {
-        const key = resolveBillingUnitKey(analysisResult.unidade, activePatients, unitConfig);
+        const key = resolveBillingUnitKey(analysisResult.unidade, patientData, unitConfig);
         if (key) setManualUnit(key);
       }
       if (analysisResult.mes) setManualMonth(analysisResult.mes);
       if (analysisResult.ano) setManualYear(analysisResult.ano);
     }
-  }, [analysisResult, activePatients, unitConfig]);
+  }, [analysisResult, patientData, unitConfig]);
 
   const handleReset = () => {
     setAnalysisResult(null);
@@ -64,15 +63,9 @@ export default function FaturamentoPage() {
     const node = pathBase === 'OFT/45' ? 'medicos' : 'unidades';
 
     const agRef = ref(db, `/${pathBase}/agendamentoWhatsApp/operacional/consultasAgendadas/${node}`);
-    const canRef = ref(db, `/${pathBase}/agendamentoWhatsApp/operacional/consultasCanceladas/${node}`);
-    
     const offAg = onValue(agRef, snap => {
-      setActivePatients(snap.exists() ? (snap.val() as any) : {});
+      setPatientData(snap.exists() ? (snap.val() as any) : {});
       setLoading(false);
-    });
-
-    const offCan = onValue(canRef, snap => {
-      setCancelledPatients(snap.exists() ? (snap.val() as any) : {});
     });
 
     const cfgRef = ref(db, `/${pathBase}/agendamentoWhatsApp/configuracoes/${node}`);
@@ -82,29 +75,9 @@ export default function FaturamentoPage() {
 
     return () => {
       offAg();
-      offCan();
       offCfg();
     };
   }, []);
-
-  const patientData = useMemo(() => {
-    const merged = { ...activePatients };
-    for (const unitKey in cancelledPatients) {
-      if (!merged[unitKey]) {
-        merged[unitKey] = cancelledPatients[unitKey];
-        continue;
-      }
-      const unitData = { ...merged[unitKey] };
-      for (const dateStr in cancelledPatients[unitKey]) {
-        unitData[dateStr] = {
-          ...(unitData[dateStr] || {}),
-          ...cancelledPatients[unitKey][dateStr],
-        };
-      }
-      merged[unitKey] = unitData;
-    }
-    return merged;
-  }, [activePatients, cancelledPatients]);
 
   const reportData = useMemo(() => {
     if (!manualMonth || !manualYear || manualUnit === "all") return [];

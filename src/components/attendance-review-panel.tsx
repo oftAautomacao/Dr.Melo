@@ -96,6 +96,7 @@ export function AttendanceReviewPanel({
   const autoFillKeyRef = useRef<string>("");
 
   const [processedRows, setProcessedRows] = useState<Set<string>>(new Set());
+  const [manuallyCancelledRows, setManuallyCancelledRows] = useState<Record<string, AttendanceBillingRow>>({});
   const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
   const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
   const [appointmentToCancel, setAppointmentToCancel] = useState<any>(null);
@@ -133,8 +134,21 @@ export function AttendanceReviewPanel({
   }, [reportRows]);
 
   const rowsWithDrafts = useMemo(() => {
-    return reportRows.map((row) => {
-      const key = getRowKey(row);
+    // Mapeia linhas atuais vindas das props
+    const currentRows = reportRows.map(row => ({ row, key: getRowKey(row) }));
+    const currentKeys = new Set(currentRows.map(r => r.key));
+
+    // Pega linhas canceladas manualmente que não estão mais nas props (já foram removidas do Firebase)
+    const keptRows = Object.entries(manuallyCancelledRows)
+      .filter(([key]) => !currentKeys.has(key))
+      .map(([key, row]) => ({ row, key }));
+
+    // Combina e ordena
+    const combined = [...currentRows, ...keptRows].sort((a, b) => 
+      a.row._date.localeCompare(b.row._date) || a.row._time.localeCompare(b.row._time)
+    );
+
+    return combined.map(({ row, key }) => {
       return {
         row,
         key,
@@ -144,7 +158,7 @@ export function AttendanceReviewPanel({
         },
       };
     });
-  }, [draftRows, reportRows]);
+  }, [draftRows, reportRows, manuallyCancelledRows]);
 
   const handleFileChange = (file: File | null) => {
     setSelectedFile(file);
@@ -351,6 +365,7 @@ export function AttendanceReviewPanel({
     setAnalysisResult(null);
     setDraftRows({});
     setProcessedRows(new Set());
+    setManuallyCancelledRows({});
     validationKeyRef.current = "";
     autoFillKeyRef.current = "";
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -694,6 +709,22 @@ export function AttendanceReviewPanel({
                 try {
                   await cancelAppointment(getFirebasePathBase(), { telefone: appointmentToCancel.telefone, unidade: appointmentToCancel.unidade, data: appointmentToCancel.dataAgendamento, hora: appointmentToCancel.horario, appointmentData: appointmentToCancel, cancelReason, enviarMsgSecretaria: true, }, ENVIRONMENT);
                   const key = getRowKey({ _unit: appointmentToCancel.unidade, _date: appointmentToCancel.dataAgendamento, _time: appointmentToCancel.horario, nomePaciente: appointmentToCancel.nomePaciente } as any);
+                  
+                  // Salva no estado local para manter em tela mesmo após sumir do Firebase
+                  setManuallyCancelledRows(prev => ({
+                    ...prev,
+                    [key]: {
+                      _unit: appointmentToCancel.unidade,
+                      _date: appointmentToCancel.dataAgendamento,
+                      _time: appointmentToCancel.horario,
+                      _unitName: appointmentToCancel.unidade, // Fallback
+                      nomePaciente: appointmentToCancel.nomePaciente,
+                      convenio: appointmentToCancel.convenio,
+                      exames: appointmentToCancel.exames,
+                      _raw: { ...appointmentToCancel, motivoCancelamento: cancelReason },
+                    } as AttendanceBillingRow
+                  }));
+
                   toggleProcessed(key);
                   toast.success("Agendamento cancelado com sucesso!", { id: loadingToast });
                   setIsConfirmCancelDialogOpen(false);
@@ -715,6 +746,22 @@ export function AttendanceReviewPanel({
               <PatientForm initialData={appointmentToReschedule} onRescheduleComplete={() => {
                   setIsRescheduleFormOpen(false);
                   const key = getRowKey({ _unit: appointmentToReschedule.unidade, _date: appointmentToReschedule.dataAgendamento, _time: appointmentToReschedule.horario, nomePaciente: appointmentToReschedule.nomePaciente } as any);
+                  
+                  // Salva no estado local como "reagendado" (que é um tipo de cancelamento do original)
+                  setManuallyCancelledRows(prev => ({
+                    ...prev,
+                    [key]: {
+                      _unit: appointmentToReschedule.unidade,
+                      _date: appointmentToReschedule.dataAgendamento,
+                      _time: appointmentToReschedule.horario,
+                      _unitName: appointmentToReschedule.unidade,
+                      nomePaciente: appointmentToReschedule.nomePaciente,
+                      convenio: appointmentToReschedule.convenio,
+                      exames: appointmentToReschedule.exames,
+                      _raw: { ...appointmentToReschedule, motivoCancelamento: "Consulta reagendada" },
+                    } as AttendanceBillingRow
+                  }));
+
                   toggleProcessed(key);
                   toast.success("Paciente reagendado com sucesso!");
                 }} firebaseBase={getFirebasePathBase()}

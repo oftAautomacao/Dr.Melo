@@ -69,16 +69,26 @@ export function getBillingAppointmentsForUnitMonth(
     const label = getBillingMonthLabel(dateStr); // Ex: "Abril de 2026"
     if (!label) continue;
     
-    // Extrai partes para comparação mais precisa
     const [monthLabel, yearLabel] = label.split(" de ");
     const [monthSelected, yearSelected] = selectedMonth.split(" de ");
 
     if (yearLabel !== yearSelected) continue;
 
     const normML = normalizeBillingText(monthLabel);
-    const normMS = normalizeBillingText(monthSelected);
+    let rawMS = monthSelected.split("/")[0].split("-")[0].trim(); // Pega apenas a parte do mês se houver 04/2026 ou 04-2026
+    let normMS = normalizeBillingText(rawMS);
 
-    // Se o mês for muito diferente, pula. Aceita "Abr" em "Abril" ou "Abri" em "Abril"
+    // Se o mês selecionado for numérico (ex: "04", "4", "042026"), extrai apenas os dígitos iniciais do mês
+    const numericMatch = normMS.match(/^(\d{1,2})/);
+    if (numericMatch) {
+      const monthIdx = parseInt(numericMatch[1], 10) - 1;
+      if (monthIdx >= 0 && monthIdx < 12) {
+        normMS = normalizeBillingText(BILLING_MONTHS[monthIdx]);
+      }
+    }
+
+    // Se o mês for muito diferente, pula. 
+    // Aceita "Abr" em "Abril", "04" em "Abril" (após conversão), etc.
     if (!normML.includes(normMS) && !normMS.includes(normML)) continue;
 
     const dayAppointments = unitData[dateStr];

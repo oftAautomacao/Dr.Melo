@@ -555,8 +555,18 @@ export function AttendanceReviewPanel({
               <TableBody>
                 {rowsWithDrafts.map(({ row, draft, key }) => {
                   const isProcessed = processedRows.has(key);
+                  const isCancelled = !!row._raw.motivoCancelamento;
+                  const cancelReason = row._raw.motivoCancelamento;
+                  
                   return (
-                    <TableRow key={key} className={`group transition-colors print:hover:bg-transparent ${isProcessed ? 'bg-slate-50/50 opacity-60' : 'hover:bg-blue-50/30'}`}>
+                    <TableRow 
+                      key={key} 
+                      className={`
+                        group transition-colors print:hover:bg-transparent 
+                        ${isProcessed ? 'bg-slate-50/50 opacity-60' : ''} 
+                        ${isCancelled ? 'bg-amber-50/50 hover:bg-amber-100/50' : 'hover:bg-blue-50/30'}
+                      `}
+                    >
                       <TableCell className="pl-6 print:hidden">
                         <Checkbox 
                           checked={isProcessed}
@@ -575,7 +585,23 @@ export function AttendanceReviewPanel({
                         </div>
                       </TableCell>
                       <TableCell className="print:py-2">
-                        <span className="font-bold text-slate-800 print:text-[10px]">{row.nomePaciente || "Não informado"}</span>
+                        <div className="flex flex-col gap-1">
+                          <span className={`font-bold print:text-[10px] ${isCancelled ? 'text-slate-400 line-through decoration-amber-500/50 decoration-2' : 'text-slate-800'}`}>
+                            {row.nomePaciente || "Não informado"}
+                          </span>
+                          {isCancelled && (
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant="outline" className="bg-amber-100 text-[9px] font-black text-amber-700 border-amber-200 py-0 h-4 px-1.5 uppercase tracking-tighter">
+                                {cancelReason === "Consulta reagendada" ? "REAGENDADO" : "CANCELADO"}
+                              </Badge>
+                              {cancelReason && cancelReason !== "Consulta reagendada" && (
+                                <span className="text-[9px] text-amber-600/70 italic font-medium truncate max-w-[150px]">
+                                  {cancelReason}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="print:py-2">
                         <div className="flex flex-col gap-1">
@@ -589,7 +615,7 @@ export function AttendanceReviewPanel({
                       </TableCell>
                       <TableCell className="text-center print:py-2">
                         <div className="flex justify-center print:hidden">
-                          <div className="flex bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200">
+                          <div className={`flex bg-slate-100 p-1 rounded-xl gap-1 border border-slate-200 ${isCancelled ? 'opacity-50 grayscale pointer-events-none' : ''}`}>
                              <button onClick={() => updateDraft(row, "realizou", "S")} className={`px-4 h-8 rounded-lg text-[10px] font-bold transition-all shadow-sm ${draft.realizou === "S" ? 'bg-emerald-500 text-white scale-105' : 'text-slate-400 hover:text-slate-600 bg-transparent'}`}>SIM</button>
                              <button onClick={() => updateDraft(row, "realizou", "N")} className={`px-4 h-8 rounded-lg text-[10px] font-bold transition-all shadow-sm ${draft.realizou === "N" ? 'bg-rose-500 text-white scale-105' : 'text-slate-400 hover:text-slate-600 bg-transparent'}`}>NÃO</button>
                           </div>
@@ -597,12 +623,12 @@ export function AttendanceReviewPanel({
                         <div className="hidden print:block font-bold"> {draft.realizou === 'S' ? 'SIM' : draft.realizou === 'N' ? 'NÃO' : '-'} </div>
                       </TableCell>
                       <TableCell className="print:py-2">
-                        <Input type="date" value={formatInputDate(draft.dataAtendimento)} onChange={(e) => updateDraft(row, "dataAtendimento", e.target.value)} className="mx-auto h-10 w-40 border-slate-200 text-xs rounded-xl focus:ring-blue-500 print:hidden" />
+                        <Input type="date" disabled={isCancelled} value={formatInputDate(draft.dataAtendimento)} onChange={(e) => updateDraft(row, "dataAtendimento", e.target.value)} className={`mx-auto h-10 w-40 border-slate-200 text-xs rounded-xl focus:ring-blue-500 print:hidden ${isCancelled ? 'opacity-50' : ''}`} />
                         <div className="hidden print:block text-center text-xs"> {draft.dataAtendimento ? new Date(draft.dataAtendimento).toLocaleDateString('pt-BR') : '-'} </div>
                       </TableCell>
                       <TableCell className="pr-8 print:pr-4 print:py-2">
                         <div className="flex flex-col gap-2">
-                          {draft.realizou === "N" && (
+                          {draft.realizou === "N" && !isCancelled && (
                             <div className="flex items-center gap-2 animate-in slide-in-from-right-2 duration-300">
                               <Button variant="outline" size="sm" onClick={() => {
                                   setAppointmentToReschedule({ ...row._raw, id: `${row._unit}-${row._date}-${row._time}`, nomePaciente: row.nomePaciente, nascimento: row._raw.nascimento, dataAgendamento: row._date, horario: row._time, convenio: row.convenio, exames: row.exames || [], unidade: row._unit, telefone: row._raw.telefone, });
@@ -614,6 +640,13 @@ export function AttendanceReviewPanel({
                                   setIsConfirmCancelDialogOpen(true);
                                 }} className="h-8 text-[10px] font-bold border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 px-2"
                               > <XCircle className="h-3 w-3 mr-1" /> Cancelar </Button>
+                            </div>
+                          )}
+                          {isCancelled && (
+                            <div className="flex items-center gap-2">
+                               <Badge variant="secondary" className="bg-slate-100 text-slate-500 border-slate-200 text-[10px] py-1 px-3">
+                                  Sem ações pendentes
+                               </Badge>
                             </div>
                           )}
                           <div className="flex items-center gap-2 print:hidden">

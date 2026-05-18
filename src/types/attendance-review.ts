@@ -33,5 +33,6 @@ export interface AttendanceBillingRow {
   exames?: string[];
   realizouConsulta?: "S" | "N";
   dataAtendimento?: string;
+  confirmado?: boolean;
   _raw: Record<string, any>;
 }

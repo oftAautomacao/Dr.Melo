@@ -561,6 +561,7 @@ export function AttendanceReviewPanel({
                   </TableHead>
                   <TableHead className="w-[150px] font-bold py-5 pl-4 print:pl-4 print:py-2">Data/Hora</TableHead>
                   <TableHead className="font-bold print:py-2">Paciente</TableHead>
+                  <TableHead className="font-bold print:py-2">Confirmou?</TableHead>
                   <TableHead className="font-bold print:py-2">Convênio / Procedimento</TableHead>
                   <TableHead className="text-center font-bold print:py-2">Realizou?</TableHead>
                   <TableHead className="text-center font-bold print:py-2">Data Atend.</TableHead>
@@ -617,6 +618,13 @@ export function AttendanceReviewPanel({
                             </div>
                           )}
                         </div>
+                      </TableCell>
+                      <TableCell className="print:py-2">
+                        {row.confirmado ? (
+                          <Badge className="bg-emerald-500 text-white border-none text-[10px] px-2 py-0 h-5">SIM</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-slate-400 border-slate-200 text-[10px] px-2 py-0 h-5">NÃO</Badge>
+                        )}
                       </TableCell>
                       <TableCell className="print:py-2">
                         <div className="flex flex-col gap-1">

@@ -103,6 +103,7 @@ export function getBillingAppointmentsForUnitMonth(
         _bairro: unitConfig[unitKey]?.bairro || "",
         realizouConsulta: appointmentData.realizouConsulta ?? appointmentData.realizou ?? "",
         dataAtendimento: appointmentData.dataAtendimento ?? "",
+        confirmado: !!appointmentData.confirmado,
         _raw: appointmentData,
       });
     }

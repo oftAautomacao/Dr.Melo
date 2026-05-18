@@ -513,7 +513,7 @@ export default function Home() {
 
           return {
             id: unit,
-            title: unitConfig?.[unit]?.empresa ?? unit,
+            title: unit.charAt(0).toUpperCase() + unit.slice(1),
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
@@ -558,7 +558,7 @@ export default function Home() {
 
           return {
             id: unit,
-            title: unitConfig?.[unit]?.empresa ?? unit,
+            title: unit.charAt(0).toUpperCase() + unit.slice(1),
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
@@ -604,7 +604,7 @@ export default function Home() {
 
           return {
             id: unit,
-            title: unitConfig?.[unit]?.empresa ?? unit,
+            title: unit.charAt(0).toUpperCase() + unit.slice(1),
             subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
@@ -634,7 +634,7 @@ export default function Home() {
 
       return entries.map(unit => ({
         id: unit,
-        title: unitConfig?.[unit]?.empresa ?? unit,
+        title: unit.charAt(0).toUpperCase() + unit.slice(1),
         subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
         count: counts[unit].count,
         value: counts[unit].value,
@@ -673,7 +673,7 @@ export default function Home() {
               .sort((a, b) => b[1].count - a[1].count)
               .slice(0, 3)
               .map(([name, data]) => ({
-                name: unitConfig?.[name]?.empresa ?? name,
+                name: name.charAt(0).toUpperCase() + name.slice(1),
                 count: data.count,
                 value: data.value
               }));

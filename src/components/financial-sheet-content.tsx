@@ -148,7 +148,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
 
     setIsReportTypeDialogOpen(false);
 
-    const unitName = unitConfig?.[unit]?.empresa ?? unit;
+    const unitName = unit.charAt(0).toUpperCase() + unit.slice(1);
     const bairro = unitConfig?.[unit]?.bairro;
     const locationString = bairro ? `${unitName} - ${bairro}` : unitName;
 

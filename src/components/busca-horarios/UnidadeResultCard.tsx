@@ -29,16 +29,19 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
   return (
     <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden hover:border-blue-300 transition-all group">
       {/* Header Bar */}
-      <div className="bg-gray-50 px-5 py-3 border-b border-gray-100 flex items-center justify-between group-hover:bg-blue-50/30 transition-colors">
-        <div className="flex items-center gap-4">
-          <h3 className="text-base font-black text-gray-800 uppercase tracking-tight">{result.empresa}</h3>
-          <span className="text-[10px] font-black bg-blue-100 text-blue-700 px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-5 py-4 border-b border-blue-100 flex items-center justify-between relative overflow-hidden transition-all">
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-10 pointer-events-none transform translate-x-4">
+          <MapPin className="w-28 h-28 text-indigo-650" />
+        </div>
+        <div className="flex items-center gap-4 relative z-10">
+          <h3 className="text-base font-black text-slate-800 uppercase tracking-tight">{result.empresa}</h3>
+          <span className="text-[10px] font-black bg-blue-200/50 text-indigo-700 px-3 py-1 rounded-full uppercase tracking-wider shadow-sm border border-blue-250/20">
             {result.bairro}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-gray-200 shadow-sm">
-          <span className="text-sm font-black text-blue-600">{totalSlots}</span>
-          <span className="text-[9px] font-black text-gray-400 uppercase tracking-tight">Vagas</span>
+        <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-blue-100 shadow-sm relative z-10">
+          <span className="text-sm font-black text-indigo-600">{totalSlots}</span>
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-tight">Vagas</span>
         </div>
       </div>
 

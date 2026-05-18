@@ -12,6 +12,7 @@ import { AttendanceReviewPanel } from "@/components/attendance-review-panel";
 import type { AttendanceBillingRow, AttendanceReviewAnalysisResult } from "@/types/attendance-review";
 import { getBillingAppointmentsForUnitMonth, resolveBillingUnitKey } from "@/lib/attendance-report";
 import { Badge } from "@/components/ui/badge";
+import { sweepAllHistoricOriginsAction } from "@/app/actions";
 
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -78,6 +79,16 @@ export default function FaturamentoPage() {
       offCfg();
     };
   }, []);
+
+  // Sincroniza as origens silenciosamente em background/bastidores ao carregar a página
+  useEffect(() => {
+    if (!loading && Object.keys(patientData).length > 0) {
+      const pathBase = getFirebasePathBase();
+      sweepAllHistoricOriginsAction(pathBase, ENVIRONMENT).catch(err => {
+        console.error("Silent background sweep error:", err);
+      });
+    }
+  }, [loading, patientData]);
 
   const reportData = useMemo(() => {
     if (!manualMonth || !manualYear || manualUnit === "all") return [];

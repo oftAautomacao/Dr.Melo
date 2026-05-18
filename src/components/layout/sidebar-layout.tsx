@@ -2,7 +2,7 @@ import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
-import { Home, CalendarDays, PlusCircle, CalendarX, Search, DollarSign } from "lucide-react"; // Importando ícones
+import { Home, CalendarDays, PlusCircle, CalendarX, Search, DollarSign, RotateCcw } from "lucide-react"; // Importando ícones
 import { MessageSquareText, Settings, BarChart, Download } from "lucide-react"; // Importando ícone de mensagem, configurações e download
 import WhatsAppIcon from '@/components/ui/whatsapp-icon';
 interface SidebarLayoutProps {

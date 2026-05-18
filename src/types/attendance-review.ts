@@ -34,5 +34,6 @@ export interface AttendanceBillingRow {
   realizouConsulta?: "S" | "N";
   dataAtendimento?: string;
   confirmado?: boolean;
+  origem?: string;
   _raw: Record<string, any>;
 }

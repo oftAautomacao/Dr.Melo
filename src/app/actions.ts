@@ -3,7 +3,8 @@
 import { whatsappService } from "@/lib/whatsapp-service";
 import { revalidatePath } from "next/cache";
 import { ref, update, get } from "firebase/database";
-import { getDatabaseInstance } from "@/lib/firebase";
+import { getDatabaseInstance, getFirestoreInstance } from "@/lib/firebase";
+import { collection, getDocs, doc, getDoc } from "firebase/firestore";
 import type {
   PatientFormData,
   AICategorization,
@@ -120,6 +121,46 @@ export async function checkAppointmentAvailabilityAction(
   }
 }
 
+/**
+ * Identifica a origem do paciente (Marketing Source) com base no histórico da conversa no Firestore.
+ */
+function getPatientOriginFromHistory(history: { role: string; content: any }[]): "facebook/instagram" | "site" | "desconhecida" {
+  if (!history || history.length === 0) return "desconhecida";
+
+  // Encontra a primeira mensagem enviada pelo usuário (paciente)
+  const firstUserMessage = history.find(m => m.role === "user");
+  if (!firstUserMessage || !firstUserMessage.content) return "desconhecida";
+
+  let text = "";
+  if (typeof firstUserMessage.content === "string") {
+    text = firstUserMessage.content;
+  } else if (Array.isArray(firstUserMessage.content)) {
+    text = firstUserMessage.content.map((part: any) => {
+      if (typeof part === "string") return part;
+      if (part.type === "text") return part.text;
+      return "";
+    }).join(" ");
+  } else if (typeof firstUserMessage.content === "object" && firstUserMessage.content !== null) {
+    text = (firstUserMessage.content as any).text || JSON.stringify(firstUserMessage.content);
+  }
+
+  const cleanText = text.trim();
+  const firstLine = cleanText.split("\n")[0].trim();
+
+  if (firstLine.includes("Olá! tenho interesse e queria mais informações, por favor.")) {
+    return "facebook/instagram";
+  }
+
+  const normalized = firstLine.toLowerCase();
+  if (normalized.includes("olá drm. melo! te conectei através do site!") || 
+      normalized.includes("te conectei através do site") || 
+      normalized.includes("te conectei atraves do site")) {
+    return "site";
+  }
+
+  return "desconhecida";
+}
+
 /* =============================================================
    SAVE: grava em consultasAgendadas (por setor e por telefone)
    ============================================================= */
@@ -151,6 +192,34 @@ export async function saveAppointmentAction(
     // Determinar o valor correto para o campo 'unidade' nos dados a serem salvos
     const unidadeParaCampo = firebaseBase === 'OFT/45' ? "OftalmoDayTijuca" : v.local;
 
+    // Busca a origem do paciente a partir do histórico de conversa no Firestore
+    let patientOrigin: "facebook/instagram" | "site" | "desconhecida" = "desconhecida";
+    try {
+      const historyKey = isDRMBase(firebaseBase) ? "historicoDaConversa" : "oft45HistoricoDaConversa";
+      const cleanPhoneForOrigin = v.telefone.replace(/\D/g, "");
+      const originDocRef = doc(getFirestoreInstance(environment), historyKey, cleanPhoneForOrigin);
+      const originSnap = await getDoc(originDocRef);
+      if (originSnap.exists()) {
+        const originData = originSnap.data();
+        let history: any[] = [];
+        if (originData) {
+          if (Array.isArray(originData.glbHistoricoDaConversa)) {
+            history = originData.glbHistoricoDaConversa;
+          } else {
+            for (const key in originData) {
+              if (Array.isArray(originData[key])) {
+                history = originData[key];
+                break;
+              }
+            }
+          }
+        }
+        patientOrigin = getPatientOriginFromHistory(history);
+      }
+    } catch (e) {
+      console.warn("SAVE_ACTION: Erro ao buscar histórico para obter origem:", e);
+    }
+
     // Monta o registro no formato usado
     const appointmentRecord: Partial<AppointmentFirebaseRecord & { medico?: string }> = {
       nomePaciente: v.nomePaciente,
@@ -163,6 +232,7 @@ export async function saveAppointmentAction(
       motivacao: v.motivacao,
       unidade: unidadeParaCampo,
       telefone: v.telefone,
+      origem: patientOrigin,
       ...(firebaseBase === 'OFT/45' ? { medico: v.local } : {}),
       ...(aiCategorizationResult && aiCategorizationResult.category && !["unknown", "desconhecido", "n/a"].includes(aiCategorizationResult.category.toLowerCase().trim())
         ? { aiCategorization: aiCategorizationResult }
@@ -585,6 +655,166 @@ export async function restoreAppointment(
     console.error("Error restoring appointment:", error);
     const msg = error instanceof Error ? error.message : "Erro desconhecido";
     return { success: false, message: `Erro ao restaurar agendamento: ${msg}` };
+  }
+}
+
+/**
+ * Varre os agendamentos ativos de uma base no Realtime Database, 
+ * busca seus históricos de conversa no Firestore e salva a origem (facebook/instagram, site ou desconhecida) 
+ * de volta nos agendamentos da base correspondente.
+ */
+export async function sweepAllHistoricOriginsAction(
+  firebaseBase: string,
+  environment: "teste" | "producao",
+  targetUnit?: string
+): Promise<{ 
+  success: boolean; 
+  message: string; 
+  updatedCount: number;
+  breakdown?: { facebook: number; site: number; desconhecida: number }
+}> {
+  try {
+    const dbInstance = getDatabaseInstance(environment);
+    const firestoreInstance = getFirestoreInstance(environment);
+
+    // 1. Carregar primeiro os agendamentos ativos do RTDB para verificar se realmente precisamos varrer
+    const idxNode = getIdxNode(firebaseBase);
+    const path = `/${firebaseBase}/agendamentoWhatsApp/operacional/consultasAgendadas`;
+    const snap = await get(ref(dbInstance, path));
+
+    if (!snap.exists()) {
+      return { success: true, message: "Nenhum agendamento encontrado para varrer.", updatedCount: 0, breakdown: { facebook: 0, site: 0, desconhecida: 0 } };
+    }
+
+    const val = snap.val();
+
+    // 2. Verificar de forma ultra rápida em memória se existe pelo menos um agendamento sem a propriedade 'origem'
+    let hasMissingOrigin = false;
+    const checkMissing = (obj: any) => {
+      if (hasMissingOrigin) return;
+      if (!obj || typeof obj !== "object") return;
+      if (obj.nomePaciente !== undefined && obj.telefone !== undefined) {
+        if (targetUnit) {
+          const unitMatch = obj.unidade && String(obj.unidade).toLowerCase() === targetUnit.toLowerCase();
+          const medicoMatch = obj.medico && String(obj.medico).toLowerCase() === targetUnit.toLowerCase();
+          if (!unitMatch && !medicoMatch) return;
+        }
+        if (obj.origem === undefined) {
+          hasMissingOrigin = true;
+        }
+        return;
+      }
+      for (const key in obj) {
+        checkMissing(obj[key]);
+      }
+    };
+    checkMissing(val);
+
+    // Se todos os agendamentos ativos já possuem 'origem', retornamos imediatamente.
+    // Isso evita completamente consultas desnecessárias ao Firestore nas cargas subsequentes!
+    if (!hasMissingOrigin) {
+      return {
+        success: true,
+        message: "Todas as consultas já possuem origem identificada. Ignorando chamada ao Firestore.",
+        updatedCount: 0,
+        breakdown: { facebook: 0, site: 0, desconhecida: 0 }
+      };
+    }
+
+    // 3. Apenas se houver dados sem origem, carregamos os históricos de conversa do Firestore
+    const historyKey = isDRMBase(firebaseBase) ? "historicoDaConversa" : "oft45HistoricoDaConversa";
+    const historyCol = collection(firestoreInstance, historyKey);
+    const historySnaps = await getDocs(historyCol);
+
+    const phoneOriginMap: Record<string, "facebook/instagram" | "site" | "desconhecida"> = {};
+
+    historySnaps.forEach((docSnap) => {
+      const phone = docSnap.id;
+      const data = docSnap.data();
+      let history: any[] = [];
+      if (data) {
+        if (Array.isArray(data.glbHistoricoDaConversa)) {
+          history = data.glbHistoricoDaConversa;
+        } else {
+          for (const key in data) {
+            if (Array.isArray(data[key])) {
+              history = data[key];
+              break;
+            }
+          }
+        }
+      }
+      phoneOriginMap[phone] = getPatientOriginFromHistory(history);
+    });
+
+    const updates: Record<string, any> = {};
+    let updatedCount = 0;
+    let facebookAdded = 0;
+    let siteAdded = 0;
+    let desconhecidaAdded = 0;
+
+    // Função recursiva para varrer o RTDB e aplicar origem nos nós que contêm nomePaciente
+    const scanNode = (obj: any, currentPath: string) => {
+      if (!obj || typeof obj !== "object") return;
+
+      if (obj.nomePaciente !== undefined && obj.telefone !== undefined) {
+        // Se targetUnit estiver especificado, filtramos por ele
+        if (targetUnit) {
+          const unitMatch = obj.unidade && String(obj.unidade).toLowerCase() === targetUnit.toLowerCase();
+          const medicoMatch = obj.medico && String(obj.medico).toLowerCase() === targetUnit.toLowerCase();
+          if (!unitMatch && !medicoMatch) {
+            return;
+          }
+        }
+
+        const phoneClean = String(obj.telefone).replace(/\D/g, "");
+        const origin = phoneOriginMap[phoneClean] || "desconhecida";
+        
+        // Se a origem atual for diferente da encontrada, adicionamos na lista de atualizações
+        if (obj.origem !== origin) {
+          updates[`${currentPath}/origem`] = origin;
+          updatedCount++;
+
+          if (origin === "facebook/instagram") {
+            facebookAdded++;
+          } else if (origin === "site") {
+            siteAdded++;
+          } else {
+            desconhecidaAdded++;
+          }
+        }
+        return;
+      }
+
+      for (const key in obj) {
+        scanNode(obj[key], `${currentPath}/${key}`);
+      }
+    };
+
+    scanNode(val, path);
+
+    // 3. Executar o batch update se houver alterações
+    if (Object.keys(updates).length > 0) {
+      await update(ref(dbInstance), updates);
+    }
+
+    return {
+      success: true,
+      message: `${updatedCount} agendamento(s) atualizados com sucesso!`,
+      updatedCount,
+      breakdown: {
+        facebook: facebookAdded,
+        site: siteAdded,
+        desconhecida: desconhecidaAdded
+      }
+    };
+  } catch (err: any) {
+    console.error("SWEEP_ACTION ERROR:", err);
+    return {
+      success: false,
+      message: "Falha na varredura: " + (err.message || String(err)),
+      updatedCount: 0,
+    };
   }
 }
 

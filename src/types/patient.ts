@@ -84,6 +84,7 @@ export interface AppointmentFirebaseRecord {
   enviarMsgSecretaria?: boolean;
   realizouConsulta?: "S" | "N";
   dataAtendimento?: string;
+  origem?: "facebook/instagram" | "site" | "desconhecida";
   conferenciaFaturamento?: {
     origem?: "manual" | "ia";
     atualizadoEm?: string;

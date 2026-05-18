@@ -525,12 +525,12 @@ export function AttendanceReviewPanel({
 
         {/* Global Actions */}
         <div className="flex items-center gap-3 ml-auto">
-           {reportRows.length > 0 && (
-             <Button variant="outline" onClick={handlePrint} className="h-10 px-4 border-slate-200 text-slate-600 rounded-xl gap-2 hover:bg-slate-50 transition-all active:scale-95 shadow-sm">
-               <Printer className="h-4 w-4" />
-               <span className="text-xs font-bold uppercase">Imprimir</span>
-             </Button>
-           )}
+            {reportRows.length > 0 && (
+              <Button variant="outline" onClick={handlePrint} className="h-10 px-4 border-slate-200 text-slate-600 rounded-xl gap-2 hover:bg-slate-50 transition-all active:scale-95 shadow-sm">
+                <Printer className="h-4 w-4" />
+                <span className="text-xs font-bold uppercase">Imprimir</span>
+              </Button>
+            )}
         </div>
       </div>
 

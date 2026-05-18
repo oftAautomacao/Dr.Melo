@@ -104,6 +104,7 @@ export function getBillingAppointmentsForUnitMonth(
         realizouConsulta: appointmentData.realizouConsulta ?? appointmentData.realizou ?? "",
         dataAtendimento: appointmentData.dataAtendimento ?? "",
         confirmado: !!appointmentData.confirmado,
+        origem: appointmentData.origem ?? "desconhecida",
         _raw: appointmentData,
       });
     }

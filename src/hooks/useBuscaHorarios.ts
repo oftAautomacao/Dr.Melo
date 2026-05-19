@@ -490,7 +490,11 @@ export function useBuscaHorarios() {
   const gerarResposta = useCallback((resultados: UnitResult[]): string => {
     if (!resultados || resultados.length === 0) return '';
     return resultados.map(unit => {
-      const header = unit.bairro ? `*${unit.empresa} - ${unit.bairro}*` : `*${unit.empresa}*`;
+      const companyName =
+        unit.empresa.trim().toLowerCase() === "oftalmo" && unit.bairro.trim().toLowerCase() === "recreio"
+          ? "Oftalmorecreio"
+          : unit.empresa;
+      const header = unit.bairro ? `*${companyName} - ${unit.bairro}*` : `*${companyName}*`;
       const lines = [header];
       unit.horariosDisponiveis.forEach(day => {
         lines.push(`- ${day.dateLabel}: ${day.slots.join(', ')}`);

@@ -16,6 +16,13 @@ const friendlyName = (name: string) => {
     .trim();
 };
 
+const formatCompanyName = (empresa: string, bairro: string) => {
+  if (empresa.trim().toLowerCase() === "oftalmo" && bairro.trim().toLowerCase() === "recreio") {
+    return "Oftalmorecreio";
+  }
+  return empresa;
+};
+
 export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardProps) {
   const [copied, setCopied] = useState<'tel' | 'addr' | 'zap' | null>(null);
   const totalSlots = result.horariosDisponiveis.reduce((sum, d) => sum + d.slots.length, 0);
@@ -34,7 +41,7 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
           <MapPin className="w-28 h-28 text-indigo-650" />
         </div>
         <div className="flex items-center gap-4 relative z-10">
-          <h3 className="text-base font-black text-slate-800 uppercase tracking-tight">{result.empresa}</h3>
+          <h3 className="text-base font-black text-slate-800 uppercase tracking-tight">{formatCompanyName(result.empresa, result.bairro)}</h3>
           <span className="text-[10px] font-black bg-blue-200/50 text-indigo-700 px-3 py-1 rounded-full uppercase tracking-wider shadow-sm border border-blue-250/20">
             {result.bairro}
           </span>

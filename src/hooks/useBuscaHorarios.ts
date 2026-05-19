@@ -490,7 +490,8 @@ export function useBuscaHorarios() {
   const gerarResposta = useCallback((resultados: UnitResult[]): string => {
     if (!resultados || resultados.length === 0) return '';
     return resultados.map(unit => {
-      const lines = [`*${unit.empresa}*`];
+      const header = unit.bairro ? `*${unit.empresa} - ${unit.bairro}*` : `*${unit.empresa}*`;
+      const lines = [header];
       unit.horariosDisponiveis.forEach(day => {
         lines.push(`- ${day.dateLabel}: ${day.slots.join(', ')}`);
       });

@@ -32,7 +32,14 @@ import {
   XCircle,
   CheckCircle2,
   CalendarRange,
-  RotateCcw
+  RotateCcw,
+  Eye,
+  Copy,
+  Check,
+  Phone,
+  User,
+  Calendar,
+  MapPin
 } from "lucide-react";
 import {
   Dialog,
@@ -43,6 +50,13 @@ import {
   DialogDescription,
   DialogClose,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -102,6 +116,15 @@ export function AttendanceReviewPanel({
   const [appointmentToCancel, setAppointmentToCancel] = useState<any>(null);
   const [appointmentToReschedule, setAppointmentToReschedule] = useState<any>(null);
   const [cancelReason, setCancelReason] = useState("");
+  const [viewingPatient, setViewingPatient] = useState<any>(null);
+  const [copiedPhone, setCopiedPhone] = useState(false);
+
+  const handleCopyPhone = (phone: string) => {
+    if (!phone) return;
+    navigator.clipboard.writeText(phone);
+    setCopiedPhone(true);
+    setTimeout(() => setCopiedPhone(false), 2000);
+  };
 
   const toggleProcessed = (key: string) => {
     setProcessedRows(prev => {
@@ -602,9 +625,18 @@ export function AttendanceReviewPanel({
                       </TableCell>
                       <TableCell className="print:py-2">
                         <div className="flex flex-col gap-1">
-                          <span className={`font-bold print:text-[10px] ${isCancelled ? 'text-slate-400 line-through decoration-amber-500/50 decoration-2' : 'text-slate-800'}`}>
-                            {row.nomePaciente || "Não informado"}
-                          </span>
+                          <div className="flex items-center gap-2 group/name">
+                            <span className={`font-bold print:text-[10px] ${isCancelled ? 'text-slate-400 line-through decoration-amber-500/50 decoration-2' : 'text-slate-800'}`}>
+                              {row.nomePaciente || "Não informado"}
+                            </span>
+                            <button 
+                              onClick={() => setViewingPatient(row)}
+                              className="text-slate-400 hover:text-blue-600 transition-colors opacity-0 group-hover/name:opacity-100 p-1 rounded-md hover:bg-blue-50 print:hidden"
+                              title="Ver dados do paciente"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          </div>
                           {isCancelled && (
                             <div className="flex items-center gap-1.5">
                               <Badge variant="outline" className="bg-amber-100 text-[9px] font-black text-amber-700 border-amber-200 py-0 h-4 px-1.5 uppercase tracking-tighter">
@@ -660,6 +692,7 @@ export function AttendanceReviewPanel({
                               > <CalendarRange className="h-3 w-3 mr-1" /> Reagendar </Button>
                               <Button variant="outline" size="sm" onClick={() => {
                                   setAppointmentToCancel({ ...row._raw, id: `${row._unit}-${row._date}-${row._time}`, nomePaciente: row.nomePaciente, nascimento: row._raw.nascimento, dataAgendamento: row._date, horario: row._time, convenio: row.convenio, exames: row.exames || [], unidade: row._unit, telefone: row._raw.telefone, });
+                                  setCancelReason("Não compareceu à consulta");
                                   setIsConfirmCancelDialogOpen(true);
                                 }} className="h-8 text-[10px] font-bold border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 px-2"
                               > <XCircle className="h-3 w-3 mr-1" /> Cancelar </Button>
@@ -778,6 +811,80 @@ export function AttendanceReviewPanel({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Sheet para Detalhes do Paciente */}
+      <Sheet open={!!viewingPatient} onOpenChange={(open) => !open && setViewingPatient(null)}>
+        <SheetContent side="right" className="sm:max-w-md bg-slate-50 border-l border-slate-200">
+          <SheetHeader className="pb-6 border-b border-slate-200">
+            <SheetTitle className="flex items-center gap-2">
+              <User className="h-5 w-5 text-blue-600" />
+              Detalhes do Paciente
+            </SheetTitle>
+            <SheetDescription>
+              Visualize os dados de agendamento e contato.
+            </SheetDescription>
+          </SheetHeader>
+          {viewingPatient && (
+            <div className="py-6 space-y-6">
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Nome Completo</h4>
+                  <p className="font-bold text-slate-800 text-base">{viewingPatient.nomePaciente}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Calendar className="h-3 w-3" /> Data</h4>
+                    <p className="font-semibold text-slate-700">{viewingPatient._date.split("-").reverse().join("/")}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Horário</h4>
+                    <p className="font-semibold text-slate-700">{viewingPatient._time}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Phone className="h-3 w-3" /> Telefone</h4>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
+                      {viewingPatient._raw.telefone || "Não informado"}
+                    </span>
+                    {viewingPatient._raw.telefone && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 rounded-md border-blue-200 hover:bg-blue-50 text-blue-600 shadow-sm"
+                        onClick={() => handleCopyPhone(viewingPatient._raw.telefone)}
+                        title="Copiar número"
+                      >
+                        {copiedPhone ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><MapPin className="h-3 w-3" /> Unidade</h4>
+                  <p className="font-semibold text-slate-700">{viewingPatient._unitName || viewingPatient._unit}</p>
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Activity className="h-3 w-3" /> Convênio / Exames</h4>
+                  <p className="font-semibold text-slate-700 mb-2">{viewingPatient.convenio || "Plano não informado"}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {(viewingPatient.exames?.length ? viewingPatient.exames : ["Consulta"]).map((proc: string, idx: number) => (
+                      <Badge key={idx} variant="secondary" className="bg-slate-100 text-[10px] font-normal text-slate-500">
+                        {proc}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -121,41 +121,64 @@ export async function checkAppointmentAvailabilityAction(
   }
 }
 
+function phoneVariants(raw: string): string[] {
+  const clean = raw.replace(/\D/g, "");
+  const variants = new Set<string>([clean]);
+
+  if (clean.startsWith("55") && clean.length >= 12) variants.add(clean.slice(2));
+  if (!clean.startsWith("55") && clean.length >= 10) variants.add("55" + clean);
+
+  if (clean.length === 13 && clean.startsWith("55")) {
+    const ddd = clean.slice(2, 4), sem9 = clean.slice(5);
+    variants.add(ddd + sem9); variants.add("55" + ddd + sem9);
+  }
+  if (clean.length === 11 && !clean.startsWith("55")) {
+    const ddd = clean.slice(0, 2), sem9 = clean.slice(3);
+    variants.add(ddd + sem9); variants.add("55" + ddd + sem9); variants.add("55" + clean);
+  }
+  if (clean.length === 10 && !clean.startsWith("55")) {
+    const ddd = clean.slice(0, 2), num = clean.slice(2);
+    variants.add(ddd + "9" + num); variants.add("55" + ddd + "9" + num); variants.add("55" + clean);
+  }
+  return Array.from(variants);
+}
+
 /**
  * Identifica a origem do paciente (Marketing Source) com base no histórico da conversa no Firestore.
  */
 function getPatientOriginFromHistory(history: { role: string; content: any }[]): "facebook/instagram" | "site" | "desconhecida" {
-  if (!history || history.length === 0) return "desconhecida";
+  if (!history || !Array.isArray(history) || history.length === 0) return "desconhecida";
 
-  // Encontra a primeira mensagem enviada pelo usuário (paciente)
-  const firstUserMessage = history.find(m => m.role === "user");
-  if (!firstUserMessage || !firstUserMessage.content) return "desconhecida";
+  for (const msg of history) {
+    if (!msg || !msg.content) continue;
 
-  let text = "";
-  if (typeof firstUserMessage.content === "string") {
-    text = firstUserMessage.content;
-  } else if (Array.isArray(firstUserMessage.content)) {
-    text = firstUserMessage.content.map((part: any) => {
-      if (typeof part === "string") return part;
-      if (part.type === "text") return part.text;
-      return "";
-    }).join(" ");
-  } else if (typeof firstUserMessage.content === "object" && firstUserMessage.content !== null) {
-    text = (firstUserMessage.content as any).text || JSON.stringify(firstUserMessage.content);
-  }
+    let text = "";
+    if (typeof msg.content === "string") {
+      text = msg.content;
+    } else if (Array.isArray(msg.content)) {
+      text = msg.content.map((part: any) => {
+        if (typeof part === "string") return part;
+        if (part.type === "text") return part.text;
+        return "";
+      }).join(" ");
+    } else if (typeof msg.content === "object" && msg.content !== null) {
+      text = (msg.content as any).text || JSON.stringify(msg.content);
+    }
 
-  const cleanText = text.trim();
-  const firstLine = cleanText.split("\n")[0].trim();
+    const n = text.toLowerCase();
 
-  if (firstLine.includes("Olá! tenho interesse e queria mais informações, por favor.")) {
-    return "facebook/instagram";
-  }
+    if (n.includes("tenho interesse e queria mais informações") ||
+        n.includes("tenho interesse e queria mais informacoes") ||
+        n.includes("interesse e queria mais informações")) {
+      return "facebook/instagram";
+    }
 
-  const normalized = firstLine.toLowerCase();
-  if (normalized.includes("olá drm. melo! te conectei através do site!") || 
-      normalized.includes("te conectei através do site") || 
-      normalized.includes("te conectei atraves do site")) {
-    return "site";
+    if (n.includes("através do site") ||
+        n.includes("atraves do site") ||
+        n.includes("te contactei") ||
+        n.includes("te conectei")) {
+      return "site";
+    }
   }
 
   return "desconhecida";
@@ -196,11 +219,24 @@ export async function saveAppointmentAction(
     let patientOrigin: "facebook/instagram" | "site" | "desconhecida" = "desconhecida";
     try {
       const historyKey = isDRMBase(firebaseBase) ? "historicoDaConversa" : "oft45HistoricoDaConversa";
-      const cleanPhoneForOrigin = v.telefone.replace(/\D/g, "");
-      const originDocRef = doc(getFirestoreInstance(environment), historyKey, cleanPhoneForOrigin);
-      const originSnap = await getDoc(originDocRef);
-      if (originSnap.exists()) {
-        const originData = originSnap.data();
+      const rawPhone = v.telefone.replace(/\D/g, "");
+      const fs = getFirestoreInstance(environment);
+
+      // Obter variantes do telefone para buscar no Firestore
+      const variants = phoneVariants(rawPhone);
+      let foundSnap = null;
+
+      for (const variant of variants) {
+        const docRef = doc(fs, historyKey, variant);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          foundSnap = snap;
+          break;
+        }
+      }
+
+      if (foundSnap) {
+        const originData = foundSnap.data();
         let history: any[] = [];
         if (originData) {
           if (Array.isArray(originData.glbHistoricoDaConversa)) {

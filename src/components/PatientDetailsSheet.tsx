@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Phone, Calendar, Clock, MapPin, User, Users, Activity } from "lucide-react";
+import { Search, Phone, Calendar, Clock, MapPin, User, Users, Activity, Instagram, Globe } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
 export interface AppointmentDetail {
@@ -32,6 +32,7 @@ export interface AppointmentDetail {
     horario: string;
     exames: string[];
     telefone: string;
+    origem?: string;
 }
 
 interface PatientDetailsSheetProps {
@@ -124,6 +125,29 @@ export function PatientDetailsSheet({
                                                         <span className="text-[10px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
                                                             {patient.convenio}
                                                         </span>
+                                                        {patient.origem && (
+                                                            <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                                                                patient.origem === 'facebook/instagram'
+                                                                    ? 'bg-pink-50 text-pink-700 border border-pink-100'
+                                                                    : patient.origem === 'site'
+                                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                                                        : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                                            }`}>
+                                                                {patient.origem === 'facebook/instagram' ? (
+                                                                    <>
+                                                                        <Instagram className="h-2.5 w-2.5" />
+                                                                        Instagram
+                                                                    </>
+                                                                ) : patient.origem === 'site' ? (
+                                                                    <>
+                                                                        <Globe className="h-2.5 w-2.5" />
+                                                                        Site
+                                                                    </>
+                                                                ) : (
+                                                                    "Desconhecida"
+                                                                )}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

@@ -66,7 +66,7 @@ const getAgeBucket = (nascimento: string) => {
 };
 
 /* ---------- Types ---------- */
-type StatType = "unidades" | "convenios" | "faixaEtaria" | "exames" | "historico";
+type StatType = "unidades" | "convenios" | "faixaEtaria" | "exames" | "historico" | "origem";
 type DashboardMode = "simple" | "advanced";
 
 interface CardData {
@@ -105,7 +105,7 @@ export default function Home() {
 
   // Advanced States
   const [statType, setStatType] = useState<StatType>("unidades");
-  const [filterCategory, setFilterCategory] = useState<"unidade" | "convenio" | "faixaEtaria" | "exame">("unidade");
+  const [filterCategory, setFilterCategory] = useState<"unidade" | "convenio" | "faixaEtaria" | "exame" | "origem">("unidade");
   const [filterValue, setFilterValue] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [sortColumn, setSortColumn] = useState<"title" | "count" | "percentage" | "value" | null>(null);
@@ -188,11 +188,12 @@ export default function Home() {
   /* ---------- Sync Filter Category with Stat Type ---------- */
   useEffect(() => {
     // Map statType to corresponding filterCategory
-    const mapping: Record<StatType, "unidade" | "convenio" | "faixaEtaria" | "exame"> = {
+    const mapping: Record<StatType, "unidade" | "convenio" | "faixaEtaria" | "exame" | "origem"> = {
       "unidades": "unidade",
       "convenios": "convenio",
       "faixaEtaria": "faixaEtaria",
       "exames": "exame",
+      "origem": "origem",
       "historico": "unidade" // Default to unidade for historico
     };
 
@@ -204,7 +205,7 @@ export default function Home() {
   }, [statType]);
 
   useEffect(() => {
-    if (filterCategory === 'unidade' || filterCategory === 'convenio' || filterCategory === 'faixaEtaria' || filterCategory === 'exame') {
+    if (filterCategory === 'unidade' || filterCategory === 'convenio' || filterCategory === 'faixaEtaria' || filterCategory === 'exame' || filterCategory === 'origem') {
       setFilterValue("all");
     } else {
       setFilterValue("");
@@ -435,6 +436,10 @@ export default function Home() {
               if (bucket !== filterValue) continue;
             }
             if (filterCategory === 'unidade' && filterValue && filterValue !== 'all' && app._unit !== filterValue) continue;
+            if (filterCategory === 'origem' && filterValue && filterValue !== 'all') {
+              const origVal = app.origem || "desconhecida";
+              if (origVal !== filterValue) continue;
+            }
 
             appointments.push(app);
           }
@@ -1100,9 +1105,78 @@ export default function Home() {
           subtitle: "Procedimento",
           count: data.count,
           value: data.value,
-          icon: <Activity className="h-5 w-5 text-orange-500" />
+         }));
+    }
+
+    if (statType === "origem") {
+      // Logic for "Origem" + "Unidade" + "All" => Show Top 3 Units per Origin
+      if (filterCategory === 'unidade' && filterValue === 'all') {
+        const origemUnidades: Record<string, Record<string, { count: number, value: number }>> = {};
+        const origemCounts: Record<string, { count: number, value: number }> = {};
+
+        appointments.forEach(app => {
+          const orig = app.origem || "desconhecida";
+          const u = app._unit;
+
+          if (!origemCounts[orig]) origemCounts[orig] = { count: 0, value: 0 };
+          origemCounts[orig].count += 1;
+          origemCounts[orig].value += app._value;
+
+          if (!origemUnidades[orig]) origemUnidades[orig] = {};
+          if (!origemUnidades[orig][u]) origemUnidades[orig][u] = { count: 0, value: 0 };
+          origemUnidades[orig][u].count += 1;
+          origemUnidades[orig][u].value += app._value;
+        });
+
+        const labels: Record<string, string> = { "facebook/instagram": "Facebook / Instagram", "site": "Site", "desconhecida": "Origem Desconhecida" };
+        const order = ["facebook/instagram", "site", "desconhecida"];
+
+        return order
+          .filter(o => origemCounts[o] && origemCounts[o].count > 0)
+          .map(origem => {
+            const breakdown = origemUnidades[origem] || {};
+            const top3 = Object.entries(breakdown)
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([name, data]) => ({
+                name: unitConfig?.[name]?.empresa ?? name,
+                count: data.count,
+                value: data.value
+              }));
+
+            return {
+              id: origem,
+              title: labels[origem] || origem,
+              subtitle: "Origem do Paciente",
+              count: origemCounts[origem].count,
+              value: origemCounts[origem].value,
+              icon: <Users className="h-5 w-5 text-indigo-500" />,
+              topUnidades: top3
+            };
+          });
+      }
+
+      // Default Logic for Origem
+      const counts: Record<string, { count: number, value: number }> = {};
+      appointments.forEach(app => {
+        const orig = app.origem || "desconhecida";
+        if (!counts[orig]) counts[orig] = { count: 0, value: 0 };
+        counts[orig].count += 1;
+        counts[orig].value += app._value;
+      });
+
+      const labels: Record<string, string> = { "facebook/instagram": "Facebook / Instagram", "site": "Site", "desconhecida": "Origem Desconhecida" };
+      return Object.entries(counts)
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([name, data]) => ({
+          id: name,
+          title: labels[name] || name,
+          subtitle: "Origem do Paciente",
+          count: data.count,
+          value: data.value,
+          icon: <Users className="h-5 w-5 text-indigo-500" />
         }));
     }
+
     return [];
   }, [filteredAppointments, statType, unitConfig, filterCategory, filterValue]);
 
@@ -1193,6 +1267,8 @@ export default function Home() {
       matches = filteredAppointments.filter((app: any) => Array.isArray(app.exames) && app.exames.includes(item.id));
     } else if (statType === "historico") {
       matches = filteredAppointments.filter((app: any) => obterNomeMes(app._date) === item.id);
+    } else if (statType === "origem") {
+      matches = filteredAppointments.filter((app: any) => (app.origem || "desconhecida") === item.id);
     }
 
     // Secondary filter if subItemName is provided
@@ -1218,7 +1294,8 @@ export default function Home() {
       dataConsulta: app._date.split("-").reverse().join("/"),
       horario: app._time || "-",
       exames: Array.isArray(app.exames) ? app.exames : [],
-      telefone: app.telefone || ""
+      telefone: app.telefone || "",
+      origem: app.origem || "desconhecida"
     }));
 
     const finalTitle = subItemName ? `${item.title} › ${subItemName}` : item.title;
@@ -1267,6 +1344,7 @@ export default function Home() {
                     <SelectItem value="convenios">Convênios</SelectItem>
                     <SelectItem value="faixaEtaria">Faixa Etária</SelectItem>
                     <SelectItem value="exames">Exames</SelectItem>
+                    <SelectItem value="origem">Origem do Paciente</SelectItem>
                     <SelectItem value="historico">Evolução Mensal</SelectItem>
                   </SelectContent>
                 </Select>
@@ -1281,6 +1359,7 @@ export default function Home() {
                     <SelectItem value="convenio">Convênio</SelectItem>
                     <SelectItem value="faixaEtaria">Faixa Etária</SelectItem>
                     <SelectItem value="exame">Exame</SelectItem>
+                    <SelectItem value="origem">Origem</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1314,6 +1393,14 @@ export default function Home() {
                       <>
                         <SelectItem value="all">Todas</SelectItem>
                         {examesAvailable.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
+                      </>
+                    )}
+                    {filterCategory === 'origem' && (
+                      <>
+                        <SelectItem value="all">Todas</SelectItem>
+                        <SelectItem value="facebook/instagram">Facebook / Instagram</SelectItem>
+                        <SelectItem value="site">Site</SelectItem>
+                        <SelectItem value="desconhecida">Origem Desconhecida</SelectItem>
                       </>
                     )}
                   </SelectContent>

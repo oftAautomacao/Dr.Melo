@@ -23,6 +23,7 @@ const DAY_LABELS: Record<string, string> = {
 };
 
 const MONTH_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const DAY_ORDER = ['2aFeira', '3aFeira', '4aFeira', '5aFeira', '6aFeira', 'Sabado'];
 
 // ----- Types -----
 export interface SearchParams {
@@ -57,6 +58,8 @@ export interface UnitResult {
   whatsApp: string;
   procedimentosAceitos: Record<string, boolean>;
   horariosDisponiveis: DaySlots[];
+  horariosFuncionamento?: string[];
+  conveniosAceitos?: string[];
   subplanosAceitos?: string[];
   examesDisponiveis?: string[];
 }
@@ -89,6 +92,21 @@ function formatDateKey(date: Date): string {
   const m = (date.getMonth() + 1).toString().padStart(2, '0');
   const d = date.getDate().toString().padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+function buildHorariosFuncionamento(turnos: any[]): string[] {
+  const grouped = new Map<string, Set<string>>();
+
+  turnos.forEach((turno) => {
+    if (!turno?.diaDaSemana || !turno?.horaInicio || !turno?.horaFim) return;
+    const ranges = grouped.get(turno.diaDaSemana) ?? new Set<string>();
+    ranges.add(`${turno.horaInicio} às ${turno.horaFim}`);
+    grouped.set(turno.diaDaSemana, ranges);
+  });
+
+  return DAY_ORDER
+    .filter((day) => grouped.has(day))
+    .map((day) => `${DAY_LABELS[day] || day}: ${Array.from(grouped.get(day) || []).sort().join(" • ")}`);
 }
 
 // ----- Hook -----
@@ -330,6 +348,7 @@ export function useBuscaHorarios() {
 
       for (const [unitName, turnos] of Object.entries(turnosByUnit)) {
         const unitConfig = unidadesConfig[unitName] || {};
+        const unitBaseTurnos = turnosArr.filter((turno) => turno.unidade === unitName);
         const dayTurnoMap: Record<string, any[]> = {};
         turnos.forEach(t => {
           if (!dayTurnoMap[t.diaDaSemana]) dayTurnoMap[t.diaDaSemana] = [];
@@ -436,6 +455,15 @@ export function useBuscaHorarios() {
           });
         }
 
+        const conveniosAceitos = conveniosList.filter((conv) => {
+          if (conv === 'Particular') {
+            return unitBaseTurnos.some((turno) => turno.Particular === 'Sim');
+          }
+          return unitBaseTurnos.some((turno) => turno[conv] === 'Sim');
+        });
+
+        const horariosFuncionamento = buildHorariosFuncionamento(unitBaseTurnos);
+
         // Calculate all exams available in this unit (considering exceptions)
         const examesDisponiveisSet = new Set<string>();
         turnos.forEach(turno => {
@@ -456,7 +484,10 @@ export function useBuscaHorarios() {
           });
         });
 
-        if (horariosDisponiveis.length > 0) {
+        const shouldIncludeInformationalResult =
+          Boolean(unidade) && !convenio && procedimentos.length === 0;
+
+        if (horariosDisponiveis.length > 0 || shouldIncludeInformationalResult) {
           unitResults.push({
             unidade: unitName,
             empresa: unitConfig.empresa || unitName,
@@ -465,6 +496,8 @@ export function useBuscaHorarios() {
             telefone: unitConfig.telefoneUnidade?.toString() || unitConfig.telefone?.toString() || '',
             whatsApp: unitConfig.whatsApp?.toString() || '',
             procedimentosAceitos: procAceitos,
+            horariosFuncionamento,
+            conveniosAceitos,
             subplanosAceitos: [...new Set(subplanosAceitos)].sort(),
             examesDisponiveis: Array.from(examesDisponiveisSet).sort(),
             horariosDisponiveis,
@@ -484,7 +517,7 @@ export function useBuscaHorarios() {
     } finally {
       setSearching(false);
     }
-  }, [turnosCriterios, turnosCriteriosExcecoes, unidadesConfig, subplanosData, getBlockInfo]);
+  }, [turnosCriterios, turnosCriteriosExcecoes, unidadesConfig, subplanosData, getBlockInfo, conveniosList, procedimentosList]);
 
   // Generate copyable response text
   const gerarResposta = useCallback((resultados: UnitResult[]): string => {

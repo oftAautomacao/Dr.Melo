@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { UnitResult } from "@/hooks/useBuscaHorarios";
-import { MapPin, CheckCircle2, XCircle, Calendar, Phone, Copy, Check, MessageCircle, Plus } from "lucide-react";
+import { MapPin, CheckCircle2, XCircle, Calendar, Phone, Copy, Check, MessageCircle, Plus, Building2, Clock3 } from "lucide-react";
 
 interface UnidadeResultCardProps {
   result: UnitResult;
@@ -26,6 +26,7 @@ const formatCompanyName = (empresa: string, bairro: string) => {
 export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardProps) {
   const [copied, setCopied] = useState<'tel' | 'addr' | 'zap' | null>(null);
   const totalSlots = result.horariosDisponiveis.reduce((sum, d) => sum + d.slots.length, 0);
+  const hasAvailability = result.horariosDisponiveis.length > 0;
 
   const copyToClipboard = (text: string, type: 'tel' | 'addr' | 'zap') => {
     navigator.clipboard.writeText(text);
@@ -105,6 +106,25 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
             </div>
           </div>
 
+          {result.horariosFuncionamento && result.horariosFuncionamento.length > 0 && (
+            <div className="pt-2 border-t border-gray-50 mt-2">
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                <Clock3 className="h-2.5 w-2.5 text-amber-500" />
+                Horário de Funcionamento
+              </div>
+              <div className="space-y-1">
+                {result.horariosFuncionamento.map((horario) => (
+                  <div
+                    key={horario}
+                    className="px-2.5 py-1.5 rounded-lg bg-amber-50/60 text-amber-800 text-[10px] font-black border border-amber-100 shadow-sm"
+                  >
+                    {horario}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Procedures */}
           {procedimentos.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1">
@@ -142,6 +162,22 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
               </div>
             </div>
           )}
+
+          {result.conveniosAceitos && result.conveniosAceitos.length > 0 && (
+            <div className="pt-2 border-t border-gray-50 mt-2">
+              <div className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                <Building2 className="h-2.5 w-2.5 text-indigo-400" />
+                Convênios Aceitos
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {result.conveniosAceitos.map(conv => (
+                  <span key={conv} className="px-2 py-0.5 rounded bg-indigo-50/60 text-indigo-700 text-[9px] font-black border border-indigo-100 shadow-sm">
+                    {conv}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Slots Col */}
@@ -152,7 +188,7 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
           </div>
           
           <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200">
-            {result.horariosDisponiveis.map(day => (
+            {hasAvailability ? result.horariosDisponiveis.map(day => (
               <div key={day.date} className="flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50/50 p-2.5 rounded-xl border border-gray-100">
                 <span className="text-[11px] font-black text-gray-600 w-28 shrink-0">
                   {day.dateLabel}
@@ -168,7 +204,13 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
                   ))}
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="bg-gray-50/70 p-3 rounded-xl border border-dashed border-gray-200">
+                <p className="text-[11px] font-bold text-gray-500">
+                  Nenhum horário disponível encontrado para os filtros atuais.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Rodapé de Exames (Apenas se não houver exames selecionados no filtro) */}

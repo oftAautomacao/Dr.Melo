@@ -39,7 +39,8 @@ import {
   Phone,
   User,
   Calendar,
-  MapPin
+  MapPin,
+  Star
 } from "lucide-react";
 import {
   Dialog,
@@ -585,6 +586,7 @@ export function AttendanceReviewPanel({
                   <TableHead className="w-[150px] font-bold py-5 pl-4 print:pl-4 print:py-2">Data/Hora</TableHead>
                   <TableHead className="font-bold print:py-2">Paciente</TableHead>
                   <TableHead className="font-bold print:py-2">Confirmou?</TableHead>
+                  <TableHead className="text-center font-bold print:py-2">Pesquisa</TableHead>
                   <TableHead className="font-bold print:py-2">Convênio / Procedimento</TableHead>
                   <TableHead className="text-center font-bold print:py-2">Realizou?</TableHead>
                   <TableHead className="text-center font-bold print:py-2">Data Atend.</TableHead>
@@ -657,6 +659,27 @@ export function AttendanceReviewPanel({
                         ) : (
                           <Badge variant="outline" className="text-slate-400 border-slate-200 text-[10px] px-2 py-0 h-5">NÃO</Badge>
                         )}
+                      </TableCell>
+                      <TableCell className="text-center print:py-2">
+                        {(() => {
+                          const pesquisa = row._raw?.pesquisaSatisfacao;
+                          if (!pesquisa) {
+                            return <Badge variant="outline" className="text-slate-400 border-slate-200 text-[10px] px-2 py-0 h-5 font-medium whitespace-nowrap">Não respondeu</Badge>;
+                          }
+                          if (pesquisa.naoCompareceu) {
+                            return <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-200 text-[10px] px-2 py-0 h-5 font-medium whitespace-nowrap">Não compareceu</Badge>;
+                          }
+                          if (pesquisa.estrelas) {
+                            return (
+                              <div className="flex items-center justify-center gap-0.5" title={`${pesquisa.estrelas} Estrelas`}>
+                                {Array.from({ length: pesquisa.estrelas }).map((_, i) => (
+                                  <Star key={i} className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                                ))}
+                              </div>
+                            );
+                          }
+                          return <Badge variant="outline" className="text-slate-400 border-slate-200 text-[10px] px-2 py-0 h-5 font-medium whitespace-nowrap">Sem dados</Badge>;
+                        })()}
                       </TableCell>
                       <TableCell className="print:py-2">
                         <div className="flex flex-col gap-1">

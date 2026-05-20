@@ -3,6 +3,7 @@
 import { openaiService } from "@/lib/ai/openai-service";
 import type { AttendanceReviewAnalysisResult } from "@/types/attendance-review";
 import { z } from "zod";
+import { ai } from "@/ai/genkit";
 
 const attendanceReviewAnalysisSchema = z.object({
   unidade: z.string().nullable(),
@@ -74,15 +75,25 @@ REGRAS IMPORTANTES:
 - Nao escreva texto extra.
 `;
 
-  return openaiService.analyzeDocumentParsed<AttendanceReviewAnalysisResult>(
-    params.fileData,
-    params.fileName,
-    params.mimeType,
-    prompt,
-    attendanceReviewAnalysisSchema,
-    "attendance_review_analysis",
-    "gpt-4o"
-  );
+  try {
+    const { output } = await ai.generate({
+      model: "googleai/gemini-2.0-flash",
+      prompt: [
+        { text: prompt },
+        {
+          media: {
+            url: `data:${params.mimeType};base64,${params.fileData}`,
+            contentType: params.mimeType,
+          },
+        },
+      ],
+      output: { schema: attendanceReviewAnalysisSchema },
+    });
+    return output as AttendanceReviewAnalysisResult;
+  } catch (error) {
+    console.error("Erro no Genkit:", error);
+    return null;
+  }
 }
 
 export async function analyzeAttendanceValidationAction(params: {
@@ -149,15 +160,25 @@ LINHAS INTERNAS FILTRADAS:
 ${candidateRowsText}
 `;
 
-  return openaiService.analyzeDocumentParsed<AttendanceReviewAnalysisResult>(
-    params.fileData,
-    params.fileName,
-    params.mimeType,
-    prompt,
-    attendanceReviewValidationSchema,
-    "attendance_review_validation",
-    "gpt-4o"
-  );
+  try {
+    const { output } = await ai.generate({
+      model: "googleai/gemini-2.0-flash",
+      prompt: [
+        { text: prompt },
+        {
+          media: {
+            url: `data:${params.mimeType};base64,${params.fileData}`,
+            contentType: params.mimeType,
+          },
+        },
+      ],
+      output: { schema: attendanceReviewValidationSchema },
+    });
+    return output as AttendanceReviewAnalysisResult;
+  } catch (error) {
+    console.error("Erro no Genkit na validação:", error);
+    return null;
+  }
 }
 export async function analyzeAttendanceRefinementAction(params: {
   fileData: string;
@@ -195,13 +216,23 @@ REGRAS:
 - Nao responda em markdown.
 `;
 
-  return openaiService.analyzeDocumentParsed<AttendanceReviewAnalysisResult>(
-    params.fileData,
-    params.fileName,
-    params.mimeType,
-    prompt,
-    attendanceReviewValidationSchema,
-    "attendance_review_refinement",
-    "gpt-4o"
-  );
+  try {
+    const { output } = await ai.generate({
+      model: "googleai/gemini-2.0-flash",
+      prompt: [
+        { text: prompt },
+        {
+          media: {
+            url: `data:${params.mimeType};base64,${params.fileData}`,
+            contentType: params.mimeType,
+          },
+        },
+      ],
+      output: { schema: attendanceReviewValidationSchema },
+    });
+    return output as AttendanceReviewAnalysisResult;
+  } catch (error) {
+    console.error("Erro no Genkit no refinamento:", error);
+    return null;
+  }
 }

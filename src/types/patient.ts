@@ -82,6 +82,7 @@ export interface AppointmentFirebaseRecord {
   aiCategorization?: AICategorization;
   bairro?: string;
   enviarMsgSecretaria?: boolean;
+  confirmado?: boolean;
   realizouConsulta?: "S" | "N";
   dataAtendimento?: string;
   origem?: "facebook/instagram" | "site" | "desconhecida";

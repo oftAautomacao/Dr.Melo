@@ -120,6 +120,7 @@ export interface CalendarAppointment {
   telefone: string;
   Observacoes?: string;
   aiCategorization?: AICategorization;
+  confirmado?: boolean;
 }
 
 type AppointmentsByUnit = Record<string, CalendarAppointment[]>;
@@ -362,6 +363,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   telefone: record.telefone,
                   Observacoes: record.Observacoes || (record.obs && record.obs.length > 0 ? record.obs[0] : ""),
                   aiCategorization: record.aiCategorization,
+                  confirmado: !!record.confirmado,
                 });
               });
             });
@@ -609,9 +611,19 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                 <div key={app.id}>
                                   <Card className="mb-3 bg-secondary/30 shadow-sm">
                                     <CardHeader className="pb-2 pt-3">
-                                      <CardTitle className="text-md text-secondary-foreground">
-                                        {app.nomePaciente}
-                                        {age !== null && ` (${age} anos)`}
+                                      <CardTitle className="flex items-center gap-2 text-md text-secondary-foreground">
+                                        <span>
+                                          {app.nomePaciente}
+                                          {age !== null && ` (${age} anos)`}
+                                        </span>
+                                        {app.confirmado && (
+                                          <Badge
+                                            variant="outline"
+                                            className="h-5 border-emerald-200 bg-emerald-50 px-2 py-0 text-[10px] font-medium text-emerald-700"
+                                          >
+                                            Confirmado
+                                          </Badge>
+                                        )}
                                       </CardTitle>
                                       <CardDescription className="text-xs">
                                         {app.motivacao}

@@ -20,6 +20,49 @@ export interface ChatMessage {
   content: string | any[];
 }
 
+type SupportedDocumentKind = "image" | "pdf" | "other";
+
+const MIME_TYPE_BY_EXTENSION: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  pdf: "application/pdf",
+};
+
+function getFileExtension(filename: string) {
+  const parts = filename.toLowerCase().split(".");
+  return parts.length > 1 ? parts.at(-1) ?? "" : "";
+}
+
+function resolveMimeType(filename: string, mimeType?: string) {
+  const normalizedMimeType = (mimeType || "").trim().toLowerCase();
+  if (normalizedMimeType) return normalizedMimeType;
+  return MIME_TYPE_BY_EXTENSION[getFileExtension(filename)] ?? "application/octet-stream";
+}
+
+function resolveDocumentKind(filename: string, mimeType?: string): SupportedDocumentKind {
+  const resolvedMimeType = resolveMimeType(filename, mimeType);
+  if (resolvedMimeType.startsWith("image/")) return "image";
+  if (resolvedMimeType === "application/pdf") return "pdf";
+  return "other";
+}
+
+async function uploadDocumentFile(base64File: string, filename: string, mimeType?: string) {
+  if (!openai) {
+    throw new Error("OpenAI client not initialized.");
+  }
+
+  const binary = Buffer.from(base64File, "base64");
+  const resolvedMimeType = resolveMimeType(filename, mimeType);
+  const uploadFile = await toFile(binary, filename, { type: resolvedMimeType });
+
+  return openai.files.create({
+    file: uploadFile,
+    purpose: "user_data",
+  });
+}
+
 export const openaiService = {
   async analyzeConversation(
     messages: ChatMessage[],
@@ -103,25 +146,40 @@ export const openaiService = {
     }
 
     try {
-      if (mimeType.startsWith("image/")) {
-        return this.analyzeImage(base64File, prompt, model);
+      const documentKind = resolveDocumentKind(filename, mimeType);
+      const resolvedMimeType = resolveMimeType(filename, mimeType);
+
+      if (documentKind === "image") {
+        const response = await openai.responses.create({
+          model,
+          input: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "input_image",
+                  image_url: `data:${resolvedMimeType};base64,${base64File}`,
+                  detail: "high",
+                },
+                { type: "input_text", text: prompt },
+              ],
+            },
+          ],
+          store: false,
+        });
+
+        return response.output_text ?? null;
       }
 
-      const binary = Buffer.from(base64File, "base64");
-      const uploadFile = await toFile(binary, filename);
-      const fileInfo = await openai.files.create({
-        file: uploadFile,
-        purpose: "user_data",
-      });
-
+      const fileInfo = await uploadDocumentFile(base64File, filename, resolvedMimeType);
       const response = await openai.responses.create({
         model,
         input: [
           {
             role: "user",
             content: [
-              { type: "input_text", text: prompt },
               { type: "input_file", file_id: fileInfo.id },
+              { type: "input_text", text: prompt },
             ],
           },
         ],
@@ -151,20 +209,22 @@ export const openaiService = {
 
     try {
       const responseFormat = zodTextFormat(schema, responseName);
+      const documentKind = resolveDocumentKind(filename, mimeType);
+      const resolvedMimeType = resolveMimeType(filename, mimeType);
 
-      if (mimeType.startsWith("image/")) {
+      if (documentKind === "image") {
         const response = await openai.responses.create({
           model,
           input: [
             {
               role: "user",
               content: [
-                { type: "input_text", text: prompt },
                 {
                   type: "input_image",
-                  image_url: `data:${mimeType};base64,${base64File}`,
+                  image_url: `data:${resolvedMimeType};base64,${base64File}`,
                   detail: "high",
                 },
+                { type: "input_text", text: prompt },
               ],
             },
           ],
@@ -177,21 +237,15 @@ export const openaiService = {
         return JSON.parse(content) as T;
       }
 
-      const binary = Buffer.from(base64File, "base64");
-      const uploadFile = await toFile(binary, filename);
-      const fileInfo = await openai.files.create({
-        file: uploadFile,
-        purpose: "user_data",
-      });
-
+      const fileInfo = await uploadDocumentFile(base64File, filename, resolvedMimeType);
       const response = await openai.responses.create({
         model,
         input: [
           {
             role: "user",
             content: [
-              { type: "input_text", text: prompt },
               { type: "input_file", file_id: fileInfo.id },
+              { type: "input_text", text: prompt },
             ],
           },
         ],

@@ -1,16 +1,19 @@
-"use server";
+﻿"use server";
 
+import { ai } from "@/ai/genkit";
 import { openaiService } from "@/lib/ai/openai-service";
 import type { AttendanceReviewAnalysisResult } from "@/types/attendance-review";
 import { z } from "zod";
-import { ai } from "@/ai/genkit";
+
+const confidenceSchema = z.enum(["alta", "m\u00e9dia", "baixa"]);
+const documentTypeSchema = z.enum(["foto", "pdf", "docx", "desconhecido"]);
 
 const attendanceReviewAnalysisSchema = z.object({
   unidade: z.string().nullable(),
   mes: z.string().nullable(),
   ano: z.string().nullable(),
-  documentType: z.enum(["foto", "pdf", "docx", "desconhecido"]),
-  confidence: z.enum(["alta", "média", "baixa"]),
+  documentType: documentTypeSchema,
+  confidence: confidenceSchema,
   rows: z.array(
     z.object({
       lineIndex: z.number(),
@@ -19,7 +22,7 @@ const attendanceReviewAnalysisSchema = z.object({
       appointmentTime: z.string().nullable(),
       realizou: z.enum(["S", "N"]).nullable(),
       dataAtendimento: z.string().nullable(),
-      confidence: z.enum(["alta", "média", "baixa"]),
+      confidence: confidenceSchema,
       notes: z.string().nullable(),
     })
   ),
@@ -29,8 +32,8 @@ const attendanceReviewValidationSchema = z.object({
   unidade: z.string().nullable(),
   mes: z.string().nullable(),
   ano: z.string().nullable(),
-  documentType: z.enum(["foto", "pdf", "docx", "desconhecido"]),
-  confidence: z.enum(["alta", "média", "baixa"]),
+  documentType: documentTypeSchema,
+  confidence: confidenceSchema,
   rows: z.array(
     z.object({
       lineIndex: z.number(),
@@ -40,11 +43,65 @@ const attendanceReviewValidationSchema = z.object({
       appointmentTime: z.string().nullable(),
       realizou: z.enum(["S", "N"]).nullable(),
       dataAtendimento: z.string().nullable(),
-      confidence: z.enum(["alta", "média", "baixa"]),
+      confidence: confidenceSchema,
       notes: z.string().nullable(),
     })
   ),
 });
+
+const GEMINI_MODEL = "googleai/gemini-2.0-flash";
+const OPENAI_MODEL = "gpt-4o";
+
+function hasGeminiApiKey() {
+  return Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+}
+
+function hasOpenAiApiKey() {
+  return Boolean(process.env.OPENAI_API_KEY);
+}
+
+async function analyzeAttendanceWithConfiguredProvider<T>(params: {
+  fileData: string;
+  fileName: string;
+  mimeType: string;
+  prompt: string;
+  schema: z.ZodTypeAny;
+  responseName: string;
+}): Promise<T | null> {
+  if (hasGeminiApiKey()) {
+    const { output } = await ai.generate({
+      model: GEMINI_MODEL,
+      prompt: [
+        { text: params.prompt },
+        {
+          media: {
+            url: `data:${params.mimeType};base64,${params.fileData}`,
+            contentType: params.mimeType,
+          },
+        },
+      ],
+      output: { schema: params.schema },
+    });
+
+    return output as T;
+  }
+
+  if (hasOpenAiApiKey()) {
+    return openaiService.analyzeDocumentParsed<T>(
+      params.fileData,
+      params.fileName,
+      params.mimeType,
+      params.prompt,
+      params.schema,
+      params.responseName,
+      OPENAI_MODEL
+    );
+  }
+
+  throw new Error(
+    "Nenhuma chave de IA foi configurada. Defina GEMINI_API_KEY, GOOGLE_API_KEY ou OPENAI_API_KEY."
+  );
+}
 
 export async function analyzeAttendanceDocumentAction(params: {
   fileData: string;
@@ -76,23 +133,17 @@ REGRAS IMPORTANTES:
 `;
 
   try {
-    const { output } = await ai.generate({
-      model: "googleai/gemini-2.0-flash",
-      prompt: [
-        { text: prompt },
-        {
-          media: {
-            url: `data:${params.mimeType};base64,${params.fileData}`,
-            contentType: params.mimeType,
-          },
-        },
-      ],
-      output: { schema: attendanceReviewAnalysisSchema },
+    return await analyzeAttendanceWithConfiguredProvider<AttendanceReviewAnalysisResult>({
+      fileData: params.fileData,
+      fileName: params.fileName,
+      mimeType: params.mimeType,
+      prompt,
+      schema: attendanceReviewAnalysisSchema,
+      responseName: "attendance_review_analysis",
     });
-    return output as AttendanceReviewAnalysisResult;
   } catch (error) {
-    console.error("Erro no Genkit:", error);
-    return null;
+    console.error("Erro na analise de documento:", error);
+    throw error;
   }
 }
 
@@ -115,16 +166,16 @@ export async function analyzeAttendanceValidationAction(params: {
   if (!params.rows.length) return null;
 
   const candidateRowsText = params.rows
-    .map((row) => {
-      return [
+    .map((row) =>
+      [
         `lineIndex: ${row.lineIndex}`,
         `patientName: ${row.patientName}`,
         `appointmentDate: ${row.appointmentDate ?? ""}`,
         `appointmentTime: ${row.appointmentTime ?? ""}`,
         `unidade: ${row.unidade ?? ""}`,
         `convenio: ${row.convenio ?? ""}`,
-      ].join(" | ");
-    })
+      ].join(" | ")
+    )
     .join("\n");
 
   const prompt = `
@@ -161,25 +212,20 @@ ${candidateRowsText}
 `;
 
   try {
-    const { output } = await ai.generate({
-      model: "googleai/gemini-2.0-flash",
-      prompt: [
-        { text: prompt },
-        {
-          media: {
-            url: `data:${params.mimeType};base64,${params.fileData}`,
-            contentType: params.mimeType,
-          },
-        },
-      ],
-      output: { schema: attendanceReviewValidationSchema },
+    return await analyzeAttendanceWithConfiguredProvider<AttendanceReviewAnalysisResult>({
+      fileData: params.fileData,
+      fileName: params.fileName,
+      mimeType: params.mimeType,
+      prompt,
+      schema: attendanceReviewValidationSchema,
+      responseName: "attendance_review_validation",
     });
-    return output as AttendanceReviewAnalysisResult;
   } catch (error) {
-    console.error("Erro no Genkit na validação:", error);
-    return null;
+    console.error("Erro na validacao do documento:", error);
+    throw error;
   }
 }
+
 export async function analyzeAttendanceRefinementAction(params: {
   fileData: string;
   fileName: string;
@@ -194,7 +240,10 @@ export async function analyzeAttendanceRefinementAction(params: {
   if (!params.pendingPatients.length) return null;
 
   const pendingText = params.pendingPatients
-    .map((p) => `- ID: ${p.lineIndex}, Nome: ${p.patientName}, Convênio: ${p.convenio ?? ""}`)
+    .map(
+      (patient) =>
+        `- ID: ${patient.lineIndex}, Nome: ${patient.patientName}, Convenio: ${patient.convenio ?? ""}`
+    )
     .join("\n");
 
   const prompt = `
@@ -217,22 +266,16 @@ REGRAS:
 `;
 
   try {
-    const { output } = await ai.generate({
-      model: "googleai/gemini-2.0-flash",
-      prompt: [
-        { text: prompt },
-        {
-          media: {
-            url: `data:${params.mimeType};base64,${params.fileData}`,
-            contentType: params.mimeType,
-          },
-        },
-      ],
-      output: { schema: attendanceReviewValidationSchema },
+    return await analyzeAttendanceWithConfiguredProvider<AttendanceReviewAnalysisResult>({
+      fileData: params.fileData,
+      fileName: params.fileName,
+      mimeType: params.mimeType,
+      prompt,
+      schema: attendanceReviewValidationSchema,
+      responseName: "attendance_review_refinement",
     });
-    return output as AttendanceReviewAnalysisResult;
   } catch (error) {
-    console.error("Erro no Genkit no refinamento:", error);
-    return null;
+    console.error("Erro no refinamento do documento:", error);
+    throw error;
   }
 }

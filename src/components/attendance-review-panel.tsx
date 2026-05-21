@@ -260,6 +260,11 @@ export function AttendanceReviewPanel({
     }));
   };
 
+  const getErrorMessage = (error: unknown, fallback: string) => {
+    if (error instanceof Error && error.message.trim()) return error.message;
+    return fallback;
+  };
+
   const handleAnalyze = async () => {
     if (!selectedFile) {
       toast.error("Selecione um arquivo antes de analisar.");
@@ -287,7 +292,7 @@ export function AttendanceReviewPanel({
       }
     } catch (error) {
       console.error(error);
-      toast.error("Falha ao analisar o documento.");
+      toast.error(getErrorMessage(error, "Falha ao analisar o documento."), { id: loadingToast });
     } finally {
       setIsAnalyzing(false);
     }
@@ -364,7 +369,7 @@ export function AttendanceReviewPanel({
         }
       } catch (error) {
         console.error(error);
-        toast.error("Falha no cruzamento.", { id: loadingToast });
+        toast.error(getErrorMessage(error, "Falha no cruzamento."), { id: loadingToast });
       } finally {
         if (active) setIsValidating(false);
       }
@@ -453,7 +458,7 @@ export function AttendanceReviewPanel({
       }
     } catch (error) {
       console.error(error);
-      toast.error("Erro no refinamento.", { id: loadingToast });
+      toast.error(getErrorMessage(error, "Erro no refinamento."), { id: loadingToast });
     } finally {
       setIsRefining(false);
     }
@@ -972,3 +977,5 @@ function matchScore(aiRow: AttendanceReviewRow, reportRow: AttendanceBillingRow)
   if (aiRow.appointmentTime && aiRow.appointmentTime === reportRow._time) score += 15;
   return score;
 }
+
+

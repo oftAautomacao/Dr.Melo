@@ -183,26 +183,33 @@ export function useBuscaHorarios() {
   }, []);
 
   // Derive convênio names from conveniosData
+  const convenioNamesSet = useMemo(() => {
+    const names = new Set<string>(Object.keys(conveniosData));
+    Object.values(subplanosData).forEach((sp: any) => {
+      if (sp?.convenio) names.add(sp.convenio);
+    });
+    names.add('Particular');
+    return names;
+  }, [conveniosData, subplanosData]);
+
   const conveniosList = useMemo(() => {
-    const names = Object.keys(conveniosData).sort();
+    const names = Array.from(convenioNamesSet).sort();
     if (!names.includes('Particular')) names.unshift('Particular');
     return names;
-  }, [conveniosData]);
+  }, [convenioNamesSet]);
 
   // Derive procedure/exam names from turnosCriterios
   const procedimentosList = useMemo(() => {
-    const convSet = new Set(Object.keys(conveniosData));
-    convSet.add('Particular');
     const procSet = new Set<string>();
     Object.values(turnosCriterios).forEach((turno: any) => {
       Object.keys(turno).forEach(key => {
-        if (!META_FIELDS.has(key) && !convSet.has(key) && (turno[key] === 'Sim' || turno[key] === 'Nao')) {
+        if (!META_FIELDS.has(key) && !convenioNamesSet.has(key) && (turno[key] === 'Sim' || turno[key] === 'Nao')) {
           procSet.add(key);
         }
       });
     });
     return Array.from(procSet).sort();
-  }, [turnosCriterios, conveniosData]);
+  }, [turnosCriterios, convenioNamesSet]);
 
   // Derive subplanos map: convenio -> subplano names
   const subplanosMap = useMemo(() => {

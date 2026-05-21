@@ -125,6 +125,16 @@ export interface CalendarAppointment {
 
 type AppointmentsByUnit = Record<string, CalendarAppointment[]>;
 
+type BlockedTimeRange = {
+  start: string;
+  end: string;
+};
+
+type DayBlockInfo = {
+  isFullDay: boolean;
+  blockedTimes: BlockedTimeRange[];
+};
+
 /** Prop opcional com a unidade enviada pela URL */
 interface AppointmentCalendarProps {
   initialUnit?: string | null;
@@ -192,11 +202,16 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingHolidays, setIsLoadingHolidays] = useState(true);
   const [examPrices, setExamPrices] = useState<Record<string, string | number>>({});
+  const [blockedDatesData, setBlockedDatesData] = useState<Record<string, any>>({});
 
   const [allHolidays, setAllHolidays] = useState<Holiday[]>([]);
   const [holidaysForCalendar, setHolidaysForCalendar] = useState<Date[]>([]);
   const [selectedDateHolidayInfo, setSelectedDateHolidayInfo] =
     useState<Holiday | undefined>();
+  const [selectedDateBlockInfo, setSelectedDateBlockInfo] = useState<DayBlockInfo>({
+    isFullDay: false,
+    blockedTimes: [],
+  });
 
   const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
   const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
@@ -292,6 +307,19 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       }
     );
     return () => unsubPrices();
+  }, []);
+
+  useEffect(() => {
+    const base = getFirebasePathBase();
+    const blockedDatesPath = `${base}/agendamentoWhatsApp/configuracoes/datasBloqueadas`;
+    const unsubBlockedDates = onValue(
+      ref(getDatabaseInstance(ENVIRONMENT), blockedDatesPath),
+      (snap: DataSnapshot) => {
+        setBlockedDatesData(snap.exists() ? (snap.val() as any) : {});
+      }
+    );
+
+    return () => unsubBlockedDates();
   }, []);
 
 
@@ -421,6 +449,156 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     [appointmentsByUnit, selectedUnit]
   );
 
+  const getDayBlockInfo = (unitName: string | undefined, dateStr: string): DayBlockInfo => {
+    if (!unitName || !dateStr) {
+      return { isFullDay: false, blockedTimes: [] };
+    }
+
+    const blockedUnitData = blockedDatesData[unitName];
+    if (!blockedUnitData || typeof blockedUnitData !== "object") {
+      return { isFullDay: false, blockedTimes: [] };
+    }
+
+    const blockedTimes: BlockedTimeRange[] = [];
+    let isFullDay = false;
+
+    Object.values(blockedUnitData).forEach((entry: any) => {
+      const blockedDate =
+        entry?.data ??
+        entry?.datasBloqueadas ??
+        entry?.date ??
+        null;
+
+      if (blockedDate !== dateStr) return;
+
+      const start =
+        entry?.horaInicio ??
+        entry?.horarioInicio ??
+        entry?.horarioinicio ??
+        entry?.inicio ??
+        "";
+      const end =
+        entry?.horaFim ??
+        entry?.horarioFim ??
+        entry?.horariofim ??
+        entry?.fim ??
+        "";
+
+      if (
+        (start === "00:00" || start === "0:00") &&
+        (end === "23:59" || end === "23:59:00" || end === "24:00")
+      ) {
+        isFullDay = true;
+        return;
+      }
+
+      if (start && end) {
+        blockedTimes.push({ start, end });
+        return;
+      }
+
+      isFullDay = true;
+    });
+
+    if (isFullDay) {
+      return { isFullDay: true, blockedTimes: [] };
+    }
+
+    return { isFullDay: false, blockedTimes };
+  };
+
+  const fullyBlockedDays = useMemo(() => {
+    if (!selectedUnit) return [];
+
+    const unitBlockedData = blockedDatesData[selectedUnit];
+    if (!unitBlockedData || typeof unitBlockedData !== "object") return [];
+
+    const dates = new Set<string>();
+    Object.values(unitBlockedData).forEach((entry: any) => {
+      const blockedDate =
+        entry?.data ??
+        entry?.datasBloqueadas ??
+        entry?.date ??
+        null;
+      if (!blockedDate) return;
+
+      const start =
+        entry?.horaInicio ??
+        entry?.horarioInicio ??
+        entry?.horarioinicio ??
+        entry?.inicio ??
+        "";
+      const end =
+        entry?.horaFim ??
+        entry?.horarioFim ??
+        entry?.horariofim ??
+        entry?.fim ??
+        "";
+
+      if (
+        !start ||
+        !end ||
+        ((start === "00:00" || start === "0:00") &&
+          (end === "23:59" || end === "23:59:00" || end === "24:00"))
+      ) {
+        dates.add(blockedDate);
+      }
+    });
+
+    return Array.from(dates)
+      .map((date) => dateFnsStartOfDay(parseISO(date)))
+      .filter((date) => dateFnsIsValid(date));
+  }, [blockedDatesData, selectedUnit]);
+
+  const partiallyBlockedDays = useMemo(() => {
+    if (!selectedUnit) return [];
+
+    const unitBlockedData = blockedDatesData[selectedUnit];
+    if (!unitBlockedData || typeof unitBlockedData !== "object") return [];
+
+    const partialDates = new Set<string>();
+    const fullDates = new Set<string>();
+
+    Object.values(unitBlockedData).forEach((entry: any) => {
+      const blockedDate =
+        entry?.data ??
+        entry?.datasBloqueadas ??
+        entry?.date ??
+        null;
+      if (!blockedDate) return;
+
+      const start =
+        entry?.horaInicio ??
+        entry?.horarioInicio ??
+        entry?.horarioinicio ??
+        entry?.inicio ??
+        "";
+      const end =
+        entry?.horaFim ??
+        entry?.horarioFim ??
+        entry?.horariofim ??
+        entry?.fim ??
+        "";
+
+      if (
+        !start ||
+        !end ||
+        ((start === "00:00" || start === "0:00") &&
+          (end === "23:59" || end === "23:59:00" || end === "24:00"))
+      ) {
+        fullDates.add(blockedDate);
+        return;
+      }
+
+      partialDates.add(blockedDate);
+    });
+
+    return Array.from(partialDates)
+      .filter((date) => !fullDates.has(date))
+      .map((date) => dateFnsStartOfDay(parseISO(date)))
+      .filter((date) => dateFnsIsValid(date));
+  }, [blockedDatesData, selectedUnit]);
+
   const bookedDays = useMemo(
     () =>
       currentUnitAppointments.map((a) =>
@@ -439,6 +617,17 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       )
       .sort((a, b) => a.horario.localeCompare(b.horario));
   }, [selectedDate, currentUnitAppointments, selectedDateHolidayInfo]);
+
+  useEffect(() => {
+    if (!selectedDate || !dateFnsIsValid(selectedDate) || !selectedUnit) {
+      setSelectedDateBlockInfo({ isFullDay: false, blockedTimes: [] });
+      return;
+    }
+
+    setSelectedDateBlockInfo(
+      getDayBlockInfo(selectedUnit, format(selectedDate, "yyyy-MM-dd"))
+    );
+  }, [blockedDatesData, selectedDate, selectedUnit]);
 
   /* ---------------------------- RENDER ------------------------------- */
   return (
@@ -501,13 +690,31 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 modifiers={{
                   booked: bookedDays,
                   holiday: holidaysForCalendar,
+                  blockedFull: fullyBlockedDays,
+                  blockedPartial: partiallyBlockedDays,
                   sunday: (d: Date) => getDay(d) === 0,
                 }}
                 modifiersClassNames={{
                   booked: "border border-yellow-500 rounded-full",
                   holiday:
                     "text-destructive bg-destructive/20 rounded-full font-semibold border-destructive",
+                  blockedFull:
+                    "rounded-full border border-teal-700 font-semibold text-teal-900",
+                  blockedPartial:
+                    "rounded-full border border-cyan-700 font-semibold text-cyan-900",
                   sunday: "bg-blue-100 text-blue-700 rounded-full",
+                }}
+                modifiersStyles={{
+                  blockedFull: {
+                    backgroundColor: "#f0fdfa",
+                    backgroundImage:
+                      "repeating-linear-gradient(135deg, rgba(13,148,136,0.55) 0px, rgba(13,148,136,0.55) 2px, transparent 2px, transparent 5px)",
+                  },
+                  blockedPartial: {
+                    backgroundColor: "#f0fdff",
+                    backgroundImage:
+                      "repeating-linear-gradient(135deg, rgba(8,145,178,0.45) 0px, rgba(8,145,178,0.45) 2px, transparent 2px, transparent 9px)",
+                  },
                 }}
               />
 
@@ -527,6 +734,28 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 <p className="flex items-center">
                   <Badge className="mr-2 w-4 h-4 rounded-full border border-yellow-500 bg-white" />
                   Dias com agendamentos
+                </p>
+                <p className="flex items-center">
+                  <Badge
+                    className="mr-2 h-4 w-4 rounded-full border border-teal-700"
+                    style={{
+                      backgroundColor: "#f0fdfa",
+                      backgroundImage:
+                        "repeating-linear-gradient(135deg, rgba(13,148,136,0.55) 0px, rgba(13,148,136,0.55) 2px, transparent 2px, transparent 5px)",
+                    }}
+                  />
+                  Dias bloqueados
+                </p>
+                <p className="flex items-center">
+                  <Badge
+                    className="mr-2 h-4 w-4 rounded-full border border-cyan-700"
+                    style={{
+                      backgroundColor: "#f0fdff",
+                      backgroundImage:
+                        "repeating-linear-gradient(135deg, rgba(8,145,178,0.45) 0px, rgba(8,145,178,0.45) 2px, transparent 2px, transparent 9px)",
+                    }}
+                  />
+                  Dias parcialmente bloqueados
                 </p>
               </div>
             </div>
@@ -555,6 +784,31 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   )}
                 </div>
               </div>
+
+              {(selectedDateBlockInfo.isFullDay || selectedDateBlockInfo.blockedTimes.length > 0) && (
+                <div className="border-b bg-muted/30 px-3 py-2 text-xs">
+                  {selectedDateBlockInfo.isFullDay ? (
+                    <div className="flex items-center gap-2 text-rose-700">
+                      <Badge className="border border-rose-500 bg-rose-100 text-rose-700 hover:bg-rose-100">
+                        Dia bloqueado
+                      </Badge>
+                      <span>Este dia esta bloqueado integralmente para novos agendamentos.</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 text-amber-700">
+                      <Badge className="border border-amber-500 bg-amber-100 text-amber-700 hover:bg-amber-100">
+                        Bloqueio parcial
+                      </Badge>
+                      <span>
+                        Horarios bloqueados:{" "}
+                        {selectedDateBlockInfo.blockedTimes
+                          .map((range) => `${range.start} - ${range.end}`)
+                          .join(", ")}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Área Rolável */}
               <ScrollArea className="flex-1 p-3">

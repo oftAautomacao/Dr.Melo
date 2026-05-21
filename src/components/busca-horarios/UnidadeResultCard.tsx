@@ -132,7 +132,7 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
                 <Clock3 className="h-2.5 w-2.5 text-amber-500" />
                 Horarios de Funcionamento
               </div>
-              <div className="max-h-24 space-y-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200">
+              <div className="max-h-32 space-y-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-gray-200">
                 {result.horariosFuncionamento.map((horario) => (
                   <div
                     key={horario}

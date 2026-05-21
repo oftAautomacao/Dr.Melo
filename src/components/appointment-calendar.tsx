@@ -53,8 +53,11 @@ import {
   Eraser,
   CalendarPlus,
   Copy,
+  Lock,
+  LockOpen,
   Search,
 } from "lucide-react";
+import { DayContent as DefaultDayContent, type DayContentProps } from "react-day-picker";
 
 import InternalChatIcon from "@/components/ui/internal-chat-icon";
 import { Button } from "@/components/ui/button";
@@ -134,6 +137,24 @@ type DayBlockInfo = {
   isFullDay: boolean;
   blockedTimes: BlockedTimeRange[];
 };
+
+function CalendarBlockedDayContent(props: DayContentProps) {
+  const isHoliday = props.activeModifiers.holiday;
+  const isFullBlocked = props.activeModifiers.blockedFull;
+  const isPartialBlocked = props.activeModifiers.blockedPartial;
+
+  return (
+    <div className="relative flex h-9 w-9 items-center justify-center">
+      <DefaultDayContent {...props} />
+      {!isHoliday && isFullBlocked && (
+        <Lock className="pointer-events-none absolute bottom-0.5 right-0.5 h-3 w-3 text-amber-500" strokeWidth={2.25} />
+      )}
+      {!isHoliday && !isFullBlocked && isPartialBlocked && (
+        <LockOpen className="pointer-events-none absolute bottom-0.5 right-0.5 h-3 w-3 text-amber-400" strokeWidth={2.25} />
+      )}
+    </div>
+  );
+}
 
 /** Prop opcional com a unidade enviada pela URL */
 interface AppointmentCalendarProps {
@@ -695,26 +716,14 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   sunday: (d: Date) => getDay(d) === 0,
                 }}
                 modifiersClassNames={{
-                  booked: "border border-yellow-500 rounded-full",
+                  booked:
+                    "rounded-full border border-emerald-400 bg-white text-black hover:bg-emerald-50 hover:text-black",
                   holiday:
                     "text-destructive bg-destructive/20 rounded-full font-semibold border-destructive",
-                  blockedFull:
-                    "rounded-full border border-teal-700 font-semibold text-teal-900",
-                  blockedPartial:
-                    "rounded-full border border-cyan-700 font-semibold text-cyan-900",
                   sunday: "bg-blue-100 text-blue-700 rounded-full",
                 }}
-                modifiersStyles={{
-                  blockedFull: {
-                    backgroundColor: "#f0fdfa",
-                    backgroundImage:
-                      "repeating-linear-gradient(135deg, rgba(13,148,136,0.55) 0px, rgba(13,148,136,0.55) 2px, transparent 2px, transparent 5px)",
-                  },
-                  blockedPartial: {
-                    backgroundColor: "#f0fdff",
-                    backgroundImage:
-                      "repeating-linear-gradient(135deg, rgba(8,145,178,0.45) 0px, rgba(8,145,178,0.45) 2px, transparent 2px, transparent 9px)",
-                  },
+                components={{
+                  DayContent: CalendarBlockedDayContent,
                 }}
               />
 
@@ -732,29 +741,15 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   Domingos (sem agendamentos)
                 </p>
                 <p className="flex items-center">
-                  <Badge className="mr-2 w-4 h-4 rounded-full border border-yellow-500 bg-white" />
+                  <Badge className="mr-2 w-4 h-4 rounded-full border border-emerald-400 bg-emerald-50" />
                   Dias com agendamentos
                 </p>
                 <p className="flex items-center">
-                  <Badge
-                    className="mr-2 h-4 w-4 rounded-full border border-teal-700"
-                    style={{
-                      backgroundColor: "#f0fdfa",
-                      backgroundImage:
-                        "repeating-linear-gradient(135deg, rgba(13,148,136,0.55) 0px, rgba(13,148,136,0.55) 2px, transparent 2px, transparent 5px)",
-                    }}
-                  />
+                  <Lock className="mr-2 h-4 w-4 text-amber-500" strokeWidth={2.25} />
                   Dias bloqueados
                 </p>
                 <p className="flex items-center">
-                  <Badge
-                    className="mr-2 h-4 w-4 rounded-full border border-cyan-700"
-                    style={{
-                      backgroundColor: "#f0fdff",
-                      backgroundImage:
-                        "repeating-linear-gradient(135deg, rgba(8,145,178,0.45) 0px, rgba(8,145,178,0.45) 2px, transparent 2px, transparent 9px)",
-                    }}
-                  />
+                  <LockOpen className="mr-2 h-4 w-4 text-amber-400" strokeWidth={2.25} />
                   Dias parcialmente bloqueados
                 </p>
               </div>

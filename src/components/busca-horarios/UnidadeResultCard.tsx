@@ -35,6 +35,62 @@ const formatCompanyName = (empresa: string, bairro: string) => {
   return empresa;
 };
 
+const normalizeContactDigits = (value?: string) => {
+  if (!value) return "";
+
+  let digits = value.replace(/\D/g, "");
+
+  if (digits.startsWith("55") && digits.length > 11) {
+    digits = digits.slice(2);
+  }
+
+  return digits;
+};
+
+const formatContactNumber = (value?: string, referenceWhatsApp?: string) => {
+  const digits = normalizeContactDigits(value);
+  const whatsAppDigits = normalizeContactDigits(referenceWhatsApp);
+
+  if (!digits) return "--";
+
+  // Alguns telefones fixos vieram salvos com um "9" extra na frente.
+  if (digits.length === 11 && whatsAppDigits.length === 10 && digits.slice(1) === whatsAppDigits) {
+    return `(${whatsAppDigits.slice(0, 2)}) ${whatsAppDigits.slice(2, 6)}-${whatsAppDigits.slice(6)}`;
+  }
+
+  if (digits.length === 11) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  }
+
+  if (digits.length === 10) {
+    return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  }
+
+  if (digits.length === 9) {
+    return `(21) ${digits.slice(0, 5)}-${digits.slice(5)}`;
+  }
+
+  if (digits.length === 8) {
+    return `(21) ${digits.slice(0, 4)}-${digits.slice(4)}`;
+  }
+
+  return value || "--";
+};
+
+const buildContactsCopyText = (empresa: string, bairro: string, telefone: string, whatsApp: string) => {
+  const unitName = formatCompanyName(empresa, bairro);
+
+  return [
+    `Os telefones da Unidade ${unitName} (${bairro}) são:`,
+    `- Telefone: ${telefone}`,
+    `- WhatsApp: ${whatsApp}`,
+  ].join("\n");
+};
+
+const buildSingleContactCopyText = (label: "Telefone" | "WhatsApp", value: string) => {
+  return `${label}: ${value}`;
+};
+
 export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardProps) {
   const [copied, setCopied] = useState<"tel" | "addr" | "zap" | "both" | null>(null);
   const totalSlots = result.horariosDisponiveis.reduce((sum, d) => sum + d.slots.length, 0);
@@ -45,6 +101,9 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
     setCopied(type);
     setTimeout(() => setCopied(null), 2050);
   };
+
+  const formattedTelefone = formatContactNumber(result.telefone, result.whatsApp);
+  const formattedWhatsApp = formatContactNumber(result.whatsApp);
 
   return (
     <div className="group overflow-hidden rounded-xl border border-gray-200 bg-white shadow-md transition-all hover:border-blue-300">
@@ -71,15 +130,33 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
           <div className="space-y-2">
             <div
               className="group/item flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent bg-white p-1.5 transition-all hover:border-gray-200 hover:bg-gray-50"
-              onClick={() => copyToClipboard(result.telefone, "tel")}
+              onClick={() => copyToClipboard(buildSingleContactCopyText("Telefone", formattedTelefone), "tel")}
             >
               <div className="rounded-md bg-gray-100 p-1.5">
                 <Phone className="h-3.5 w-3.5 text-gray-600" />
               </div>
               <div className="flex flex-1 flex-col truncate">
                 <span className="mb-0.5 text-[9px] font-black uppercase leading-none text-gray-400">Telefone</span>
-                <span className="text-xs font-bold leading-none text-gray-700">{result.telefone || "--"}</span>
+                <span className="text-xs font-bold leading-none text-gray-700">{formattedTelefone}</span>
               </div>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  copyToClipboard(
+                    buildContactsCopyText(result.empresa, result.bairro, formattedTelefone, formattedWhatsApp),
+                    "both",
+                  );
+                }}
+                className="p-1 rounded hover:bg-blue-50 text-blue-500 hover:text-blue-700 transition-colors flex items-center justify-center"
+                title="Copiar Ambos os Telefones"
+              >
+                {copied === "both" ? (
+                  <Check className="h-3.5 w-3.5 font-bold text-green-600" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </button>
               {copied === "tel" ? (
                 <Check className="h-3.5 w-3.5 font-bold text-green-600" />
               ) : (
@@ -90,14 +167,14 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
             {result.whatsApp && (
               <div
                 className="group/item flex cursor-pointer items-center gap-2.5 rounded-lg border border-transparent bg-white p-1.5 transition-all hover:border-gray-200 hover:bg-gray-50"
-                onClick={() => copyToClipboard(result.whatsApp, "zap")}
+                onClick={() => copyToClipboard(buildSingleContactCopyText("WhatsApp", formattedWhatsApp), "zap")}
               >
                 <div className="rounded-md bg-green-100 p-1.5">
                   <MessageCircle className="h-3.5 w-3.5 text-green-600" />
                 </div>
                 <div className="flex flex-1 flex-col truncate">
                   <span className="mb-0.5 text-[9px] font-black uppercase leading-none text-green-500">WhatsApp</span>
-                  <span className="text-xs font-bold leading-none text-gray-700">{result.whatsApp}</span>
+                  <span className="text-xs font-bold leading-none text-gray-700">{formattedWhatsApp}</span>
                 </div>
                 {copied === "zap" ? (
                   <Check className="h-3.5 w-3.5 font-bold text-green-600" />
@@ -125,26 +202,6 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
               )}
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              const unitName = formatCompanyName(result.empresa, result.bairro);
-              const text = `Os telefones da Unidade ${unitName} (${result.bairro}) são: Telefone: ${result.telefone || "--"} | WhatsApp: ${result.whatsApp || "--"}`;
-              copyToClipboard(text, "both");
-            }}
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-100 bg-indigo-50/50 py-2 text-[10px] font-black uppercase tracking-wider text-indigo-700 hover:bg-indigo-100/70 transition-all shadow-sm active:scale-95 mt-1"
-          >
-            {copied === "both" ? (
-              <>
-                <Check className="h-3.5 w-3.5" /> Contatos Copiados!
-              </>
-            ) : (
-              <>
-                <Copy className="h-3.5 w-3.5" /> Copiar Ambos os Telefones
-              </>
-            )}
-          </button>
 
           {result.horariosFuncionamento && result.horariosFuncionamento.length > 0 && (
             <div className="mt-2 border-t border-gray-50 pt-2">

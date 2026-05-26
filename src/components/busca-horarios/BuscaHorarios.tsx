@@ -8,7 +8,7 @@ import { ptBR } from "date-fns/locale";
 import { format, getDay, parseISO, isValid, startOfDay } from "date-fns";
 import { 
   Search, Plus, X, Loader2, Clock, Sun, Moon, SunMoon, 
-  AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy, MapPin
+  AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy, MapPin, ChevronDown
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -29,6 +29,7 @@ export default function BuscaHorarios() {
   
   const [procSearch, setProcSearch] = useState("");
   const [showProcDropdown, setShowProcDropdown] = useState(false);
+  const [showUnidadeDropdown, setShowUnidadeDropdown] = useState(false);
 
   const selectedDatesStrings = useMemo(() => {
     return selectedDateObjects.map(d => format(d, "yyyy-MM-dd"));
@@ -288,41 +289,58 @@ export default function BuscaHorarios() {
             </div>
             <div className="space-y-4">
               {/* Unidades (Opcional) */}
-              <div className="space-y-1.5">
+              <div className="relative space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
                   <MapPin className="h-3 w-3 text-primary" /> Unidades (Opcional)
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {unidadesList.map(unit => {
-                    const isSelected = selectedUnidades.includes(unit);
-                    return (
+                <button
+                  type="button"
+                  onClick={() => setShowUnidadeDropdown(prev => !prev)}
+                  className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all flex items-center justify-between"
+                >
+                  <span className="truncate text-left">
+                    {selectedUnidades.length === 0
+                      ? "Todas as Unidades"
+                      : selectedUnidades.length === 1
+                      ? selectedUnidades[0].replace(/([A-Z])/g, ' $1').trim()
+                      : `${selectedUnidades.length} unidades selecionadas`}
+                  </span>
+                  <ChevronDown className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ${showUnidadeDropdown ? 'rotate-180' : ''}`} />
+                </button>
+                {showUnidadeDropdown && (
+                  <div className="absolute z-20 mt-1 w-full bg-card border border-input rounded-xl shadow-2xl p-1 max-h-56 overflow-y-auto scrollbar-thin">
+                    {selectedUnidades.length > 0 && (
                       <button
-                        key={unit}
                         type="button"
-                        onClick={() => {
-                          setSelectedUnidades(prev => 
-                            isSelected ? prev.filter(u => u !== unit) : [...prev, unit]
-                          );
-                        }}
-                        className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-left flex items-center justify-between
-                          ${isSelected 
-                            ? 'bg-primary border-primary text-primary-foreground shadow-sm' 
-                            : 'bg-muted border-input text-muted-foreground hover:border-primary hover:text-primary'}`}
+                        onClick={() => setSelectedUnidades([])}
+                        className="w-full text-left px-3 py-1.5 text-[10px] font-black text-rose-500 hover:bg-red-50 rounded-lg transition-colors border-b mb-1"
                       >
-                        <span className="truncate">{unit.replace(/([A-Z])/g, ' $1').trim()}</span>
-                        {isSelected && <span className="text-[8px] font-black bg-primary-foreground text-primary px-1 py-0.5 rounded-full leading-none">✓</span>}
+                        ✕ Limpar (Todas as Unidades)
                       </button>
-                    );
-                  })}
-                </div>
-                {selectedUnidades.length > 0 && (
-                  <button 
-                    type="button"
-                    onClick={() => setSelectedUnidades([])} 
-                    className="text-[9px] font-black text-rose-500 hover:underline uppercase tracking-wider block mt-1 ml-0.5 transition-all"
-                  >
-                    Limpar seleção (Todas)
-                  </button>
+                    )}
+                    {unidadesList.map(unit => {
+                      const isSelected = selectedUnidades.includes(unit);
+                      return (
+                        <button
+                          key={unit}
+                          type="button"
+                          onClick={() => {
+                            setSelectedUnidades(prev =>
+                              isSelected ? prev.filter(u => u !== unit) : [...prev, unit]
+                            );
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-2
+                            ${isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-gray-700'}`}
+                        >
+                          <span className={`h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0 transition-all
+                            ${isSelected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
+                            {isSelected && <span className="text-white text-[8px] leading-none font-black">✓</span>}
+                          </span>
+                          {unit.replace(/([A-Z])/g, ' $1').trim()}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 

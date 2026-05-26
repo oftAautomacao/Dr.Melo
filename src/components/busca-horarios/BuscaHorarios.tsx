@@ -214,6 +214,14 @@ export default function BuscaHorarios() {
                 value={procSearch}
                 onChange={e => { setProcSearch(e.target.value); setShowProcDropdown(true); }}
                 onFocus={() => setShowProcDropdown(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    if (filteredProcs.length > 0) {
+                      addProcedimento(filteredProcs[0]);
+                    }
+                  }
+                }}
                 className="w-full rounded-lg border border-input pl-10 pr-4 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none bg-muted hover:bg-card"
               />
               {showProcDropdown && filteredProcs.length > 0 && (

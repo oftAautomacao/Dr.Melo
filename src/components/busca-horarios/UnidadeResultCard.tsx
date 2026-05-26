@@ -36,14 +36,14 @@ const formatCompanyName = (empresa: string, bairro: string) => {
 };
 
 export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardProps) {
-  const [copied, setCopied] = useState<"tel" | "addr" | "zap" | null>(null);
+  const [copied, setCopied] = useState<"tel" | "addr" | "zap" | "both" | null>(null);
   const totalSlots = result.horariosDisponiveis.reduce((sum, d) => sum + d.slots.length, 0);
   const hasAvailability = result.horariosDisponiveis.length > 0;
 
-  const copyToClipboard = (text: string, type: "tel" | "addr" | "zap") => {
+  const copyToClipboard = (text: string, type: "tel" | "addr" | "zap" | "both") => {
     navigator.clipboard.writeText(text);
     setCopied(type);
-    setTimeout(() => setCopied(null), 2000);
+    setTimeout(() => setCopied(null), 2050);
   };
 
   return (
@@ -125,6 +125,26 @@ export function UnidadeResultCard({ result, procedimentos }: UnidadeResultCardPr
               )}
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              const unitName = formatCompanyName(result.empresa, result.bairro);
+              const text = `Os telefones da Unidade ${unitName} (${result.bairro}) são: Telefone: ${result.telefone || "--"} | WhatsApp: ${result.whatsApp || "--"}`;
+              copyToClipboard(text, "both");
+            }}
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-indigo-100 bg-indigo-50/50 py-2 text-[10px] font-black uppercase tracking-wider text-indigo-700 hover:bg-indigo-100/70 transition-all shadow-sm active:scale-95 mt-1"
+          >
+            {copied === "both" ? (
+              <>
+                <Check className="h-3.5 w-3.5" /> Contatos Copiados!
+              </>
+            ) : (
+              <>
+                <Copy className="h-3.5 w-3.5" /> Copiar Ambos os Telefones
+              </>
+            )}
+          </button>
 
           {result.horariosFuncionamento && result.horariosFuncionamento.length > 0 && (
             <div className="mt-2 border-t border-gray-50 pt-2">

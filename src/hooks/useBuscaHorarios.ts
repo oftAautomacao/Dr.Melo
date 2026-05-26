@@ -32,7 +32,7 @@ export interface SearchParams {
   procedimentos: string[];
   periodo: 'Manha' | 'Tarde' | 'Ambos';
   selectedDates: string[]; // YYYY-MM-DD
-  unidade?: string;
+  unidades?: string[];
 }
 
 export interface DaySlots {
@@ -118,7 +118,8 @@ export function useBuscaHorarios() {
   const [datasBloqueadas, setDatasBloqueadas] = useState<Record<string, any>>({});
   const [feriadosData, setFeriadosData] = useState<Record<string, any>>({});
   const [conveniosData, setConveniosData] = useState<Record<string, any>>({});
-  const [examesMetadata, setExamesMetadata] = useState<Record<string, ExamInfo>>({});
+  const [examesData, setExamesData] = useState<Record<string, any>>({});
+  const [cirurgiasData, setCirurgiasData] = useState<Record<string, any>>({});
 
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
@@ -130,7 +131,7 @@ export function useBuscaHorarios() {
     const base = getFirebasePathBase();
     const basePath = `${base}/agendamentoWhatsApp/configuracoes`;
     let loaded = 0;
-    const totalToLoad = 8;
+    const totalToLoad = 9;
     const checkDone = () => { loaded++; if (loaded >= totalToLoad) setLoading(false); };
 
     const off1 = onValue(ref(db, `${basePath}/turnosCriterios`), s => {
@@ -164,23 +165,44 @@ export function useBuscaHorarios() {
       setConveniosData(s.exists() ? s.val() : {}); checkDone();
     });
     const off7 = onValue(ref(db, `${basePath}/exames`), s => {
-      const val = s.exists() ? s.val() : {};
-      const mapped: Record<string, ExamInfo> = {};
-      Object.entries(val).forEach(([k, v]: [string, any]) => {
-        mapped[k] = {
-          nome: v.nome || k,
-          preco: v.preco,
-          drMelo: v.drMelo,
-          clinica: v.clinica,
-          incluso: v.preco === "incluso na consulta" || v.drMelo === "incluso na consulta"
-        };
-      });
-      setExamesMetadata(mapped);
-      checkDone();
+      setExamesData(s.exists() ? s.val() : {}); checkDone();
+    });
+    const off8 = onValue(ref(db, `${basePath}/cirurgias`), s => {
+      setCirurgiasData(s.exists() ? s.val() : {}); checkDone();
     });
 
-    return () => { off1(); offEx(); off2(); off3(); off4(); off5(); off6(); off7(); };
+    return () => { off1(); offEx(); off2(); off3(); off4(); off5(); off6(); off7(); off8(); };
   }, []);
+
+  const examesMetadata = useMemo<Record<string, ExamInfo>>(() => {
+    const mapped: Record<string, ExamInfo> = {};
+    
+    // Process exames
+    Object.entries(examesData).forEach(([k, v]: [string, any]) => {
+      mapped[k] = {
+        nome: v.nome || k,
+        preco: v.preco,
+        drMelo: v.drMelo,
+        clinica: v.clinica,
+        incluso: v.preco === "incluso na consulta" || v.drMelo === "incluso na consulta"
+      };
+    });
+
+    // Process cirurgias
+    Object.entries(cirurgiasData).forEach(([k, v]: [string, any]) => {
+      if (v) {
+        mapped[k] = {
+          nome: v.nome || mapped[k]?.nome || k,
+          preco: v.preco !== undefined ? v.preco : (mapped[k]?.preco ?? ""),
+          drMelo: v.drMelo !== undefined ? v.drMelo : (mapped[k]?.drMelo ?? ""),
+          clinica: v.clinica !== undefined ? v.clinica : (mapped[k]?.clinica ?? ""),
+          incluso: v.preco === "incluso na consulta" || v.drMelo === "incluso na consulta" || (mapped[k]?.incluso ?? false)
+        };
+      }
+    });
+
+    return mapped;
+  }, [examesData, cirurgiasData]);
 
   // Derive convênio names from conveniosData
   const convenioNamesSet = useMemo(() => {
@@ -283,13 +305,13 @@ export function useBuscaHorarios() {
     setResults(null);
 
     try {
-      const { convenio, subplano, procedimentos, periodo, selectedDates, unidade } = params;
+      const { convenio, subplano, procedimentos, periodo, selectedDates, unidades } = params;
       const isParticular = convenio === 'Particular';
       let turnosArr = Object.values(turnosCriterios) as any[];
 
-      // Step 0: Filter by specific unit if provided
-      if (unidade) {
-        turnosArr = turnosArr.filter(turno => turno.unidade === unidade);
+      // Step 0: Filter by specific units if provided
+      if (unidades && unidades.length > 0) {
+        turnosArr = turnosArr.filter(turno => unidades.includes(turno.unidade));
       }
 
       // Step 1: Filter turnos by convênio (only if convenio is provided)
@@ -492,7 +514,7 @@ export function useBuscaHorarios() {
         });
 
         const shouldIncludeInformationalResult =
-          Boolean(unidade) && !convenio && procedimentos.length === 0;
+          Boolean(unidades && unidades.length > 0) && !convenio && procedimentos.length === 0;
 
         if (horariosDisponiveis.length > 0 || shouldIncludeInformationalResult) {
           unitResults.push({

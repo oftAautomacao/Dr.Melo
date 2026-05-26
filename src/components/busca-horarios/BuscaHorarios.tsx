@@ -20,7 +20,7 @@ export default function BuscaHorarios() {
   } = useBuscaHorarios();
 
   const [convenio, setConvenio] = useState("");
-  const [selectedUnidade, setSelectedUnidade] = useState("");
+  const [selectedUnidades, setSelectedUnidades] = useState<string[]>([]);
   const [subplano, setSubplano] = useState("");
   const [procedimentos, setProcedimentos] = useState<string[]>([]);
   const [periodo, setPeriodo] = useState<"Manha" | "Tarde" | "Ambos">("Ambos");
@@ -72,20 +72,20 @@ export default function BuscaHorarios() {
   };
 
   const handleBuscar = () => {
-    if (!convenio && procedimentos.length === 0 && !selectedUnidade) return;
-    buscar({ convenio, subplano, procedimentos, periodo, selectedDates: selectedDatesStrings, unidade: selectedUnidade });
+    if (!convenio && procedimentos.length === 0 && selectedUnidades.length === 0) return;
+    buscar({ convenio, subplano, procedimentos, periodo, selectedDates: selectedDatesStrings, unidades: selectedUnidades });
   };
 
   const handleLimpar = () => {
     setConvenio("");
-    setSelectedUnidade("");
+    setSelectedUnidades([]);
     setSubplano("");
     setProcedimentos([]);
     setPeriodo("Ambos");
     setSelectedDateObjects([]);
     // To clear results, we need to call a clear function in the hook or set results to null
     // Assuming 'buscar' with empty params or a new clear function
-    buscar({ convenio: "", subplano: "", procedimentos: [], periodo: "Ambos", selectedDates: [], unidade: "" });
+    buscar({ convenio: "", subplano: "", procedimentos: [], periodo: "Ambos", selectedDates: [], unidades: [] });
   };
 
   const examPrices = useMemo(() => {
@@ -287,21 +287,43 @@ export default function BuscaHorarios() {
               <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Critérios de Busca</h2>
             </div>
             <div className="space-y-4">
-              {/* Unidade (Opcional) */}
+              {/* Unidades (Opcional) */}
               <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                  <MapPin className="h-3 w-3 text-primary" /> Unidade (Opcional)
+                  <MapPin className="h-3 w-3 text-primary" /> Unidades (Opcional)
                 </label>
-                <select
-                  value={selectedUnidade}
-                  onChange={(e) => setSelectedUnidade(e.target.value)}
-                  className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all"
-                >
-                  <option value="">Todas as Unidades</option>
-                  {unidadesList.map(unit => (
-                    <option key={unit} value={unit}>{unit.replace(/([A-Z])/g, ' $1').trim()}</option>
-                  ))}
-                </select>
+                <div className="grid grid-cols-2 gap-2">
+                  {unidadesList.map(unit => {
+                    const isSelected = selectedUnidades.includes(unit);
+                    return (
+                      <button
+                        key={unit}
+                        type="button"
+                        onClick={() => {
+                          setSelectedUnidades(prev => 
+                            isSelected ? prev.filter(u => u !== unit) : [...prev, unit]
+                          );
+                        }}
+                        className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border transition-all text-left flex items-center justify-between
+                          ${isSelected 
+                            ? 'bg-primary border-primary text-primary-foreground shadow-sm' 
+                            : 'bg-muted border-input text-muted-foreground hover:border-primary hover:text-primary'}`}
+                      >
+                        <span className="truncate">{unit.replace(/([A-Z])/g, ' $1').trim()}</span>
+                        {isSelected && <span className="text-[8px] font-black bg-primary-foreground text-primary px-1 py-0.5 rounded-full leading-none">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+                {selectedUnidades.length > 0 && (
+                  <button 
+                    type="button"
+                    onClick={() => setSelectedUnidades([])} 
+                    className="text-[9px] font-black text-rose-500 hover:underline uppercase tracking-wider block mt-1 ml-0.5 transition-all"
+                  >
+                    Limpar seleção (Todas)
+                  </button>
+                )}
               </div>
 
               <div>
@@ -415,7 +437,7 @@ export default function BuscaHorarios() {
             </button>
             <button
               onClick={handleBuscar}
-              disabled={searching || (!convenio && procedimentos.length === 0 && !selectedUnidade)}
+              disabled={searching || (!convenio && procedimentos.length === 0 && selectedUnidades.length === 0)}
               className="flex-[2] flex items-center justify-center gap-2 py-4 rounded-xl font-black text-xs text-primary-foreground transition-all uppercase tracking-widest
                 bg-primary hover:bg-primary/90 shadow-xl shadow-primary/10 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none active:scale-[0.98]"
             >

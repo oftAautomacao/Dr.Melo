@@ -17,11 +17,11 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }
     <div className="flex min-h-screen">
       {/* Sidebar - Changed background to dark blue and text to white */}
       <div className="w-64 bg-blue-900 text-white flex flex-col">
-        <div className={`flex justify-center items-center border-b border-gray-700 bg-white ${unit === 'OFT/45' ? 'py-1' : 'p-2'}`}>
+        <div className={`flex justify-center items-center border-b border-gray-700 ${unit === 'OFT/45' ? 'bg-white py-1' : 'bg-blue-900 p-2'}`}>
           {unit === 'OFT/45' ? (
             <Image src="/images/logo lobo.jpg" alt="OFT Logo" width={120} height={48} className="object-contain" />
           ) : (
-            <Image src="/images/image1.png" alt="Dr. Melo Logo" width={150} height={60} className="object-contain" />
+            <Image src="/images/image2_semFundo.png" alt="Dr. Melo Logo" width={150} height={60} className="object-contain bg-blue-900" />
           )}
         </div>
         <nav className="flex flex-col p-4 space-y-2">

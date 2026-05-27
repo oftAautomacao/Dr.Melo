@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+const INCLUDED_IN_CONSULTA_OPTION = "__included_in_consulta__";
+
 export default function BuscaHorarios() {
   const {
     loading, searching, results,
@@ -30,6 +32,7 @@ export default function BuscaHorarios() {
   const [procSearch, setProcSearch] = useState("");
   const [showProcDropdown, setShowProcDropdown] = useState(false);
   const [showUnidadeDropdown, setShowUnidadeDropdown] = useState(false);
+  const [selectedByIncludedOption, setSelectedByIncludedOption] = useState(false);
 
   const selectedDatesStrings = useMemo(() => {
     return selectedDateObjects.map(d => format(d, "yyyy-MM-dd"));
@@ -55,21 +58,41 @@ export default function BuscaHorarios() {
     }).filter(Boolean) as Date[];
   }, [feriadosData]);
 
+  const includedProcedimentos = useMemo(() => {
+    return procedimentosList.filter((proc) => examesMetadata[proc]?.incluso);
+  }, [procedimentosList, examesMetadata]);
+
   const filteredProcs = useMemo(() => {
     const search = procSearch.toLowerCase();
-    return procedimentosList
+    const filtered = procedimentosList
       .filter(p => !procedimentos.includes(p))
       .filter(p => !search || p.toLowerCase().includes(search));
-  }, [procedimentosList, procedimentos, procSearch]);
+
+    if (search && "incluso na consulta".includes(search) && includedProcedimentos.length > 0) {
+      return [INCLUDED_IN_CONSULTA_OPTION, ...filtered];
+    }
+
+    return filtered;
+  }, [procedimentosList, procedimentos, procSearch, includedProcedimentos]);
 
   const addProcedimento = (proc: string) => {
+    if (proc === INCLUDED_IN_CONSULTA_OPTION) {
+      setProcedimentos((prev) => Array.from(new Set([...prev, ...includedProcedimentos])));
+      setSelectedByIncludedOption(true);
+      setProcSearch("");
+      setShowProcDropdown(false);
+      return;
+    }
+
     setProcedimentos(prev => [...prev, proc]);
+    setSelectedByIncludedOption(false);
     setProcSearch("");
     setShowProcDropdown(false);
   };
 
   const removeProcedimento = (proc: string) => {
     setProcedimentos(prev => prev.filter(p => p !== proc));
+    setSelectedByIncludedOption(false);
   };
 
   const handleBuscar = () => {
@@ -82,6 +105,7 @@ export default function BuscaHorarios() {
     setSelectedUnidades([]);
     setSubplano("");
     setProcedimentos([]);
+    setSelectedByIncludedOption(false);
     setPeriodo("Ambos");
     setSelectedDateObjects([]);
     // To clear results, we need to call a clear function in the hook or set results to null
@@ -116,6 +140,10 @@ export default function BuscaHorarios() {
     });
     return { items, total };
   }, [procedimentos, examesMetadata]);
+
+  const hasIncludedOptionCopyMode = useMemo(() => {
+    return examPrices.items.length > 0 && examPrices.items.every((item) => item.label === "Incluso");
+  }, [examPrices]);
 
   const friendlyName = (name: string) => {
     return name
@@ -233,7 +261,7 @@ export default function BuscaHorarios() {
                       onClick={() => addProcedimento(proc)}
                       className="w-full text-left px-4 py-2 text-sm font-bold hover:bg-muted rounded-lg transition-colors border-b last:border-0"
                     >
-                      {friendlyName(proc)}
+                      {proc === INCLUDED_IN_CONSULTA_OPTION ? "Incluso na consulta" : friendlyName(proc)}
                     </button>
                   ))}
                 </div>
@@ -262,8 +290,10 @@ export default function BuscaHorarios() {
                     <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Total</span>
                     <button 
                       onClick={() => {
-                        const text = examPrices.items.map(i => `- ${friendlyName(i.nome)}: ${i.label}`).join('\n') + 
-                                     `\n\n*Total: R$ ${examPrices.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*`;
+                        const text = selectedByIncludedOption && hasIncludedOptionCopyMode
+                          ? examPrices.items.map(i => `- ${friendlyName(i.nome)}`).join('\n')
+                          : examPrices.items.map(i => `- ${friendlyName(i.nome)}: ${i.label}`).join('\n') + 
+                            `\n\n*Total: R$ ${examPrices.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}*`;
                         navigator.clipboard.writeText(text);
                         toast.success("Orçamento copiado!");
                       }}

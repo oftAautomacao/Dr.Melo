@@ -120,6 +120,7 @@ export interface CalendarAppointment {
   exames: string[];
   motivacao: string;
   unidade: string;
+  unidadeLabel?: string;
   telefone: string;
   Observacoes?: string;
   aiCategorization?: AICategorization;
@@ -408,7 +409,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   convenio: record.convenio,
                   exames: record.exames || [],
                   motivacao: record.motivacao,
-                  unidade: base === "OFT/45" ? unit : record.unidade,
+                  unidade: unit,
+                  unidadeLabel: record.unidade,
                   telefone: record.telefone,
                   Observacoes: record.Observacoes || (record.obs && record.obs.length > 0 ? record.obs[0] : ""),
                   aiCategorization: record.aiCategorization,
@@ -851,7 +853,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                           {selectedUnit &&
                             appointmentsForSelectedDate.map((app, idx) => {
                               const age = calculateAge(app.nascimento);
-                              const formattedUnit = app.unidade
+                              const formattedUnit = (app.unidadeLabel || app.unidade)
                                 .replace(/([A-Z])/g, " $1")
                                 .trim();
                               const isParticular = app.convenio?.trim().toLowerCase() === "particular";

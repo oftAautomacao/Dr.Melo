@@ -144,7 +144,7 @@ export function PatientDetailsSheet({
                                                                         Site
                                                                     </>
                                                                 ) : (
-                                                                    "Desconhecida"
+                                                                    patient.origem.charAt(0).toUpperCase() + patient.origem.slice(1)
                                                                 )}
                                                             </span>
                                                         )}

@@ -85,7 +85,7 @@ export interface AppointmentFirebaseRecord {
   confirmado?: boolean;
   realizouConsulta?: "S" | "N";
   dataAtendimento?: string;
-  origem?: "facebook/instagram" | "site" | "desconhecida";
+  origem?: string;
   conferenciaFaturamento?: {
     origem?: "manual" | "ia";
     atualizadoEm?: string;

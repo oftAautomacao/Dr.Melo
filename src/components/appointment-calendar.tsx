@@ -204,14 +204,16 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 }) => {
   const { toast } = useToast();
   const router = useRouter();
+  const initialCalendarDate = parseFilterDate(initialFilter) ?? new Date();
   /* ----------------------------- ESTADOS ----------------------------- */
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
     if (initialDay) {
       const day = parseISO(initialDay);
       if (dateFnsIsValid(day)) return day;
     }
-    return parseFilterDate(initialFilter) ?? new Date();
+    return initialCalendarDate;
   });
+  const [calendarMonth, setCalendarMonth] = useState<Date>(initialCalendarDate);
 
   const [appointmentsByUnit, setAppointmentsByUnit] =
     useState<AppointmentsByUnit>({});
@@ -259,7 +261,11 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     }
     
     setSelectedUnit(record.unidade);
-    setSelectedDate(parseISO(record.dataAgendamento));
+    const recordDate = parseISO(record.dataAgendamento);
+    setSelectedDate(recordDate);
+    if (dateFnsIsValid(recordDate)) {
+      setCalendarMonth(recordDate);
+    }
   };
 
   /* -- estados para autopreencher/limpar -- */
@@ -440,23 +446,6 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialUnit, selectedUnit]);
 
-  // Atualiza selectedUnit se initialUnit mudar
-  useEffect(() => {
-    if (
-      initialUnit !== undefined &&
-      initialUnit !== null &&
-      initialUnit !== selectedUnit
-    ) {
-      setSelectedUnit(initialUnit);
-    } else if (
-      selectedUnit === undefined &&
-      availableUnits.length > 0 &&
-      (initialUnit === undefined || initialUnit === null)
-    ) {
-      setSelectedUnit(availableUnits[0]);
-    }
-  }, [initialUnit, selectedUnit, availableUnits]);
-
   /* ------------------- Estado e Efeito para FirebaseBase no cliente --------------- */
   const [clientFirebaseBase, setClientFirebaseBase] = useState<string | null>(null);
 
@@ -471,6 +460,50 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     () => (selectedUnit ? appointmentsByUnit[selectedUnit] ?? [] : []),
     [appointmentsByUnit, selectedUnit]
   );
+
+  const availableUnitsForSelectedMonth = useMemo(() => {
+    if (!dateFnsIsValid(calendarMonth)) {
+      return availableUnits;
+    }
+
+    const selectedYear = calendarMonth.getFullYear();
+    const selectedMonth = calendarMonth.getMonth();
+
+    return availableUnits.filter((unit) =>
+      (appointmentsByUnit[unit] ?? []).some((appointment) => {
+        const appointmentDate = parseISO(appointment.dataAgendamento);
+        return (
+          dateFnsIsValid(appointmentDate) &&
+          appointmentDate.getFullYear() === selectedYear &&
+          appointmentDate.getMonth() === selectedMonth
+        );
+      })
+    );
+  }, [appointmentsByUnit, availableUnits, calendarMonth]);
+
+  // Atualiza selectedUnit se initialUnit mudar ou sair da lista do mes atual
+  useEffect(() => {
+    if (
+      initialUnit !== undefined &&
+      initialUnit !== null &&
+      initialUnit !== selectedUnit &&
+      availableUnitsForSelectedMonth.includes(initialUnit)
+    ) {
+      setSelectedUnit(initialUnit);
+    } else if (
+      selectedUnit === undefined &&
+      availableUnitsForSelectedMonth.length > 0 &&
+      (initialUnit === undefined || initialUnit === null)
+    ) {
+      setSelectedUnit(availableUnitsForSelectedMonth[0]);
+    } else if (
+      selectedUnit !== undefined &&
+      availableUnitsForSelectedMonth.length > 0 &&
+      !availableUnitsForSelectedMonth.includes(selectedUnit)
+    ) {
+      setSelectedUnit(availableUnitsForSelectedMonth[0]);
+    }
+  }, [initialUnit, selectedUnit, availableUnitsForSelectedMonth]);
 
   const getDayBlockInfo = (unitName: string | undefined, dateStr: string): DayBlockInfo => {
     if (!unitName || !dateStr) {
@@ -676,10 +709,10 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
               {/* REMOVIDO O HEADER "Médicos"/"Unidades" CONFORME SOLICITADO */}
               <ScrollArea className="flex-1 px-4 py-4">
                 <div className="space-y-2">
-                  {availableUnits.length === 0 && !isLoading && (
-                    <EmptyMsg msg="Nenhuma unidade" />
+                  {availableUnitsForSelectedMonth.length === 0 && !isLoading && (
+                    <EmptyMsg msg="Nenhuma unidade com agendamento neste mes." />
                   )}
-                  {availableUnits.map((unit) => {
+                  {availableUnitsForSelectedMonth.map((unit) => {
                     const isActive = unit === selectedUnit;
                     const formatted = unit.replace(/([A-Z])/g, " $1").trim();
                     return (
@@ -707,7 +740,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 mode="single"
                 selected={selectedDate}
                 onSelect={setSelectedDate}
-                defaultMonth={selectedDate}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
                 className="rounded-md border p-3"
                 locale={ptBR}
                 modifiers={{

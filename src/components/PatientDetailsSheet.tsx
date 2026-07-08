@@ -21,6 +21,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Phone, Calendar, Clock, MapPin, User, Users, Activity, Instagram, Globe } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { normalizePatientOrigin } from "@/lib/patient-origin";
+import { useToast } from "@/hooks/use-toast";
 
 export interface AppointmentDetail {
     nome: string;
@@ -50,6 +51,7 @@ export function PatientDetailsSheet({
     patients,
 }: PatientDetailsSheetProps) {
     const [searchTerm, setSearchTerm] = useState("");
+    const { toast } = useToast();
 
     const filteredPatients = useMemo(() => {
         return patients.filter((p) =>
@@ -148,7 +150,7 @@ export function PatientDetailsSheet({
                                                                         Google
                                                                     </>
                                                                 ) : (
-                                                                    normalizedOrigin
+                                                                    "Desconhecida"
                                                                 )}
                                                             </span>
                                                                 );
@@ -165,10 +167,21 @@ export function PatientDetailsSheet({
                                                     <span className="truncate leading-none">{patient.unidadeName}</span>
                                                 </div>
                                                 {patient.telefone && (
-                                                    <a href={`tel:${patient.telefone}`} className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700 font-bold transition-colors">
+                                                    <button
+                                                        type="button"
+                                                        className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700 font-bold transition-colors"
+                                                        onClick={() => {
+                                                            const cleanPhone = patient.telefone.replace(/\D/g, "");
+                                                            void navigator.clipboard.writeText(cleanPhone);
+                                                            toast({
+                                                                title: "N\u00FAmero copiado",
+                                                                description: cleanPhone,
+                                                            });
+                                                        }}
+                                                    >
                                                         <Phone className="h-3.5 w-3.5 shrink-0" />
                                                         <span className="leading-none tracking-tight">{patient.telefone}</span>
-                                                    </a>
+                                                    </button>
                                                 )}
                                                 {patient.exames.length > 0 && (
                                                     <div className="flex items-start gap-1.5 text-orange-600 font-bold">

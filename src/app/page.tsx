@@ -1,10 +1,10 @@
-"use client";
+﻿"use client";
 
 import SidebarLayout from "@/components/layout/sidebar-layout";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Building2, UserX } from "lucide-react";
+import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Building2, UserX, MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
@@ -31,13 +31,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { differenceInYears, parse } from "date-fns";
 import { PatientDetailsSheet, AppointmentDetail } from "@/components/PatientDetailsSheet";
 import { normalizePatientOrigin } from "@/lib/patient-origin";
 
 /* ---------- helpers ---------- */
 const MESES = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
+  "Janeiro", "Fevereiro", "Mar\u00E7o", "Abril", "Maio", "Junho",
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
@@ -48,6 +49,24 @@ const obterNomeMes = (dataStr: string) => {
 };
 
 const obterAno = (dataStr: string) => dataStr.substring(0, 4);
+
+const normalizeSearchText = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const matchesSearchText = (value: string, query: string) => {
+  const normalizedValue = normalizeSearchText(value);
+  const normalizedQuery = normalizeSearchText(query);
+  if (!normalizedQuery) return true;
+
+  const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
+  if (normalizedValue.includes(normalizedQuery)) return true;
+
+  return queryTokens.every((token) => normalizedValue.includes(token));
+};
 
 const calculateAge = (nascimento: string) => {
   if (!nascimento) return 0;
@@ -61,14 +80,21 @@ const calculateAge = (nascimento: string) => {
 
 const getAgeBucket = (nascimento: string) => {
   const age = calculateAge(nascimento);
-  if (age <= 13) return "Criança";
+  if (age <= 13) return "Crian\u00E7a";
   if (age <= 59) return "Adulto"; // Includes adolescents as requested
   return "Idoso";
 };
 
 /* ---------- Types ---------- */
-type StatType = "unidades" | "convenios" | "faixaEtaria" | "exames" | "historico" | "origem";
+type StatType = "unidades" | "convenios" | "faixaEtaria" | "exames" | "historico" | "origem" | "motivacao" | "cirurgia";
 type DashboardMode = "simple" | "advanced";
+
+type FilterCategory = "unidade" | "convenio" | "faixaEtaria" | "exame" | "origem" | "motivacao" | "cirurgia";
+
+interface FilterOptionItem {
+  value: string;
+  label: string;
+}
 
 interface CardData {
   id: string;
@@ -87,7 +113,7 @@ interface CardData {
 }
 
 /* =============================================================
-   PÁGINA INICIAL MERGED (HOME + STATISTICS)
+   PÃGINA INICIAL MERGED (HOME + STATISTICS)
    ============================================================= */
 export default function Home() {
   const router = useRouter();
@@ -106,8 +132,10 @@ export default function Home() {
 
   // Advanced States
   const [statType, setStatType] = useState<StatType>("unidades");
-  const [filterCategory, setFilterCategory] = useState<"unidade" | "convenio" | "faixaEtaria" | "exame" | "origem">("unidade");
+  const [filterCategory, setFilterCategory] = useState<FilterCategory>("unidade");
   const [filterValue, setFilterValue] = useState<string>("all");
+  const [optionQuery, setOptionQuery] = useState("");
+  const [isOptionInputFocused, setIsOptionInputFocused] = useState(false);
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [sortColumn, setSortColumn] = useState<"title" | "count" | "percentage" | "value" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
@@ -189,12 +217,14 @@ export default function Home() {
   /* ---------- Sync Filter Category with Stat Type ---------- */
   useEffect(() => {
     // Map statType to corresponding filterCategory
-    const mapping: Record<StatType, "unidade" | "convenio" | "faixaEtaria" | "exame" | "origem"> = {
+    const mapping: Record<StatType, FilterCategory> = {
       "unidades": "unidade",
       "convenios": "convenio",
       "faixaEtaria": "faixaEtaria",
       "exames": "exame",
       "origem": "origem",
+      "motivacao": "motivacao",
+      "cirurgia": "cirurgia",
       "historico": "unidade" // Default to unidade for historico
     };
 
@@ -206,12 +236,16 @@ export default function Home() {
   }, [statType]);
 
   useEffect(() => {
-    if (filterCategory === 'unidade' || filterCategory === 'convenio' || filterCategory === 'faixaEtaria' || filterCategory === 'exame' || filterCategory === 'origem') {
+    if (filterCategory === 'unidade' || filterCategory === 'convenio' || filterCategory === 'faixaEtaria' || filterCategory === 'exame' || filterCategory === 'origem' || filterCategory === 'motivacao' || filterCategory === 'cirurgia') {
       setFilterValue("all");
     } else {
       setFilterValue("");
     }
   }, [filterCategory]);
+
+  useEffect(() => {
+    setOptionQuery(filterValue === "all" ? "" : filterValue);
+  }, [filterValue]);
 
   /* ---------- Available Options (Memoized) ---------- */
   const unitsAvailable = useMemo(() => Object.keys(patientData).sort(), [patientData]);
@@ -244,7 +278,100 @@ export default function Home() {
     return Array.from(set).sort();
   }, [patientData]);
 
-  const faixasEtariasAvailable = ["Criança", "Adulto", "Idoso"];
+  const faixasEtariasAvailable = ["Crian\u00E7a", "Adulto", "Idoso"];
+
+  const motivacoesAvailable = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const unit in patientData) {
+      for (const date in patientData[unit]) {
+        const hours = patientData[unit][date];
+        for (const time in hours) {
+          const motivacao = String(hours[time]?.motivacao || "").trim();
+          if (!motivacao) continue;
+          counts.set(motivacao, (counts.get(motivacao) || 0) + 1);
+        }
+      }
+    }
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([motivacao]) => motivacao);
+  }, [patientData]);
+
+  const cirurgiasAvailable = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const unit in patientData) {
+      for (const date in patientData[unit]) {
+        const hours = patientData[unit][date];
+        for (const time in hours) {
+          const cirurgia = String(hours[time]?.cirurgia || "").trim();
+          if (!cirurgia) continue;
+          counts.set(cirurgia, (counts.get(cirurgia) || 0) + 1);
+        }
+      }
+    }
+
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([cirurgia]) => cirurgia);
+  }, [patientData]);
+
+  const filterOptions = useMemo<FilterOptionItem[]>(() => {
+    if (filterCategory === "unidade") {
+      return unitsAvailable.map((u) => ({
+        value: u,
+        label: `${unitConfig?.[u]?.empresa ?? u}${unitConfig?.[u]?.bairro ? ` - ${unitConfig?.[u]?.bairro}` : ""}`,
+      }));
+    }
+
+    if (filterCategory === "convenio") {
+      return conveniosAvailable.map((c) => ({ value: c, label: c }));
+    }
+
+    if (filterCategory === "faixaEtaria") {
+      return faixasEtariasAvailable.map((f) => ({ value: f, label: f }));
+    }
+
+    if (filterCategory === "exame") {
+      return examesAvailable.map((e) => ({ value: e, label: e }));
+    }
+
+    if (filterCategory === "origem") {
+      return [
+        { value: "Google", label: "Google" },
+        { value: "Instagram", label: "Instagram" },
+        { value: "Desconhecido", label: "Desconhecida" },
+      ];
+    }
+
+    if (filterCategory === "motivacao") {
+      return motivacoesAvailable.map((m) => ({ value: m, label: m }));
+    }
+
+    if (filterCategory === "cirurgia") {
+      return cirurgiasAvailable.map((c) => ({ value: c, label: c }));
+    }
+
+    return [];
+  }, [cirurgiasAvailable, conveniosAvailable, examesAvailable, faixasEtariasAvailable, filterCategory, motivacoesAvailable, unitConfig, unitsAvailable]);
+
+  const filteredOptionSuggestions = useMemo(() => {
+    if (!optionQuery.trim()) {
+      return filterOptions.slice(0, 12);
+    }
+
+    const normalizedQuery = normalizeSearchText(optionQuery);
+
+    return [...filterOptions]
+      .filter((option) => matchesSearchText(option.label, optionQuery))
+      .sort((a, b) => {
+        const aStarts = normalizeSearchText(a.label).startsWith(normalizedQuery);
+        const bStarts = normalizeSearchText(b.label).startsWith(normalizedQuery);
+        if (aStarts !== bStarts) return aStarts ? -1 : 1;
+        return a.label.localeCompare(b.label);
+      })
+      .slice(0, 12);
+  }, [filterOptions, optionQuery]);
 
   const mesesDisponiveis = useMemo(() => {
     const set = new Set<string>();
@@ -392,7 +519,7 @@ export default function Home() {
             const examesArray = Array.isArray(hours[time].exames) ? hours[time].exames : [];
             
             if (date < "2026-03-01" || selectedUnit !== "DRM" || !isParticular) {
-               appValue = 30; // Regra antiga / Plano de Saúde
+               appValue = 30; // Regra antiga / Plano de SaÃºde
                const count = examesArray.length;
                if (count > 0) {
                  examesArray.forEach((ex: string) => {
@@ -406,7 +533,7 @@ export default function Home() {
                    const conf = examConfig[exName];
                    let priceDrMelo = conf?.drMelo;
 
-                   // Preparação para futura alteração onde drMelo será separado por unidade
+                   // PreparaÃ§Ã£o para futura alteraÃ§Ã£o onde drMelo serÃ¡ separado por unidade
                    if (priceDrMelo && typeof priceDrMelo === 'object') {
                        priceDrMelo = priceDrMelo[unit] || 0;
                    }
@@ -428,18 +555,27 @@ export default function Home() {
 
             const app = { ...hours[time], _unit: unit, _date: date, _time: time, _value: appValue, _examPrices: examPrices };
 
-            if (filterCategory === 'convenio' && filterValue && filterValue !== 'all' && app.convenio !== filterValue) continue;
+            if (filterCategory === 'convenio' && filterValue && filterValue !== 'all' && !matchesSearchText(app.convenio || "", filterValue)) continue;
             if (filterCategory === 'exame' && filterValue && filterValue !== 'all') {
-              if (!Array.isArray(app.exames) || !app.exames.includes(filterValue)) continue;
+              if (!Array.isArray(app.exames) || !app.exames.some((ex: string) => matchesSearchText(ex, filterValue))) continue;
             }
             if (filterCategory === 'faixaEtaria' && filterValue && filterValue !== 'all') {
               const bucket = getAgeBucket(app.nascimento);
               if (bucket !== filterValue) continue;
             }
-            if (filterCategory === 'unidade' && filterValue && filterValue !== 'all' && app._unit !== filterValue) continue;
+            if (filterCategory === 'unidade' && filterValue && filterValue !== 'all') {
+              const unitLabel = `${unitConfig?.[app._unit]?.empresa ?? app._unit}${unitConfig?.[app._unit]?.bairro ? ` - ${unitConfig?.[app._unit]?.bairro}` : ""}`;
+              if (!matchesSearchText(unitLabel, filterValue) && !matchesSearchText(app._unit, filterValue)) continue;
+            }
             if (filterCategory === 'origem' && filterValue && filterValue !== 'all') {
               const origVal = normalizePatientOrigin(app.origem);
-              if (origVal !== filterValue) continue;
+              if (!matchesSearchText(origVal, filterValue)) continue;
+            }
+            if (filterCategory === 'motivacao' && filterValue && filterValue !== 'all') {
+              if (!matchesSearchText(app.motivacao || "", filterValue)) continue;
+            }
+            if (filterCategory === 'cirurgia' && filterValue && filterValue !== 'all') {
+              if (!matchesSearchText(app.cirurgia || "", filterValue)) continue;
             }
 
             appointments.push(app);
@@ -448,7 +584,7 @@ export default function Home() {
       }
     }
     return appointments;
-  }, [patientData, filter, statType, filterCategory, filterValue, examConfig, selectedUnit]);
+  }, [patientData, filter, statType, filterCategory, filterValue, examConfig, selectedUnit, unitConfig]);
 
   const displayData = useMemo<CardData[]>(() => {
     const appointments = filteredAppointments;
@@ -495,7 +631,7 @@ export default function Home() {
 
         appointments.forEach(app => {
           const u = app._unit;
-          const c = app.convenio || "Não informado";
+          const c = app.convenio || "N\u00E3o informado";
 
           if (!unitCounts[u]) unitCounts[u] = { count: 0, value: 0, ratingSum: 0, ratingCount: 0, noShows: 0 };
           unitCounts[u].count += 1;
@@ -520,7 +656,7 @@ export default function Home() {
           return {
             id: unit,
             title: unit.charAt(0).toUpperCase() + unit.slice(1),
-            subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
+            subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "M\u00E9dico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
             ratingSum: unitCounts[unit].ratingSum,
@@ -565,7 +701,7 @@ export default function Home() {
           return {
             id: unit,
             title: unit.charAt(0).toUpperCase() + unit.slice(1),
-            subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
+            subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "M\u00E9dico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
             ratingSum: unitCounts[unit].ratingSum,
@@ -611,7 +747,7 @@ export default function Home() {
           return {
             id: unit,
             title: unit.charAt(0).toUpperCase() + unit.slice(1),
-            subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
+            subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "M\u00E9dico" : "Unidade"),
             count: unitCounts[unit].count,
             value: unitCounts[unit].value,
             ratingSum: unitCounts[unit].ratingSum,
@@ -641,7 +777,7 @@ export default function Home() {
       return entries.map(unit => ({
         id: unit,
         title: unit.charAt(0).toUpperCase() + unit.slice(1),
-        subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "Médico" : "Unidade"),
+        subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === 'OFT/45' ? "M\u00E9dico" : "Unidade"),
         count: counts[unit].count,
         value: counts[unit].value,
         ratingSum: counts[unit].ratingSum,
@@ -658,7 +794,7 @@ export default function Home() {
         const convenioCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
-          const c = app.convenio || "Não informado";
+          const c = app.convenio || "N\u00E3o informado";
           const u = app._unit;
 
           if (!convenioCounts[c]) convenioCounts[c] = { count: 0, value: 0 };
@@ -687,7 +823,7 @@ export default function Home() {
               return {
                 id: convenio,
                 title: convenio,
-                subtitle: "Convênio Médico",
+                subtitle: "Conv\u00EAnio M\u00E9dico",
                 count: convenioCounts[convenio].count,
                 value: convenioCounts[convenio].value,
                 icon: <FileText className="h-5 w-5 text-green-600" />,
@@ -702,7 +838,7 @@ export default function Home() {
         const convenioCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
-          const c = app.convenio || "Não informado";
+          const c = app.convenio || "N\u00E3o informado";
           const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
 
           if (!convenioCounts[c]) convenioCounts[c] = { count: 0, value: 0 };
@@ -726,7 +862,7 @@ export default function Home() {
               return {
                 id: convenio,
                 title: convenio,
-                subtitle: "Convênio Médico",
+                subtitle: "Conv\u00EAnio M\u00E9dico",
                 count: convenioCounts[convenio].count,
                 value: convenioCounts[convenio].value,
                 icon: <FileText className="h-5 w-5 text-green-600" />,
@@ -741,7 +877,7 @@ export default function Home() {
         const convenioCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
-          const c = app.convenio || "Não informado";
+          const c = app.convenio || "N\u00E3o informado";
 
           if (!convenioCounts[c]) convenioCounts[c] = { count: 0, value: 0 };
           convenioCounts[c].count += 1;
@@ -768,7 +904,7 @@ export default function Home() {
               return {
                 id: convenio,
                 title: convenio,
-                subtitle: "Convênio Médico",
+                subtitle: "Conv\u00EAnio M\u00E9dico",
                 count: convenioCounts[convenio].count,
                 value: convenioCounts[convenio].value,
                 icon: <FileText className="h-5 w-5 text-green-600" />,
@@ -780,7 +916,7 @@ export default function Home() {
       // Default Logic
       const counts: Record<string, { count: number, value: number }> = {};
       appointments.forEach(app => {
-        const conv = app.convenio || "Não informado";
+        const conv = app.convenio || "N\u00E3o informado";
         if (!counts[conv]) counts[conv] = { count: 0, value: 0 };
         counts[conv].count += 1;
         counts[conv].value += app._value;
@@ -790,7 +926,7 @@ export default function Home() {
         .map(([name, data]) => ({
           id: name,
           title: name,
-          subtitle: "Convênio Médico",
+          subtitle: "Conv\u00EAnio M\u00E9dico",
           count: data.count,
           value: data.value,
           icon: <FileText className="h-5 w-5 text-green-600" />
@@ -817,8 +953,8 @@ export default function Home() {
           faixaUnidades[bucket][u].value += app._value;
         });
 
-        const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
-        const order = ["Criança", "Adulto", "Idoso"];
+        const ranges = { "Crian\u00E7a": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
+        const order = ["Crian\u00E7a", "Adulto", "Idoso"];
 
         return order
           .filter(f => faixaCounts[f] && faixaCounts[f].count > 0)
@@ -835,7 +971,7 @@ export default function Home() {
             return {
               id: faixa,
               title: faixa,
-              subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Etária",
+              subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Et\u00E1ria",
               count: faixaCounts[faixa].count,
               value: faixaCounts[faixa].value,
               icon: <Users className="h-5 w-5 text-purple-500" />,
@@ -851,7 +987,7 @@ export default function Home() {
 
         appointments.forEach(app => {
           const bucket = getAgeBucket(app.nascimento) || "Desconhecido";
-          const c = app.convenio || "Não informado";
+          const c = app.convenio || "N\u00E3o informado";
 
           if (!faixaCounts[bucket]) faixaCounts[bucket] = { count: 0, value: 0 };
           faixaCounts[bucket].count += 1;
@@ -863,8 +999,8 @@ export default function Home() {
           faixaConvenios[bucket][c].value += app._value;
         });
 
-        const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
-        const order = ["Criança", "Adulto", "Idoso"];
+        const ranges = { "Crian\u00E7a": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
+        const order = ["Crian\u00E7a", "Adulto", "Idoso"];
 
         return order
           .filter(f => faixaCounts[f] && faixaCounts[f].count > 0)
@@ -877,7 +1013,7 @@ export default function Home() {
             return {
               id: faixa,
               title: faixa,
-              subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Etária",
+              subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Et\u00E1ria",
               count: faixaCounts[faixa].count,
               value: faixaCounts[faixa].value,
               icon: <Users className="h-5 w-5 text-purple-500" />,
@@ -908,8 +1044,8 @@ export default function Home() {
           }
         });
 
-        const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
-        const order = ["Criança", "Adulto", "Idoso"];
+        const ranges = { "Crian\u00E7a": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
+        const order = ["Crian\u00E7a", "Adulto", "Idoso"];
 
         return order
           .filter(f => faixaCounts[f] && faixaCounts[f].count > 0)
@@ -922,7 +1058,7 @@ export default function Home() {
             return {
               id: faixa,
               title: faixa,
-              subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Etária",
+              subtitle: ranges[faixa as keyof typeof ranges] || "Faixa Et\u00E1ria",
               count: faixaCounts[faixa].count,
               value: faixaCounts[faixa].value,
               icon: <Users className="h-5 w-5 text-purple-500" />,
@@ -933,11 +1069,11 @@ export default function Home() {
 
       // Default Logic
       const buckets: Record<string, { count: number, value: number }> = { 
-        "Criança": { count: 0, value: 0 }, 
+        "Crian\u00E7a": { count: 0, value: 0 }, 
         "Adulto": { count: 0, value: 0 }, 
         "Idoso": { count: 0, value: 0 } 
       };
-      const ranges = { "Criança": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
+      const ranges = { "Crian\u00E7a": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
       appointments.forEach(app => {
         const bucket = getAgeBucket(app.nascimento);
         if (buckets[bucket] !== undefined) {
@@ -945,12 +1081,12 @@ export default function Home() {
           buckets[bucket].value += app._value;
         }
       });
-      const order = ["Criança", "Adulto", "Idoso"];
+      const order = ["Crian\u00E7a", "Adulto", "Idoso"];
       return order
         .map(name => ({
           id: name,
           title: name,
-          subtitle: ranges[name as keyof typeof ranges] || "Faixa Etária",
+          subtitle: ranges[name as keyof typeof ranges] || "Faixa Et\u00E1ria",
           count: buckets[name]?.count || 0,
           value: buckets[name]?.value || 0,
           icon: <Users className="h-5 w-5 text-purple-500" />
@@ -1010,7 +1146,7 @@ export default function Home() {
         const exameCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
-          const c = app.convenio || "Não informado";
+          const c = app.convenio || "N\u00E3o informado";
           if (Array.isArray(app.exames)) {
             app.exames.forEach((ex: string) => {
               if (!exameCounts[ex]) exameCounts[ex] = { count: 0, value: 0 };
@@ -1129,7 +1265,7 @@ export default function Home() {
           origemUnidades[orig][u].value += app._value;
         });
 
-        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Origem Desconhecida" };
+        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
         const order = ["Google", "Instagram", "Desconhecido"];
 
         return order
@@ -1165,7 +1301,7 @@ export default function Home() {
         counts[orig].value += app._value;
       });
 
-      const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Origem Desconhecida" };
+      const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
       return Object.entries(counts)
         .sort((a, b) => b[1].count - a[1].count)
         .map(([name, data]) => ({
@@ -1175,6 +1311,270 @@ export default function Home() {
           count: data.count,
           value: data.value,
           icon: <Users className="h-5 w-5 text-indigo-500" />
+        }));
+    }
+
+    if (statType === "motivacao") {
+      if (filterCategory === "unidade" && filterValue === "all") {
+        const motivacaoUnidades: Record<string, Record<string, { count: number; value: number }>> = {};
+        const motivacaoCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const motivacao = String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado";
+          const unidade = app._unit;
+
+          if (!motivacaoCounts[motivacao]) motivacaoCounts[motivacao] = { count: 0, value: 0 };
+          motivacaoCounts[motivacao].count += 1;
+          motivacaoCounts[motivacao].value += app._value;
+
+          if (!motivacaoUnidades[motivacao]) motivacaoUnidades[motivacao] = {};
+          if (!motivacaoUnidades[motivacao][unidade]) motivacaoUnidades[motivacao][unidade] = { count: 0, value: 0 };
+          motivacaoUnidades[motivacao][unidade].count += 1;
+          motivacaoUnidades[motivacao][unidade].value += app._value;
+        });
+
+        return Object.entries(motivacaoCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([motivacao, data]) => ({
+            id: motivacao,
+            title: motivacao,
+            subtitle: "Motiva\u00E7\u00E3o do Agendamento",
+            count: data.count,
+            value: data.value,
+            icon: <MessageSquare className="h-5 w-5 text-cyan-600" />,
+            topUnidades: Object.entries(motivacaoUnidades[motivacao] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([name, breakdown]) => ({
+                name: unitConfig?.[name]?.empresa ?? name,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "convenio" && filterValue === "all") {
+        const motivacaoConvenios: Record<string, Record<string, { count: number; value: number }>> = {};
+        const motivacaoCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const motivacao = String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado";
+          const convenio = app.convenio || "N\u00E3o informado";
+
+          if (!motivacaoCounts[motivacao]) motivacaoCounts[motivacao] = { count: 0, value: 0 };
+          motivacaoCounts[motivacao].count += 1;
+          motivacaoCounts[motivacao].value += app._value;
+
+          if (!motivacaoConvenios[motivacao]) motivacaoConvenios[motivacao] = {};
+          if (!motivacaoConvenios[motivacao][convenio]) motivacaoConvenios[motivacao][convenio] = { count: 0, value: 0 };
+          motivacaoConvenios[motivacao][convenio].count += 1;
+          motivacaoConvenios[motivacao][convenio].value += app._value;
+        });
+
+        return Object.entries(motivacaoCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([motivacao, data]) => ({
+            id: motivacao,
+            title: motivacao,
+            subtitle: "Motiva\u00E7\u00E3o do Agendamento",
+            count: data.count,
+            value: data.value,
+            icon: <MessageSquare className="h-5 w-5 text-cyan-600" />,
+            topConvenios: Object.entries(motivacaoConvenios[motivacao] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([name, breakdown]) => ({
+                name,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "faixaEtaria" && filterValue === "all") {
+        const motivacaoFaixas: Record<string, Record<string, { count: number; value: number }>> = {};
+        const motivacaoCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const motivacao = String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado";
+          const faixa = getAgeBucket(app.nascimento) || "Desconhecido";
+
+          if (!motivacaoCounts[motivacao]) motivacaoCounts[motivacao] = { count: 0, value: 0 };
+          motivacaoCounts[motivacao].count += 1;
+          motivacaoCounts[motivacao].value += app._value;
+
+          if (!motivacaoFaixas[motivacao]) motivacaoFaixas[motivacao] = {};
+          if (!motivacaoFaixas[motivacao][faixa]) motivacaoFaixas[motivacao][faixa] = { count: 0, value: 0 };
+          motivacaoFaixas[motivacao][faixa].count += 1;
+          motivacaoFaixas[motivacao][faixa].value += app._value;
+        });
+
+        return Object.entries(motivacaoCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([motivacao, data]) => ({
+            id: motivacao,
+            title: motivacao,
+            subtitle: "Motiva\u00E7\u00E3o do Agendamento",
+            count: data.count,
+            value: data.value,
+            icon: <MessageSquare className="h-5 w-5 text-cyan-600" />,
+            topFaixas: Object.entries(motivacaoFaixas[motivacao] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([name, breakdown]) => ({
+                name,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      const counts: Record<string, { count: number; value: number }> = {};
+      appointments.forEach((app) => {
+        const motivacao = String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado";
+        if (!counts[motivacao]) counts[motivacao] = { count: 0, value: 0 };
+        counts[motivacao].count += 1;
+        counts[motivacao].value += app._value;
+      });
+
+      return Object.entries(counts)
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([motivacao, data]) => ({
+          id: motivacao,
+          title: motivacao,
+          subtitle: "Motiva\u00E7\u00E3o do Agendamento",
+          count: data.count,
+          value: data.value,
+          icon: <MessageSquare className="h-5 w-5 text-cyan-600" />,
+        }));
+    }
+
+    if (statType === "cirurgia") {
+      if (filterCategory === "unidade" && filterValue === "all") {
+        const cirurgiaUnidades: Record<string, Record<string, { count: number; value: number }>> = {};
+        const cirurgiaCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const cirurgia = String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado";
+          const unidade = app._unit;
+
+          if (!cirurgiaCounts[cirurgia]) cirurgiaCounts[cirurgia] = { count: 0, value: 0 };
+          cirurgiaCounts[cirurgia].count += 1;
+          cirurgiaCounts[cirurgia].value += app._value;
+
+          if (!cirurgiaUnidades[cirurgia]) cirurgiaUnidades[cirurgia] = {};
+          if (!cirurgiaUnidades[cirurgia][unidade]) cirurgiaUnidades[cirurgia][unidade] = { count: 0, value: 0 };
+          cirurgiaUnidades[cirurgia][unidade].count += 1;
+          cirurgiaUnidades[cirurgia][unidade].value += app._value;
+        });
+
+        return Object.entries(cirurgiaCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([cirurgia, data]) => ({
+            id: cirurgia,
+            title: cirurgia,
+            subtitle: "Cirurgia do Agendamento",
+            count: data.count,
+            value: data.value,
+            icon: <Activity className="h-5 w-5 text-rose-600" />,
+            topUnidades: Object.entries(cirurgiaUnidades[cirurgia] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([name, breakdown]) => ({
+                name: unitConfig?.[name]?.empresa ?? name,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "convenio" && filterValue === "all") {
+        const cirurgiaConvenios: Record<string, Record<string, { count: number; value: number }>> = {};
+        const cirurgiaCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const cirurgia = String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado";
+          const convenio = app.convenio || "N\u00E3o informado";
+
+          if (!cirurgiaCounts[cirurgia]) cirurgiaCounts[cirurgia] = { count: 0, value: 0 };
+          cirurgiaCounts[cirurgia].count += 1;
+          cirurgiaCounts[cirurgia].value += app._value;
+
+          if (!cirurgiaConvenios[cirurgia]) cirurgiaConvenios[cirurgia] = {};
+          if (!cirurgiaConvenios[cirurgia][convenio]) cirurgiaConvenios[cirurgia][convenio] = { count: 0, value: 0 };
+          cirurgiaConvenios[cirurgia][convenio].count += 1;
+          cirurgiaConvenios[cirurgia][convenio].value += app._value;
+        });
+
+        return Object.entries(cirurgiaCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([cirurgia, data]) => ({
+            id: cirurgia,
+            title: cirurgia,
+            subtitle: "Cirurgia do Agendamento",
+            count: data.count,
+            value: data.value,
+            icon: <Activity className="h-5 w-5 text-rose-600" />,
+            topConvenios: Object.entries(cirurgiaConvenios[cirurgia] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([name, breakdown]) => ({
+                name,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "faixaEtaria" && filterValue === "all") {
+        const cirurgiaFaixas: Record<string, Record<string, { count: number; value: number }>> = {};
+        const cirurgiaCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const cirurgia = String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado";
+          const faixa = getAgeBucket(app.nascimento) || "Desconhecido";
+
+          if (!cirurgiaCounts[cirurgia]) cirurgiaCounts[cirurgia] = { count: 0, value: 0 };
+          cirurgiaCounts[cirurgia].count += 1;
+          cirurgiaCounts[cirurgia].value += app._value;
+
+          if (!cirurgiaFaixas[cirurgia]) cirurgiaFaixas[cirurgia] = {};
+          if (!cirurgiaFaixas[cirurgia][faixa]) cirurgiaFaixas[cirurgia][faixa] = { count: 0, value: 0 };
+          cirurgiaFaixas[cirurgia][faixa].count += 1;
+          cirurgiaFaixas[cirurgia][faixa].value += app._value;
+        });
+
+        return Object.entries(cirurgiaCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([cirurgia, data]) => ({
+            id: cirurgia,
+            title: cirurgia,
+            subtitle: "Cirurgia do Agendamento",
+            count: data.count,
+            value: data.value,
+            icon: <Activity className="h-5 w-5 text-rose-600" />,
+            topFaixas: Object.entries(cirurgiaFaixas[cirurgia] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([name, breakdown]) => ({
+                name,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      const counts: Record<string, { count: number; value: number }> = {};
+      appointments.forEach((app) => {
+        const cirurgia = String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado";
+        if (!counts[cirurgia]) counts[cirurgia] = { count: 0, value: 0 };
+        counts[cirurgia].count += 1;
+        counts[cirurgia].value += app._value;
+      });
+
+      return Object.entries(counts)
+        .sort((a, b) => b[1].count - a[1].count)
+        .map(([cirurgia, data]) => ({
+          id: cirurgia,
+          title: cirurgia,
+          subtitle: "Cirurgia do Agendamento",
+          count: data.count,
+          value: data.value,
+          icon: <Activity className="h-5 w-5 text-rose-600" />,
         }));
     }
 
@@ -1261,7 +1661,7 @@ export default function Home() {
     if (statType === "unidades") {
       matches = filteredAppointments.filter((app: any) => app._unit === item.id);
     } else if (statType === "convenios") {
-      matches = filteredAppointments.filter((app: any) => (app.convenio || "Não informado") === item.id);
+      matches = filteredAppointments.filter((app: any) => (app.convenio || "N\u00E3o informado") === item.id);
     } else if (statType === "faixaEtaria") {
       matches = filteredAppointments.filter((app: any) => getAgeBucket(app.nascimento) === item.id);
     } else if (statType === "exames") {
@@ -1270,6 +1670,10 @@ export default function Home() {
       matches = filteredAppointments.filter((app: any) => obterNomeMes(app._date) === item.id);
     } else if (statType === "origem") {
       matches = filteredAppointments.filter((app: any) => normalizePatientOrigin(app.origem) === item.id);
+    } else if (statType === "motivacao") {
+      matches = filteredAppointments.filter((app: any) => (String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado") === item.id);
+    } else if (statType === "cirurgia") {
+      matches = filteredAppointments.filter((app: any) => (String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado") === item.id);
     }
 
     // Secondary filter if subItemName is provided
@@ -1277,7 +1681,7 @@ export default function Home() {
       if (item.topUnidades) {
         matches = matches.filter((app: any) => (unitConfig?.[app._unit]?.empresa ?? app._unit) === subItemName);
       } else if (item.topConvenios) {
-        matches = matches.filter((app: any) => (app.convenio || "Não informado") === subItemName);
+        matches = matches.filter((app: any) => (app.convenio || "N\u00E3o informado") === subItemName);
       } else if (item.topFaixas) {
         matches = matches.filter((app: any) => getAgeBucket(app.nascimento) === subItemName);
       } else if (item.topExames) {
@@ -1286,10 +1690,10 @@ export default function Home() {
     }
 
     const details: AppointmentDetail[] = matches.map((app: any) => ({
-      nome: app.nomePaciente || app.nome || "Não informado",
+      nome: app.nomePaciente || app.nome || "N\u00E3o informado",
       nascimento: app.nascimento || "-",
       idade: calculateAge(app.nascimento),
-      convenio: app.convenio || "Não informado",
+      convenio: app.convenio || "N\u00E3o informado",
       unidade: app._unit,
       unidadeName: unitConfig?.[app._unit]?.empresa ?? app._unit,
       dataConsulta: app._date.split("-").reverse().join("/"),
@@ -1299,7 +1703,7 @@ export default function Home() {
       origem: normalizePatientOrigin(app.origem)
     }));
 
-    const finalTitle = subItemName ? `${item.title} › ${subItemName}` : item.title;
+    const finalTitle = subItemName ? `${item.title} â€º ${subItemName}` : item.title;
     setActiveDrillDown({ title: finalTitle, patients: details });
     setDrillDownOpen(true);
   };
@@ -1329,24 +1733,26 @@ export default function Home() {
               className="text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full hover:bg-blue-100 transition-colors flex items-center gap-1.5"
             >
               <BarChart3 className="w-4 h-4" />
-              {dashboardMode === 'simple' ? 'Ativar Modo Analítico' : 'Voltar ao Modo Simples'}
+              {dashboardMode === 'simple' ? 'Ativar Modo Anal\u00EDtico' : 'Voltar ao Modo Simples'}
             </button>
           </div>
 
           {/* Controls Container - Only show robust checks in Advanced Mode */}
           {dashboardMode === 'advanced' && (
-            <div className="flex flex-col sm:flex-row gap-4 items-end sm:items-center w-full xl:w-auto bg-white/60 p-4 rounded-xl border border-blue-100/50 backdrop-blur-sm shadow-sm animate-in fade-in slide-in-from-top-2">
+            <div className="relative z-40 flex flex-col sm:flex-row gap-4 items-end sm:items-center w-full xl:w-auto bg-white/60 p-4 rounded-xl border border-blue-100/50 backdrop-blur-sm shadow-sm animate-in fade-in slide-in-from-top-2">
               <div className="flex flex-col gap-1.5 w-full sm:w-auto">
                 <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">Agrupar Por</label>
                 <Select value={statType} onValueChange={(v) => setStatType(v as StatType)}>
                   <SelectTrigger className="w-full sm:w-[160px] bg-white"><SelectValue placeholder="Tipo" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unidades">{selectedUnit === 'OFT/45' ? 'Médicos' : 'Unidades'}</SelectItem>
-                    <SelectItem value="convenios">Convênios</SelectItem>
-                    <SelectItem value="faixaEtaria">Faixa Etária</SelectItem>
+                    <SelectItem value="unidades">{selectedUnit === 'OFT/45' ? 'M\u00E9dicos' : 'Unidades'}</SelectItem>
+                    <SelectItem value="convenios">Conv\u00EAnios</SelectItem>
+                    <SelectItem value="faixaEtaria">Faixa Et\u00E1ria</SelectItem>
                     <SelectItem value="exames">Exames</SelectItem>
+                    <SelectItem value="motivacao">{"Motiva\u00E7\u00E3o"}</SelectItem>
+                    <SelectItem value="cirurgia">Cirurgia</SelectItem>
                     <SelectItem value="origem">Origem do Paciente</SelectItem>
-                    <SelectItem value="historico">Evolução Mensal</SelectItem>
+                    <SelectItem value="historico">Evolu\u00E7\u00E3o Mensal</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1356,68 +1762,95 @@ export default function Home() {
                 <Select value={filterCategory} onValueChange={(v: any) => setFilterCategory(v)}>
                   <SelectTrigger className="w-full sm:w-[150px] bg-white"><SelectValue placeholder="Categoria" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unidade">{selectedUnit === 'OFT/45' ? 'Médico' : 'Unidade'}</SelectItem>
-                    <SelectItem value="convenio">Convênio</SelectItem>
-                    <SelectItem value="faixaEtaria">Faixa Etária</SelectItem>
+                    <SelectItem value="unidade">{selectedUnit === 'OFT/45' ? 'M\u00E9dico' : 'Unidade'}</SelectItem>
+                    <SelectItem value="convenio">Conv\u00EAnio</SelectItem>
+                    <SelectItem value="faixaEtaria">Faixa Et\u00E1ria</SelectItem>
                     <SelectItem value="exame">Exame</SelectItem>
+                    <SelectItem value="motivacao">{"Motiva\u00E7\u00E3o"}</SelectItem>
+                    <SelectItem value="cirurgia">Cirurgia</SelectItem>
                     <SelectItem value="origem">Origem</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="flex flex-col gap-1.5 w-full sm:w-auto animate-in fade-in">
-                <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">Opção</label>
-                <Select value={filterValue} onValueChange={setFilterValue}>
-                  <SelectTrigger className="w-full sm:w-[160px] bg-white"><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                  <SelectContent className="max-h-[250px]">
-                    {filterCategory === 'unidade' && (
-                      <>
-                        <SelectItem value="all">Todas</SelectItem>
-                        {unitsAvailable.map((u) => (
-                          <SelectItem key={u} value={u}>{unitConfig?.[u]?.empresa ?? u} {unitConfig?.[u]?.bairro ? ` - ${unitConfig?.[u]?.bairro}` : ''}</SelectItem>
-                        ))}
-                      </>
-                    )}
-                    {filterCategory === 'convenio' && (
-                      <>
-                        <SelectItem value="all">Todas</SelectItem>
-                        {conveniosAvailable.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </>
-                    )}
-                    {filterCategory === 'faixaEtaria' && (
-                      <>
-                        <SelectItem value="all">Todas</SelectItem>
-                        {faixasEtariasAvailable.map((f) => <SelectItem key={f} value={f}>{f}</SelectItem>)}
-                      </>
-                    )}
-                    {filterCategory === 'exame' && (
-                      <>
-                        <SelectItem value="all">Todas</SelectItem>
-                        {examesAvailable.map((e) => <SelectItem key={e} value={e}>{e}</SelectItem>)}
-                      </>
-                    )}
-                    {filterCategory === 'origem' && (
-                      <>
-                        <SelectItem value="all">Todas</SelectItem>
-                        <SelectItem value="Google">Google</SelectItem>
-                        <SelectItem value="Instagram">Instagram</SelectItem>
-                        <SelectItem value="Desconhecido">Origem Desconhecida</SelectItem>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
+                <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">Op\u00E7\u00E3o</label>
+                <div className="relative z-50 w-full sm:w-[260px]">
+                  <Input
+                    value={optionQuery}
+                    placeholder="Digite para filtrar..."
+                    className="bg-white pr-16"
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      setOptionQuery(nextValue);
+                      setFilterValue(nextValue.trim() ? nextValue : "all");
+                    }}
+                    onFocus={() => setIsOptionInputFocused(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => setIsOptionInputFocused(false), 120);
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-100"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setOptionQuery("");
+                      setFilterValue("all");
+                      setIsOptionInputFocused(false);
+                    }}
+                  >
+                    Todas
+                  </button>
+                  {isOptionInputFocused && filteredOptionSuggestions.length > 0 && (
+                    <div className="absolute z-[120] mt-2 max-h-52 w-full overflow-y-auto rounded-lg border border-blue-100 bg-white p-1.5 shadow-2xl">
+                      {filteredOptionSuggestions.map((option) => (
+                        <button
+                          key={`${option.value}-${option.label}`}
+                          type="button"
+                          className="flex w-full items-start rounded-md px-2.5 py-1.5 text-left text-xs leading-4 text-slate-700 hover:bg-blue-50"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setOptionQuery(option.label);
+                            setFilterValue(option.value);
+                            setIsOptionInputFocused(false);
+                          }}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-                <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">Período</label>
-                <Select value={filter} onValueChange={setFilter}>
-                  <SelectTrigger className="w-full sm:w-[160px] bg-white"><SelectValue placeholder="Mês/Ano" /></SelectTrigger>
-                  <SelectContent className="max-h-[250px]">
-                    {statType === 'historico' && <SelectItem value="all">Todos os Anos</SelectItem>}
-                    {anosDisponiveis.map((y) => (<SelectItem key={y} value={y}>{y}</SelectItem>))}
-                    {statType !== 'historico' && mesesDisponiveis.map((m) => (<SelectItem key={m} value={m}>{m}</SelectItem>))}
-                  </SelectContent>
-                </Select>
+                <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">Per\u00EDodo</label>
+                <div className="flex items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100 w-full sm:w-auto">
+                  <button
+                    onClick={() => handlePeriodChange('prev')}
+                    disabled={isPrevDisabled}
+                    className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
+                    title="Anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={togglePeriodMode}
+                    className="px-6 py-2 text-xs font-medium text-slate-700 hover:text-blue-600 min-w-[148px] text-center tracking-wide transition-colors cursor-pointer"
+                    title={`Clique para ver por ${periodMode === 'year' ? 'M\u00EAs' : 'Ano'}`}
+                  >
+                    {filter}
+                  </button>
+                  <button
+                    onClick={() => handlePeriodChange('next')}
+                    disabled={isNextDisabled}
+                    className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
+                    title="Pr\u00F3ximo"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm self-end">
@@ -1443,7 +1876,7 @@ export default function Home() {
                   <button
                     onClick={togglePeriodMode}
                     className="px-6 py-2 text-xs font-medium text-slate-700 hover:text-blue-600 min-w-[148px] text-center tracking-wide transition-colors cursor-pointer"
-                    title={`Clique para ver por ${periodMode === 'year' ? 'Mês' : 'Ano'}`}
+                    title={`Clique para ver por ${periodMode === 'year' ? 'M\u00EAs' : 'Ano'}`}
                   >
                     {filter}
                   </button>
@@ -1451,7 +1884,7 @@ export default function Home() {
                     onClick={() => handlePeriodChange('next')}
                     disabled={isNextDisabled}
                     className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
-                    title="Próximo"
+                    title="Pr\u00F3ximo"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -1464,11 +1897,11 @@ export default function Home() {
 
         {/* Main Content */}
         <section className="w-full max-w-6xl transition-all duration-300">
-          {loading && <p className="text-center">Carregando…</p>}
+          {loading && <p className="text-center">Carregandoâ€¦</p>}
 
           {!loading && displayData.length === 0 && (
             <div className="text-center p-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-              <p className="text-gray-500">Nenhum dado encontrado para esta combinação.</p>
+              <p className="text-gray-500">Nenhum dado encontrado para esta combina\u00E7\u00E3o.</p>
             </div>
           )}
 
@@ -1487,7 +1920,7 @@ export default function Home() {
                             <div className="flex items-center gap-1">
                               Grupo
                               {sortColumn === "title" && (
-                                <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                                <span>{sortDirection === "asc" ? "â†‘" : "â†“"}</span>
                               )}
                             </div>
                           </th>
@@ -1499,7 +1932,7 @@ export default function Home() {
                             <div className="flex items-center justify-center gap-1">
                               Qtd.
                               {sortColumn === "count" && (
-                                <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                                <span>{sortDirection === "asc" ? "â†‘" : "â†“"}</span>
                               )}
                             </div>
                           </th>
@@ -1510,7 +1943,7 @@ export default function Home() {
                             <div className="flex items-center justify-center gap-1">
                               %
                               {sortColumn === "percentage" && (
-                                <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                                <span>{sortDirection === "asc" ? "â†‘" : "â†“"}</span>
                               )}
                             </div>
                           </th>
@@ -1521,7 +1954,7 @@ export default function Home() {
                             <div className="flex items-center justify-end gap-1">
                               Valor Estimado
                               {sortColumn === "value" && (
-                                <span>{sortDirection === "asc" ? "↑" : "↓"}</span>
+                                <span>{sortDirection === "asc" ? "â†‘" : "â†“"}</span>
                               )}
                             </div>
                           </th>
@@ -1580,8 +2013,8 @@ export default function Home() {
                                     <UserX className="w-3.5 h-3.5" />
                                     {item.noShows || 0}
                                   </span>
-                                  <span title="Média de Avaliações" className="flex items-center gap-1 text-yellow-600">
-                                    ⭐ {item.ratingCount ? (item.ratingSum! / item.ratingCount!).toFixed(1) : "-"}
+                                  <span title="M\u00E9dia de Avalia\u00E7\u00F5es" className="flex items-center gap-1 text-yellow-600">
+                                    â­ {item.ratingCount ? (item.ratingSum! / item.ratingCount!).toFixed(1) : "-"}
                                   </span>
                                 </div>
                               )}
@@ -1779,7 +2212,7 @@ export default function Home() {
                             ) : (
                               <>
                                 <div className="text-base font-bold text-gray-800">{item.count}</div>
-                                <div className="text-[10px] text-gray-400 mb-0.5">{statType === 'exames' ? 'Solicitações' : 'Pacientes'}</div>
+                                <div className="text-[10px] text-gray-400 mb-0.5">{statType === 'exames' ? 'Solicita\u00E7\u00F5es' : 'Pacientes'}</div>
                                 {item.value !== undefined ? (
                                   <div className="text-xs font-semibold text-green-600">R$ {item.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</div>
                                 ) : (
@@ -1817,4 +2250,5 @@ export default function Home() {
     </SidebarLayout>
   );
 }
+
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { startOfDay as dateFnsStartOfDay, parse as dateFnsParse, isValid as dateFnsIsValid, format as dateFnsFormat } from 'date-fns';
+import { PATIENT_ORIGIN_VALUES } from "@/lib/patient-origin";
 // Removed checkIsHoliday import as it's not used directly in schema validation anymore.
 // Validation for holidays is handled in the component UI.
 
@@ -20,6 +21,7 @@ export const PatientFormSchema = z.object({
   motivacao: z.string().min(1, { message: "Motivação é obrigatória." }),
   local: z.string().min(1, { message: "Local é obrigatório." }),
   telefone: z.string().regex(/^\d{10,15}$/, { message: "Telefone inválido. Deve conter apenas números (10 a 15 dígitos)." }),
+  origem: z.enum(PATIENT_ORIGIN_VALUES, { required_error: "Origem Ã© obrigatÃ³ria." }),
   observacoes: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.dataNascimento instanceof Date && dateFnsIsValid(data.dataNascimento)) {

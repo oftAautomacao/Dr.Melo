@@ -4,7 +4,7 @@ import type * as React from 'react';
 import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { ref, onValue, type DataSnapshot } from "firebase/database";
+import { ref, onValue, get, type DataSnapshot } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
 import { parse as dateFnsParse, format as dateFnsFormat, isValid as dateFnsIsValid } from 'date-fns';
 
@@ -27,6 +27,7 @@ import {
   HeartPulse,
   Stethoscope,
   BrainCircuit,
+  Globe,
   Image as ImageIcon,
 } from "lucide-react";
 
@@ -49,6 +50,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { PatientFormSchema, type PatientFormData, type AICategorization } from "@/types/patient";
 import { saveAppointmentAction, cancelAppointment, checkAppointmentAvailabilityAction } from "@/app/actions";
+import { getPhoneVariants, normalizePatientOrigin } from "@/lib/patient-origin";
 import { categorizePatientObservations } from "@/ai/flows/categorize-patient-observations";
 import { fetchHolidays, isHoliday as checkIsHoliday, type Holiday as HolidayType } from '@/lib/holidays';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -158,6 +160,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         motivacao: initialData.motivacao ?? "",
         local: initialData.unidade ?? "",
         telefone: initialData.telefone ?? "",
+        origem: normalizePatientOrigin(initialData.origem),
         observacoes: initialData.Observacoes ?? "",
         cpf: initialData.cpf ?? "",
       }
@@ -172,6 +175,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         motivacao: "",
         local: "",
         telefone: "",
+        origem: "desconhecida",
         observacoes: "",
       },
   });
@@ -198,6 +202,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     form.setValue("motivacao", "");
     form.setValue("local", "");
     form.setValue("observacoes", "");
+    form.setValue("origem", "desconhecida");
     setAiResult(null);
   };
   const dataAgendadaValue = form.watch("dataAgendamento");
@@ -228,6 +233,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         motivacao: initialData.motivacao ?? "",
         local: initialData.unidade ?? "",
         telefone: initialData.telefone ?? "",
+        origem: normalizePatientOrigin(initialData.origem),
         observacoes: initialData.Observacoes ?? "",
         cpf: initialData.cpf ?? "",
       };
@@ -263,6 +269,8 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
       }
     }
 
+    vals.origem = normalizePatientOrigin(vals.origem);
+
     // Normalizar "Particular" se necessário
     if (vals.convenio === "Particular" && conveniosList.length > 0) {
       const particularItem = conveniosList.find(c =>
@@ -290,6 +298,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         normalizeStr(vals.convenio) !== normalizeStr(currentValues.convenio) ||
         normalizeStr(vals.motivacao) !== normalizeStr(currentValues.motivacao) ||
         normalizeStr(vals.local) !== normalizeStr(currentValues.local) ||
+        normalizeStr(vals.origem) !== normalizeStr(currentValues.origem) ||
         normalizeStr(vals.observacoes) !== normalizeStr(currentValues.observacoes) ||
         formatDate(vals.dataAgendamento) !== formatDate(currentValues.dataAgendamento) ||
         formatDate(vals.dataNascimento) !== formatDate(currentValues.dataNascimento) ||
@@ -308,6 +317,48 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
 
 
   const selectedPatientPhoneNumber = form.watch("telefone"); // Watching the phone field for auto-fill button
+
+  useEffect(() => {
+    const cleanPhone = String(selectedPatientPhoneNumber || "").replace(/\D/g, "");
+    if (cleanPhone.length < 10) return;
+
+    let cancelled = false;
+
+    const loadOriginFromConversas = async () => {
+      try {
+        const effectiveFirebaseBase = firebaseBase || getFirebasePathBase();
+        const dbInstance = getDatabaseInstance(ENVIRONMENT);
+
+        for (const variant of getPhoneVariants(cleanPhone)) {
+          const originPath = `/${effectiveFirebaseBase}/agendamentoWhatsApp/operacional/conversas/${variant}/origem`;
+          const snap = await get(ref(dbInstance, originPath));
+
+          if (cancelled) return;
+
+          if (snap.exists() && typeof snap.val() === "string" && snap.val().trim() !== "") {
+            form.setValue("origem", normalizePatientOrigin(snap.val()), {
+              shouldDirty: false,
+              shouldValidate: true,
+            });
+            return;
+          }
+        }
+
+        form.setValue("origem", "desconhecida", {
+          shouldDirty: false,
+          shouldValidate: true,
+        });
+      } catch (error) {
+        console.warn("PATIENT_FORM: Nao foi possivel carregar a origem nas conversas.", error);
+      }
+    };
+
+    void loadOriginFromConversas();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPatientPhoneNumber, form, firebaseBase]);
 
   // Function to handle auto-filling data based on the selected patient's phone number
   const handleAutoFill = () => {
@@ -609,13 +660,14 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                 dataAgendamento: initialData.dataAgendamento,
                 horaAgendamento: initialData.horario,
                 convenio: initialData.convenio,
-                exames: initialData.exames,
-                motivacao: initialData.motivacao,
-                unidade: initialData.unidade,
-                telefone: initialData.telefone,
-                Observacoes: initialData.Observacoes,
-                aiCategorization: initialData.aiCategorization,
-              },
+                  exames: initialData.exames,
+                  motivacao: initialData.motivacao,
+                  unidade: initialData.unidade,
+                  telefone: initialData.telefone,
+                  origem: initialData.origem,
+                  Observacoes: initialData.Observacoes,
+                  aiCategorization: initialData.aiCategorization,
+                },
               cancelReason: "Consulta reagendada",
               enviarMsgSecretaria: sendSecretaryMessage,
             },
@@ -954,6 +1006,28 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                         Número fora do padrão (55 + DDD...).
                       </p>
                     )}
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="origem"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4" />Origem</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione a origem" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="google">Google</SelectItem>
+                        <SelectItem value="instagram">Instagram</SelectItem>
+                        <SelectItem value="desconhecida">Desconhecida</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
                   </FormItem>
                 )}
               />

@@ -122,6 +122,7 @@ export interface CalendarAppointment {
   unidade: string;
   unidadeLabel?: string;
   telefone: string;
+  origem?: string;
   Observacoes?: string;
   aiCategorization?: AICategorization;
   confirmado?: boolean;
@@ -418,6 +419,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   unidade: unit,
                   unidadeLabel: record.unidade,
                   telefone: record.telefone,
+                  origem: record.origem,
                   Observacoes: record.Observacoes || (record.obs && record.obs.length > 0 ? record.obs[0] : ""),
                   aiCategorization: record.aiCategorization,
                   confirmado: !!record.confirmado,
@@ -1146,6 +1148,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                     motivacao: appointmentToCancel.motivacao,
                     unidade: appointmentToCancel.unidade,
                     telefone: appointmentToCancel.telefone,
+                    origem: appointmentToCancel.origem,
                     Observacoes: appointmentToCancel.Observacoes || "",
                     ...(appointmentToCancel.aiCategorization && {
                       aiCategorization: appointmentToCancel.aiCategorization,

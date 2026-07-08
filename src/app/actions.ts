@@ -4,6 +4,7 @@ import { whatsappService } from "@/lib/whatsapp-service";
 import { revalidatePath } from "next/cache";
 import { ref, update, get, query, orderByKey, startAt, limitToFirst } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
+import { getPhoneVariants, normalizePatientOrigin } from "@/lib/patient-origin";
 import type {
   PatientFormData,
   AICategorization,
@@ -118,28 +119,6 @@ export async function checkAppointmentAvailabilityAction(
   }
 }
 
-function phoneVariants(raw: string): string[] {
-  const clean = raw.replace(/\D/g, "");
-  const variants = new Set<string>([clean]);
-
-  if (clean.startsWith("55") && clean.length >= 12) variants.add(clean.slice(2));
-  if (!clean.startsWith("55") && clean.length >= 10) variants.add("55" + clean);
-
-  if (clean.length === 13 && clean.startsWith("55")) {
-    const ddd = clean.slice(2, 4), sem9 = clean.slice(5);
-    variants.add(ddd + sem9); variants.add("55" + ddd + sem9);
-  }
-  if (clean.length === 11 && !clean.startsWith("55")) {
-    const ddd = clean.slice(0, 2), sem9 = clean.slice(3);
-    variants.add(ddd + sem9); variants.add("55" + ddd + sem9); variants.add("55" + clean);
-  }
-  if (clean.length === 10 && !clean.startsWith("55")) {
-    const ddd = clean.slice(0, 2), num = clean.slice(2);
-    variants.add(ddd + "9" + num); variants.add("55" + ddd + "9" + num); variants.add("55" + clean);
-  }
-  return Array.from(variants);
-}
-
 /* =============================================================
    SAVE: grava em consultasAgendadas (por setor) e em conversas
    ============================================================= */
@@ -170,28 +149,7 @@ export async function saveAppointmentAction(
 
     // Determinar o valor correto para o campo 'unidade' nos dados a serem salvos
     const unidadeParaCampo = firebaseBase === 'OFT/45' ? "OftalmoDayTijuca" : v.local;
-
-    // Busca a origem do paciente a partir do Realtime Database
-    let patientOrigin: string = "desconhecida";
-    try {
-      const rawPhone = v.telefone.replace(/\D/g, "");
-      const dbInstance = getDatabaseInstance(environment);
-      const variants = phoneVariants(rawPhone);
-
-      for (const variant of variants) {
-        const originPath = `/${firebaseBase}/agendamentoWhatsApp/operacional/conversas/${variant}/origem`;
-        const snap = await get(ref(dbInstance, originPath));
-        if (snap.exists()) {
-          const val = snap.val();
-          if (val && typeof val === "string") {
-            patientOrigin = val;
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("SAVE_ACTION: Erro ao buscar origem nas conversas do RTDB:", e);
-    }
+    const normalizedOrigin = normalizePatientOrigin(v.origem);
 
     // Monta o registro no formato usado
     const appointmentRecord: Partial<AppointmentFirebaseRecord & { medico?: string }> = {
@@ -205,7 +163,7 @@ export async function saveAppointmentAction(
       motivacao: v.motivacao,
       unidade: unidadeParaCampo,
       telefone: v.telefone,
-      origem: patientOrigin,
+      origem: normalizedOrigin,
       ...(firebaseBase === 'OFT/45' ? { medico: v.local } : {}),
       ...(aiCategorizationResult && aiCategorizationResult.category && !["unknown", "desconhecido", "n/a"].includes(aiCategorizationResult.category.toLowerCase().trim())
         ? { aiCategorization: aiCategorizationResult }
@@ -268,6 +226,7 @@ export async function saveAppointmentAction(
     const pathBase = `/${firebaseBase}/agendamentoWhatsApp/operacional`;
     const agBase = `${pathBase}/consultasAgendadas`;
     const convBase = `${pathBase}/conversas`;
+    const dbInstance = getDatabaseInstance(environment);
     const updates: Record<string, any> = {};
 
     const appointmentDataToSave = {
@@ -282,9 +241,18 @@ export async function saveAppointmentAction(
     if (isDRMBase(firebaseBase)) {
       const cleanPhone = phone.replace(/\D/g, "");
       updates[`${convBase}/${cleanPhone}/consultasAgendadas/${datePath}/${timePath}`] = appointmentDataToSave;
+      updates[`${convBase}/${cleanPhone}/origem`] = normalizedOrigin;
+
+      for (const variant of getPhoneVariants(cleanPhone)) {
+        if (variant === cleanPhone) continue;
+
+        const variantSnap = await get(ref(dbInstance, `${convBase}/${variant}`));
+        if (variantSnap.exists()) {
+          updates[`${convBase}/${variant}/origem`] = normalizedOrigin;
+        }
+      }
     }
 
-    const dbInstance = getDatabaseInstance(environment);
     await update(ref(dbInstance), updates);
 
     // --- DISPARAR WHATSAPP PARA O PACIENTE ---

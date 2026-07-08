@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { differenceInYears, parse } from "date-fns";
 import { PatientDetailsSheet, AppointmentDetail } from "@/components/PatientDetailsSheet";
+import { normalizePatientOrigin } from "@/lib/patient-origin";
 
 /* ---------- helpers ---------- */
 const MESES = [
@@ -437,7 +438,7 @@ export default function Home() {
             }
             if (filterCategory === 'unidade' && filterValue && filterValue !== 'all' && app._unit !== filterValue) continue;
             if (filterCategory === 'origem' && filterValue && filterValue !== 'all') {
-              const origVal = app.origem || "desconhecida";
+              const origVal = normalizePatientOrigin(app.origem);
               if (origVal !== filterValue) continue;
             }
 
@@ -1115,7 +1116,7 @@ export default function Home() {
         const origemCounts: Record<string, { count: number, value: number }> = {};
 
         appointments.forEach(app => {
-          const orig = app.origem || "desconhecida";
+          const orig = normalizePatientOrigin(app.origem);
           const u = app._unit;
 
           if (!origemCounts[orig]) origemCounts[orig] = { count: 0, value: 0 };
@@ -1128,8 +1129,8 @@ export default function Home() {
           origemUnidades[orig][u].value += app._value;
         });
 
-        const labels: Record<string, string> = { "facebook/instagram": "Facebook / Instagram", "site": "Site", "desconhecida": "Origem Desconhecida" };
-        const order = ["facebook/instagram", "site", "desconhecida"];
+        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Origem Desconhecida" };
+        const order = ["Google", "Instagram", "Desconhecido"];
 
         return order
           .filter(o => origemCounts[o] && origemCounts[o].count > 0)
@@ -1158,13 +1159,13 @@ export default function Home() {
       // Default Logic for Origem
       const counts: Record<string, { count: number, value: number }> = {};
       appointments.forEach(app => {
-        const orig = app.origem || "desconhecida";
+        const orig = normalizePatientOrigin(app.origem);
         if (!counts[orig]) counts[orig] = { count: 0, value: 0 };
         counts[orig].count += 1;
         counts[orig].value += app._value;
       });
 
-      const labels: Record<string, string> = { "facebook/instagram": "Facebook / Instagram", "site": "Site", "desconhecida": "Origem Desconhecida" };
+      const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Origem Desconhecida" };
       return Object.entries(counts)
         .sort((a, b) => b[1].count - a[1].count)
         .map(([name, data]) => ({
@@ -1268,7 +1269,7 @@ export default function Home() {
     } else if (statType === "historico") {
       matches = filteredAppointments.filter((app: any) => obterNomeMes(app._date) === item.id);
     } else if (statType === "origem") {
-      matches = filteredAppointments.filter((app: any) => (app.origem || "desconhecida") === item.id);
+      matches = filteredAppointments.filter((app: any) => normalizePatientOrigin(app.origem) === item.id);
     }
 
     // Secondary filter if subItemName is provided
@@ -1295,7 +1296,7 @@ export default function Home() {
       horario: app._time || "-",
       exames: Array.isArray(app.exames) ? app.exames : [],
       telefone: app.telefone || "",
-      origem: app.origem || "desconhecida"
+      origem: normalizePatientOrigin(app.origem)
     }));
 
     const finalTitle = subItemName ? `${item.title} › ${subItemName}` : item.title;
@@ -1398,9 +1399,9 @@ export default function Home() {
                     {filterCategory === 'origem' && (
                       <>
                         <SelectItem value="all">Todas</SelectItem>
-                        <SelectItem value="facebook/instagram">Facebook / Instagram</SelectItem>
-                        <SelectItem value="site">Site</SelectItem>
-                        <SelectItem value="desconhecida">Origem Desconhecida</SelectItem>
+                        <SelectItem value="Google">Google</SelectItem>
+                        <SelectItem value="Instagram">Instagram</SelectItem>
+                        <SelectItem value="Desconhecido">Origem Desconhecida</SelectItem>
                       </>
                     )}
                   </SelectContent>

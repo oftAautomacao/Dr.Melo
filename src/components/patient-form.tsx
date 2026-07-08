@@ -175,7 +175,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         motivacao: "",
         local: "",
         telefone: "",
-        origem: "desconhecida",
+        origem: "Desconhecido",
         observacoes: "",
       },
   });
@@ -202,7 +202,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     form.setValue("motivacao", "");
     form.setValue("local", "");
     form.setValue("observacoes", "");
-    form.setValue("origem", "desconhecida");
+    form.setValue("origem", "Desconhecido");
     setAiResult(null);
   };
   const dataAgendadaValue = form.watch("dataAgendamento");
@@ -344,7 +344,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
           }
         }
 
-        form.setValue("origem", "desconhecida", {
+        form.setValue("origem", "Desconhecido", {
           shouldDirty: false,
           shouldValidate: true,
         });
@@ -1022,9 +1022,9 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="google">Google</SelectItem>
-                        <SelectItem value="instagram">Instagram</SelectItem>
-                        <SelectItem value="desconhecida">Desconhecida</SelectItem>
+                        <SelectItem value="Google">Google</SelectItem>
+                        <SelectItem value="Instagram">Instagram</SelectItem>
+                        <SelectItem value="Desconhecido">Desconhecido</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

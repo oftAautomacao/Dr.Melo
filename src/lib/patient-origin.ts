@@ -1,4 +1,4 @@
-export const PATIENT_ORIGIN_VALUES = ["google", "instagram", "desconhecida"] as const;
+export const PATIENT_ORIGIN_VALUES = ["Google", "Instagram", "Desconhecido"] as const;
 
 export type PatientOrigin = (typeof PATIENT_ORIGIN_VALUES)[number];
 
@@ -6,7 +6,7 @@ export function normalizePatientOrigin(origin: string | null | undefined): Patie
   const raw = String(origin ?? "").trim().toLowerCase();
 
   if (raw === "google" || raw === "site") {
-    return "google";
+    return "Google";
   }
 
   if (
@@ -16,7 +16,7 @@ export function normalizePatientOrigin(origin: string | null | undefined): Patie
     raw === "facebook/instagram" ||
     raw === "facebook / instagram"
   ) {
-    return "instagram";
+    return "Instagram";
   }
 
   if (
@@ -25,10 +25,10 @@ export function normalizePatientOrigin(origin: string | null | undefined): Patie
     raw === "descolhecida" ||
     raw === ""
   ) {
-    return "desconhecida";
+    return "Desconhecido";
   }
 
-  return "desconhecida";
+  return "Desconhecido";
 }
 
 export function getPhoneVariants(raw: string): string[] {

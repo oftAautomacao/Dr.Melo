@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Phone, Calendar, Clock, MapPin, User, Users, Activity, Instagram, Globe } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { normalizePatientOrigin } from "@/lib/patient-origin";
 
 export interface AppointmentDetail {
     nome: string;
@@ -126,27 +127,32 @@ export function PatientDetailsSheet({
                                                             {patient.convenio}
                                                         </span>
                                                         {patient.origem && (
+                                                            (() => {
+                                                                const normalizedOrigin = normalizePatientOrigin(patient.origem);
+                                                                return (
                                                             <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                                                                patient.origem === 'facebook/instagram'
+                                                                normalizedOrigin === 'Instagram'
                                                                     ? 'bg-pink-50 text-pink-700 border border-pink-100'
-                                                                    : patient.origem === 'site'
+                                                                    : normalizedOrigin === 'Google'
                                                                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
                                                                         : 'bg-slate-100 text-slate-500 border border-slate-200'
                                                             }`}>
-                                                                {patient.origem === 'facebook/instagram' ? (
+                                                                {normalizedOrigin === 'Instagram' ? (
                                                                     <>
                                                                         <Instagram className="h-2.5 w-2.5" />
                                                                         Instagram
                                                                     </>
-                                                                ) : patient.origem === 'site' ? (
+                                                                ) : normalizedOrigin === 'Google' ? (
                                                                     <>
                                                                         <Globe className="h-2.5 w-2.5" />
-                                                                        Site
+                                                                        Google
                                                                     </>
                                                                 ) : (
-                                                                    patient.origem.charAt(0).toUpperCase() + patient.origem.slice(1)
+                                                                    normalizedOrigin
                                                                 )}
                                                             </span>
+                                                                );
+                                                            })()
                                                         )}
                                                     </div>
                                                 </div>

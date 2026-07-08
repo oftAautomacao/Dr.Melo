@@ -1,4 +1,5 @@
 export type BillingUnitConfig = Record<string, { bairro?: string; empresa?: string }>;
+import { normalizePatientOrigin } from "@/lib/patient-origin";
 
 export function normalizeBillingText(value: string) {
   return value
@@ -104,7 +105,7 @@ export function getBillingAppointmentsForUnitMonth(
         realizouConsulta: appointmentData.realizouConsulta ?? appointmentData.realizou ?? "",
         dataAtendimento: appointmentData.dataAtendimento ?? "",
         confirmado: !!appointmentData.confirmado,
-        origem: appointmentData.origem ?? "desconhecida",
+        origem: normalizePatientOrigin(appointmentData.origem),
         _raw: appointmentData,
       });
     }

@@ -144,6 +144,8 @@ export default function Home() {
   const [drillDownOpen, setDrillDownOpen] = useState(false);
   const [activeDrillDown, setActiveDrillDown] = useState<{ title: string; patients: AppointmentDetail[] } | null>(null);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
+  const analyticSelectItemClassName =
+    "text-xs font-medium text-slate-900 data-[highlighted]:bg-blue-700 data-[highlighted]:text-white";
 
   const toggleCardExpansion = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1703,7 +1705,7 @@ export default function Home() {
       origem: normalizePatientOrigin(app.origem)
     }));
 
-    const finalTitle = subItemName ? `${item.title} â€º ${subItemName}` : item.title;
+    const finalTitle = subItemName ? `${item.title} \u203A ${subItemName}` : item.title;
     setActiveDrillDown({ title: finalTitle, patients: details });
     setDrillDownOpen(true);
   };
@@ -1724,62 +1726,75 @@ export default function Home() {
         )}
 
         {/* Top section: Header, Logo, and Mode Toggle */}
-        <section className="w-full flex flex-col xl:flex-row justify-between items-start xl:items-end mb-8 gap-6">
-          <div className="flex flex-col items-start gap-4">
+        <section className="w-full flex flex-col xl:flex-row xl:items-start xl:justify-between mb-8 gap-4">
 
-            {/* Dashboard Mode Toggle */}
+          <div className="w-full flex justify-start xl:w-auto xl:order-1">
             <button
               onClick={() => setDashboardMode(prev => prev === 'simple' ? 'advanced' : 'simple')}
-              className="text-xs font-semibold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full hover:bg-blue-100 transition-colors flex items-center gap-1.5"
+              className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5 text-center"
             >
-              <BarChart3 className="w-4 h-4" />
-              {dashboardMode === 'simple' ? 'Ativar Modo Anal\u00EDtico' : 'Voltar ao Modo Simples'}
+              <BarChart3 className="w-4 h-4 shrink-0" />
+              <span className="leading-tight text-center">
+                {dashboardMode === 'simple' ? (
+                  <>
+                    Ativar
+                    <br />
+                    Modo Anal{"\u00ED"}tico
+                  </>
+                ) : (
+                  <>
+                    Voltar ao
+                    <br />
+                    Modo Simples
+                  </>
+                )}
+              </span>
             </button>
           </div>
 
           {/* Controls Container - Only show robust checks in Advanced Mode */}
           {dashboardMode === 'advanced' && (
-            <div className="relative z-40 flex flex-col sm:flex-row gap-4 items-end sm:items-center w-full xl:w-auto bg-white/60 p-4 rounded-xl border border-blue-100/50 backdrop-blur-sm shadow-sm animate-in fade-in slide-in-from-top-2">
+            <div className="relative z-40 flex flex-col sm:flex-row sm:flex-wrap gap-2.5 items-stretch sm:items-end w-full xl:w-auto xl:ml-auto xl:order-2 bg-white/60 p-3 rounded-xl border border-blue-100/50 backdrop-blur-sm shadow-sm animate-in fade-in slide-in-from-top-2">
               <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-                <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">Agrupar Por</label>
+                <label className="text-[10px] font-semibold text-blue-900 uppercase tracking-wider ml-1">Agrupar Por</label>
                 <Select value={statType} onValueChange={(v) => setStatType(v as StatType)}>
-                  <SelectTrigger className="w-full sm:w-[160px] bg-white"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[160px] bg-white text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unidades">{selectedUnit === 'OFT/45' ? 'M\u00E9dicos' : 'Unidades'}</SelectItem>
-                    <SelectItem value="convenios">Conv\u00EAnios</SelectItem>
-                    <SelectItem value="faixaEtaria">Faixa Et\u00E1ria</SelectItem>
-                    <SelectItem value="exames">Exames</SelectItem>
-                    <SelectItem value="motivacao">{"Motiva\u00E7\u00E3o"}</SelectItem>
-                    <SelectItem value="cirurgia">Cirurgia</SelectItem>
-                    <SelectItem value="origem">Origem do Paciente</SelectItem>
-                    <SelectItem value="historico">Evolu\u00E7\u00E3o Mensal</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="unidades">{selectedUnit === 'OFT/45' ? 'M\u00E9dicos' : 'Unidades'}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="convenios">{"Conv\u00EAnios"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="faixaEtaria">{"Faixa Et\u00E1ria"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="exames">Exames</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="motivacao">{"Motiva\u00E7\u00E3o"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="cirurgia">Cirurgia</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="origem">Origem do Paciente</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="historico">{"Evolu\u00E7\u00E3o Mensal"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-                <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">Filtrar por</label>
+                <label className="text-[10px] font-semibold text-blue-900 uppercase tracking-wider ml-1">Filtrar por</label>
                 <Select value={filterCategory} onValueChange={(v: any) => setFilterCategory(v)}>
-                  <SelectTrigger className="w-full sm:w-[150px] bg-white"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[160px] bg-white text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="unidade">{selectedUnit === 'OFT/45' ? 'M\u00E9dico' : 'Unidade'}</SelectItem>
-                    <SelectItem value="convenio">Conv\u00EAnio</SelectItem>
-                    <SelectItem value="faixaEtaria">Faixa Et\u00E1ria</SelectItem>
-                    <SelectItem value="exame">Exame</SelectItem>
-                    <SelectItem value="motivacao">{"Motiva\u00E7\u00E3o"}</SelectItem>
-                    <SelectItem value="cirurgia">Cirurgia</SelectItem>
-                    <SelectItem value="origem">Origem</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="unidade">{selectedUnit === 'OFT/45' ? 'M\u00E9dico' : 'Unidade'}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="convenio">{"Conv\u00EAnio"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="faixaEtaria">{"Faixa Et\u00E1ria"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="exame">Exame</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="motivacao">{"Motiva\u00E7\u00E3o"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="cirurgia">Cirurgia</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="origem">Origem</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="flex flex-col gap-1.5 w-full sm:w-auto animate-in fade-in">
-                <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">Op\u00E7\u00E3o</label>
-                <div className="relative z-50 w-full sm:w-[260px]">
+                <label className="text-[10px] font-semibold text-blue-900 uppercase tracking-wider ml-1">{"Op\u00E7\u00E3o"}</label>
+                <div className="relative z-50 w-full sm:w-[160px]">
                   <Input
                     value={optionQuery}
                     placeholder="Digite para filtrar..."
-                    className="bg-white pr-16"
+                    className="bg-white text-xs placeholder:text-xs"
                     onChange={(e) => {
                       const nextValue = e.target.value;
                       setOptionQuery(nextValue);
@@ -1790,25 +1805,13 @@ export default function Home() {
                       window.setTimeout(() => setIsOptionInputFocused(false), 120);
                     }}
                   />
-                  <button
-                    type="button"
-                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 hover:bg-slate-100"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      setOptionQuery("");
-                      setFilterValue("all");
-                      setIsOptionInputFocused(false);
-                    }}
-                  >
-                    Todas
-                  </button>
                   {isOptionInputFocused && filteredOptionSuggestions.length > 0 && (
-                    <div className="absolute z-[120] mt-2 max-h-52 w-full overflow-y-auto rounded-lg border border-blue-100 bg-white p-1.5 shadow-2xl">
+                    <div className="absolute z-[120] mt-2 max-h-52 w-[220px] overflow-y-auto rounded-lg border border-blue-100 bg-white p-1 shadow-2xl sm:w-[240px]">
                       {filteredOptionSuggestions.map((option) => (
                         <button
                           key={`${option.value}-${option.label}`}
                           type="button"
-                          className="flex w-full items-start rounded-md px-2.5 py-1.5 text-left text-xs leading-4 text-slate-700 hover:bg-blue-50"
+                          className="flex w-full items-start rounded-md px-3 py-2 text-left text-xs font-medium leading-5 text-slate-900 hover:bg-blue-700 hover:text-white"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setOptionQuery(option.label);
@@ -1825,19 +1828,19 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-                <label className="text-xs font-semibold text-blue-900 uppercase tracking-wider ml-1">Per\u00EDodo</label>
-                <div className="flex items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100 w-full sm:w-auto">
+                <label className="text-[10px] font-semibold text-blue-900 uppercase tracking-wider ml-1">{"Per\u00EDodo"}</label>
+                <div className="flex h-10 items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100 w-full sm:w-[160px]">
                   <button
                     onClick={() => handlePeriodChange('prev')}
                     disabled={isPrevDisabled}
-                    className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
+                    className="flex h-full items-center px-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
                     title="Anterior"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <button
                     onClick={togglePeriodMode}
-                    className="px-6 py-2 text-xs font-medium text-slate-700 hover:text-blue-600 min-w-[148px] text-center tracking-wide transition-colors cursor-pointer"
+                    className="flex-1 h-full px-2 text-xs font-medium text-slate-700 hover:text-blue-600 text-center transition-colors cursor-pointer"
                     title={`Clique para ver por ${periodMode === 'year' ? 'M\u00EAs' : 'Ano'}`}
                   >
                     {filter}
@@ -1845,7 +1848,7 @@ export default function Home() {
                   <button
                     onClick={() => handlePeriodChange('next')}
                     disabled={isNextDisabled}
-                    className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
+                    className="flex h-full items-center px-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
                     title="Pr\u00F3ximo"
                   >
                     <ChevronRight className="w-4 h-4" />
@@ -1853,7 +1856,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm self-end">
+              <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm self-start sm:self-end">
                 <button onClick={() => setViewMode("cards")} className={`p-2 rounded-md ${viewMode === "cards" ? "bg-blue-100 text-blue-700" : "text-gray-400 hover:text-gray-600"}`}><LayoutGrid className="w-5 h-5" /></button>
                 <button onClick={() => setViewMode("table")} className={`p-2 rounded-md ${viewMode === "table" ? "bg-blue-100 text-blue-700" : "text-gray-400 hover:text-gray-600"}`}><List className="w-5 h-5" /></button>
               </div>
@@ -1862,8 +1865,8 @@ export default function Home() {
 
           {/* Basic Period Filter (Visible ONLY in Simple Mode) */}
           {dashboardMode === 'simple' && (
-            <div className="flex flex-col items-end pt-4">
-              <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-col items-start pt-1 w-full xl:w-auto xl:ml-auto xl:order-2 xl:items-end">
+              <div className="flex flex-col items-start gap-1 xl:items-end">
                 <div className="flex items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100">
                   <button
                     onClick={() => handlePeriodChange('prev')}
@@ -1875,7 +1878,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={togglePeriodMode}
-                    className="px-6 py-2 text-xs font-medium text-slate-700 hover:text-blue-600 min-w-[148px] text-center tracking-wide transition-colors cursor-pointer"
+                    className="px-6 py-2 text-[11px] font-medium text-slate-700 hover:text-blue-600 min-w-[148px] text-center tracking-wide transition-colors cursor-pointer"
                     title={`Clique para ver por ${periodMode === 'year' ? 'M\u00EAs' : 'Ano'}`}
                   >
                     {filter}
@@ -1892,12 +1895,13 @@ export default function Home() {
               </div>
             </div>
           )}
+
         </section>
 
 
         {/* Main Content */}
         <section className="w-full max-w-6xl transition-all duration-300">
-          {loading && <p className="text-center">Carregandoâ€¦</p>}
+          {loading && <p className="text-center">Carregando...</p>}
 
           {!loading && displayData.length === 0 && (
             <div className="text-center p-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
@@ -1920,7 +1924,7 @@ export default function Home() {
                             <div className="flex items-center gap-1">
                               Grupo
                               {sortColumn === "title" && (
-                                <span>{sortDirection === "asc" ? "â†‘" : "â†“"}</span>
+                                <span>{sortDirection === "asc" ? "\u2191" : "\u2193"}</span>
                               )}
                             </div>
                           </th>
@@ -1932,7 +1936,7 @@ export default function Home() {
                             <div className="flex items-center justify-center gap-1">
                               Qtd.
                               {sortColumn === "count" && (
-                                <span>{sortDirection === "asc" ? "â†‘" : "â†“"}</span>
+                                <span>{sortDirection === "asc" ? "\u2191" : "\u2193"}</span>
                               )}
                             </div>
                           </th>
@@ -1943,7 +1947,7 @@ export default function Home() {
                             <div className="flex items-center justify-center gap-1">
                               %
                               {sortColumn === "percentage" && (
-                                <span>{sortDirection === "asc" ? "â†‘" : "â†“"}</span>
+                                <span>{sortDirection === "asc" ? "\u2191" : "\u2193"}</span>
                               )}
                             </div>
                           </th>
@@ -1954,7 +1958,7 @@ export default function Home() {
                             <div className="flex items-center justify-end gap-1">
                               Valor Estimado
                               {sortColumn === "value" && (
-                                <span>{sortDirection === "asc" ? "â†‘" : "â†“"}</span>
+                                <span>{sortDirection === "asc" ? "\u2191" : "\u2193"}</span>
                               )}
                             </div>
                           </th>
@@ -2014,7 +2018,7 @@ export default function Home() {
                                     {item.noShows || 0}
                                   </span>
                                   <span title="M\u00E9dia de Avalia\u00E7\u00F5es" className="flex items-center gap-1 text-yellow-600">
-                                    â­ {item.ratingCount ? (item.ratingSum! / item.ratingCount!).toFixed(1) : "-"}
+                                    {"\u2605"} {item.ratingCount ? (item.ratingSum! / item.ratingCount!).toFixed(1) : "-"}
                                   </span>
                                 </div>
                               )}

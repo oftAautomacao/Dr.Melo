@@ -6,10 +6,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ENVIRONMENT } from "../../../ambiente";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import {
+  cleanupUnitOrphanOriginAction,
   cleanupConversasLegacyNodesAction,
   copyPhoneAppointmentsToConversasAction,
   getConversasLegacyCleanupPreviewAction,
   getConversasOriginsPreviewAction,
+  getUnitOrphanOriginPreviewAction,
   getPhoneAppointmentsCopyPreviewAction,
   migratePhoneOriginAction,
   type ConversasLegacyCleanupPreviewItem,
@@ -22,6 +24,9 @@ import {
   type PhoneAppointmentsCopyPreviewItem,
   type PhoneAppointmentsCopyPreviewResult,
   type PhoneAppointmentsCopyResult,
+  type UnitOrphanOriginCleanupResult,
+  type UnitOrphanOriginPreviewItem,
+  type UnitOrphanOriginPreviewResult,
 } from "@/app/actions";
 import { AlertTriangle, PlayCircle, PauseCircle, RefreshCw, CheckCircle2 } from "lucide-react";
 
@@ -105,6 +110,28 @@ export default function MigrarOrigensPage() {
   const cleanupIsRunningRef = useRef(false);
   const cleanupLastRunSizeRef = useRef(cleanupRunSize);
 
+  const [orphanPreviewItems, setOrphanPreviewItems] = useState<UnitOrphanOriginPreviewItem[]>([]);
+  const [orphanPreviewCursor, setOrphanPreviewCursor] = useState<string | null>(null);
+  const [orphanNextCursor, setOrphanNextCursor] = useState<string | null>(null);
+  const [orphanIsExhausted, setOrphanIsExhausted] = useState(false);
+  const [orphanIsRunning, setOrphanIsRunning] = useState(false);
+  const [orphanIsDone, setOrphanIsDone] = useState(false);
+  const [orphanIsLoading, setOrphanIsLoading] = useState(false);
+  const [orphanHasLoaded, setOrphanHasLoaded] = useState(false);
+  const [orphanRunSize, setOrphanRunSize] = useState<(typeof PROCESS_OPTIONS)[number]>(5);
+  const [orphanTarget, setOrphanTarget] = useState<OriginSyncTarget>("consultasAgendadas");
+
+  const [orphanTotalProcessed, setOrphanTotalProcessed] = useState(0);
+  const [orphanTotalUpdated, setOrphanTotalUpdated] = useState(0);
+  const [orphanTotalSkipped, setOrphanTotalSkipped] = useState(0);
+  const [orphanTotalErrors, setOrphanTotalErrors] = useState(0);
+
+  const [orphanLogs, setOrphanLogs] = useState<LogEntry[]>([]);
+  const orphanLogsEndRef = useRef<HTMLDivElement>(null);
+  const orphanIsPausedRef = useRef(false);
+  const orphanIsRunningRef = useRef(false);
+  const orphanLastRunSizeRef = useRef(orphanRunSize);
+
   const addLog = useCallback((entry: LogEntry) => {
     setLogs((prev) => [...prev.slice(-200), entry]);
     setTimeout(() => logsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -118,6 +145,11 @@ export default function MigrarOrigensPage() {
   const addCleanupLog = useCallback((entry: LogEntry) => {
     setCleanupLogs((prev) => [...prev.slice(-200), entry]);
     setTimeout(() => cleanupLogsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+  }, []);
+
+  const addOrphanLog = useCallback((entry: LogEntry) => {
+    setOrphanLogs((prev) => [...prev.slice(-200), entry]);
+    setTimeout(() => orphanLogsEndRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
   }, []);
 
   const loadPreview = useCallback(
@@ -280,6 +312,60 @@ export default function MigrarOrigensPage() {
     [ENVIRONMENT, addCleanupLog, cleanupRunSize]
   );
 
+  const loadOrphanPreview = useCallback(
+    async (startCursor: string | null, resetSession: boolean, showLoadingMessage: boolean) => {
+      setOrphanIsLoading(true);
+
+      if (resetSession) {
+        setOrphanLogs([]);
+        setOrphanIsDone(false);
+        setOrphanTotalProcessed(0);
+        setOrphanTotalUpdated(0);
+        setOrphanTotalSkipped(0);
+        setOrphanTotalErrors(0);
+      }
+
+      try {
+        if (showLoadingMessage) {
+          addOrphanLog({ type: "info", message: "Carregando previa dos nos com apenas origem em unidades..." });
+        }
+
+        const result: UnitOrphanOriginPreviewResult = await getUnitOrphanOriginPreviewAction(
+          "DRM",
+          ENVIRONMENT,
+          orphanRunSize,
+          startCursor,
+          orphanTarget
+        );
+
+        setOrphanPreviewItems(result.items);
+        setOrphanPreviewCursor(startCursor);
+        setOrphanNextCursor(result.nextCursor);
+        setOrphanIsExhausted(result.done);
+        setOrphanHasLoaded(true);
+
+        if (result.items.length === 0 && result.done) {
+          setOrphanIsDone(true);
+          addOrphanLog({
+            type: "info",
+            message: `Nenhum no com apenas origem foi encontrado em ${orphanTarget}/unidades para junho, julho e agosto de 2026.`,
+          });
+          return;
+        }
+
+        addOrphanLog({
+          type: "info",
+          message: `Previa carregada com ${result.items.length} no(s) de ${orphanTarget}/unidades com apenas origem para apagar.`,
+        });
+      } catch (e: any) {
+        addOrphanLog({ type: "error", message: `Erro ao carregar previa: ${e.message}` });
+      } finally {
+        setOrphanIsLoading(false);
+      }
+    },
+    [ENVIRONMENT, addOrphanLog, orphanRunSize, orphanTarget]
+  );
+
   useEffect(() => {
     if (!hasLoaded || isRunning) {
       lastRunSizeRef.current = runSize;
@@ -309,6 +395,16 @@ export default function MigrarOrigensPage() {
     cleanupLastRunSizeRef.current = cleanupRunSize;
     void loadCleanupPreview(cleanupPreviewCursor, false, false);
   }, [cleanupRunSize, cleanupHasLoaded, cleanupIsRunning, cleanupPreviewCursor, loadCleanupPreview]);
+
+  useEffect(() => {
+    if (!orphanHasLoaded || orphanIsRunning) {
+      orphanLastRunSizeRef.current = orphanRunSize;
+      return;
+    }
+    if (orphanLastRunSizeRef.current === orphanRunSize) return;
+    orphanLastRunSizeRef.current = orphanRunSize;
+    void loadOrphanPreview(orphanPreviewCursor, false, false);
+  }, [orphanRunSize, orphanHasLoaded, orphanIsRunning, orphanPreviewCursor, loadOrphanPreview]);
 
   const handleLoad = async () => {
     await loadPreview(null, true, true);
@@ -619,6 +715,111 @@ export default function MigrarOrigensPage() {
     setCleanupLogs([]);
   };
 
+  const handleOrphanLoad = async () => {
+    await loadOrphanPreview(null, true, true);
+  };
+
+  const handleOrphanStart = async () => {
+    if (orphanPreviewItems.length === 0) return;
+
+    orphanIsPausedRef.current = false;
+    orphanIsRunningRef.current = true;
+    setOrphanIsRunning(true);
+
+    addOrphanLog({
+      type: "info",
+      message: `Apagando ${orphanPreviewItems.length} no(s) exibido(s) na previa de ${orphanTarget}/unidades com apenas origem.`,
+    });
+
+    let processedInRun = 0;
+
+    for (let idx = 0; idx < orphanPreviewItems.length; idx += PARALLEL_BATCH_SIZE) {
+      if (orphanIsPausedRef.current) break;
+
+      const batch = orphanPreviewItems.slice(idx, idx + PARALLEL_BATCH_SIZE);
+      const results: UnitOrphanOriginCleanupResult[] = await Promise.all(
+        batch.map(({ target, unidade, date, time }) =>
+          cleanupUnitOrphanOriginAction("DRM", target, unidade, date, time, ENVIRONMENT)
+        )
+      );
+
+      for (const r of results) {
+        processedInRun++;
+
+        if (r.success) {
+          if (r.nodesRemoved > 0) {
+            setOrphanTotalUpdated((prev) => prev + r.nodesRemoved);
+            addOrphanLog({
+              type: "ok",
+              message: `[OK] ${r.target}/unidades/${r.unidade}/${r.date}/${r.time} -> no com apenas origem apagado.`,
+            });
+          } else {
+            setOrphanTotalSkipped((prev) => prev + 1);
+            addOrphanLog({
+              type: "skip",
+              message: `[SKIP] ${r.target}/unidades/${r.unidade}/${r.date}/${r.time} -> o no ja nao era mais apenas origem.`,
+            });
+          }
+        } else {
+          setOrphanTotalErrors((prev) => prev + 1);
+          addOrphanLog({
+            type: "error",
+            message: `[ERRO] ${r.target}/unidades/${r.unidade}/${r.date}/${r.time} -> ${r.error}`,
+          });
+        }
+
+        setOrphanTotalProcessed((prev) => prev + 1);
+      }
+
+      await new Promise((res) => setTimeout(res, 300));
+    }
+
+    orphanIsRunningRef.current = false;
+    setOrphanIsRunning(false);
+
+    if (orphanIsPausedRef.current) {
+      addOrphanLog({ type: "info", message: "Limpeza pausada. Clique em apagar para continuar a rodada." });
+      return;
+    }
+
+    addOrphanLog({
+      type: "info",
+      message: `Rodada concluida em ${orphanTarget}. ${processedInRun} no(s) foram processados.`,
+    });
+
+    if (orphanNextCursor === null) {
+      setOrphanPreviewItems([]);
+      setOrphanIsDone(true);
+      setOrphanIsExhausted(true);
+      addOrphanLog({ type: "info", message: "Limpeza concluida. Nao ha mais nos com apenas origem na fila atual." });
+      return;
+    }
+
+    await loadOrphanPreview(orphanNextCursor, false, true);
+  };
+
+  const handleOrphanPause = () => {
+    orphanIsPausedRef.current = true;
+    setOrphanIsRunning(false);
+  };
+
+  const handleOrphanReset = () => {
+    orphanIsPausedRef.current = false;
+    orphanIsRunningRef.current = false;
+    setOrphanIsRunning(false);
+    setOrphanIsDone(false);
+    setOrphanHasLoaded(false);
+    setOrphanPreviewItems([]);
+    setOrphanPreviewCursor(null);
+    setOrphanNextCursor(null);
+    setOrphanIsExhausted(false);
+    setOrphanTotalProcessed(0);
+    setOrphanTotalUpdated(0);
+    setOrphanTotalSkipped(0);
+    setOrphanTotalErrors(0);
+    setOrphanLogs([]);
+  };
+
   if (pathBase !== "DRM") {
     return (
       <SidebarLayout unit={pathBase as any}>
@@ -649,6 +850,7 @@ export default function MigrarOrigensPage() {
             <TabsTrigger value="sincronizar-origem">Sincronizar Origem</TabsTrigger>
             <TabsTrigger value="copiar-telefones-conversas">Copiar Telefones para Conversas</TabsTrigger>
             <TabsTrigger value="limpar-nos-legados">Limpar Nos Legados</TabsTrigger>
+            <TabsTrigger value="limpar-origens-orfas">Limpar Origens Orfas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="sincronizar-origem" className="space-y-4">
@@ -1183,6 +1385,196 @@ export default function MigrarOrigensPage() {
                 ))
               )}
               <div ref={cleanupLogsEndRef} />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="limpar-origens-orfas" className="space-y-4">
+            <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <h2 className="text-lg font-semibold text-gray-900">Limpar Origens Orfas</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Mostra antes a previa dos registros em{" "}
+                <code className="rounded bg-gray-100 px-1">{orphanTarget}/unidades</code> para junho, julho e agosto de
+                2026 cujo no do horario tenha exclusivamente o campo <code className="rounded bg-gray-100 px-1">origem</code>.
+                Apenas esses nos podem ser apagados.
+              </p>
+            </div>
+
+            <div className="mb-4 grid grid-cols-4 gap-3">
+              {[
+                { label: "Processados", value: orphanTotalProcessed, color: "text-blue-700", bg: "bg-blue-50" },
+                { label: "Nos Apagados", value: orphanTotalUpdated, color: "text-green-700", bg: "bg-green-50" },
+                { label: "Sem mudanca", value: orphanTotalSkipped, color: "text-gray-600", bg: "bg-gray-50" },
+                { label: "Erros", value: orphanTotalErrors, color: "text-red-700", bg: "bg-red-50" },
+              ].map(({ label, value, color, bg }) => (
+                <div key={label} className={`${bg} rounded-xl border border-gray-100 p-4 text-center`}>
+                  <div className={`text-3xl font-bold ${color}`}>{value}</div>
+                  <div className="mt-1 text-xs text-gray-500">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mb-4 flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Destino</span>
+                <select
+                  value={orphanTarget}
+                  onChange={(e) => {
+                    setOrphanTarget(e.target.value as OriginSyncTarget);
+                    setOrphanHasLoaded(false);
+                    setOrphanIsDone(false);
+                    setOrphanPreviewItems([]);
+                    setOrphanPreviewCursor(null);
+                    setOrphanNextCursor(null);
+                    setOrphanIsExhausted(false);
+                  }}
+                  disabled={orphanIsLoading || orphanIsRunning}
+                  className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {TARGET_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}/unidades
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Qtd. por execucao</span>
+                <select
+                  value={orphanRunSize}
+                  onChange={(e) => setOrphanRunSize(Number(e.target.value) as (typeof PROCESS_OPTIONS)[number])}
+                  disabled={orphanIsLoading || orphanIsRunning}
+                  className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {PROCESS_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option} no(s)
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <button
+                onClick={handleOrphanLoad}
+                disabled={orphanIsLoading || orphanIsRunning}
+                className="flex items-center gap-2 rounded-lg bg-gray-700 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw className={`h-4 w-4 ${orphanIsLoading ? "animate-spin" : ""}`} />
+                {orphanIsLoading ? "Carregando..." : orphanHasLoaded ? "Recarregar Previa" : "Carregar Previa"}
+              </button>
+
+              {!orphanIsRunning ? (
+                <button
+                  onClick={handleOrphanStart}
+                  disabled={orphanPreviewItems.length === 0 || orphanIsDone || orphanIsLoading}
+                  className="flex items-center gap-2 rounded-lg bg-red-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <PlayCircle className="h-4 w-4" />
+                  Apagar Nos com Apenas Origem
+                </button>
+              ) : (
+                <button
+                  onClick={handleOrphanPause}
+                  className="flex items-center gap-2 rounded-lg bg-yellow-500 px-5 py-2 text-sm font-semibold text-white transition hover:bg-yellow-600"
+                >
+                  <PauseCircle className="h-4 w-4" />
+                  Pausar
+                </button>
+              )}
+
+              <button
+                onClick={handleOrphanReset}
+                disabled={orphanIsRunning}
+                className="flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Reiniciar
+              </button>
+
+              {orphanIsDone && (
+                <span className="ml-2 flex items-center gap-2 text-sm font-semibold text-green-700">
+                  <CheckCircle2 className="h-5 w-5" /> Concluido!
+                </span>
+              )}
+            </div>
+
+            <div className="mb-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-800">Previa da Rodada</h2>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Estes sao os nos que serao apagados somente se voce clicar no botao vermelho.
+                  </p>
+                </div>
+                <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                  {orphanPreviewItems.length} no(s)
+                </span>
+              </div>
+
+              {!orphanHasLoaded ? (
+                <p className="text-sm text-gray-500">Clique em "Carregar Previa" para ver os registros antes da limpeza.</p>
+              ) : orphanPreviewItems.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  {orphanIsExhausted
+                    ? `Nao ha mais nos com apenas origem em ${orphanTarget}/unidades na fila atual.`
+                    : "Nenhum no foi encontrado nesta previa."}
+                </p>
+              ) : (
+                <div className="max-h-96 space-y-2 overflow-y-auto pr-2">
+                  {orphanPreviewItems.map((item, index) => (
+                    <div
+                      key={`${item.target}-${item.unidade}-${item.date}-${item.time}-${index}`}
+                      className="flex items-start justify-between gap-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
+                    >
+                      <div>
+                        <div className="text-sm font-semibold text-gray-800">
+                          {index + 1}. {item.unidade} - {item.date} - {item.time}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          destino: {item.target}/unidades
+                        </div>
+                        <div className="text-xs text-gray-500">origem: {item.origem || "(vazia)"}</div>
+                      </div>
+                      <span className="text-[11px] font-medium uppercase tracking-wide text-red-500">Apenas origem</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mb-4 rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                <span>
+                  Cursor atual: <strong>{orphanPreviewCursor ?? "inicio"}</strong>
+                </span>
+                <span>
+                  Proximo cursor: <strong>{orphanNextCursor ?? "fim da fila"}</strong>
+                </span>
+              </div>
+            </div>
+
+            <div className="h-72 overflow-y-auto rounded-xl border border-gray-700 bg-gray-950 p-4 font-mono text-xs">
+              {orphanLogs.length === 0 ? (
+                <p className="text-gray-500">Os eventos da carga e da limpeza aparecerao aqui.</p>
+              ) : (
+                orphanLogs.map((log, i) => (
+                  <div
+                    key={i}
+                    className={
+                      log.type === "ok"
+                        ? "text-green-400"
+                        : log.type === "error"
+                          ? "text-red-400"
+                          : log.type === "skip"
+                            ? "text-gray-400"
+                            : "text-blue-300"
+                    }
+                  >
+                    {log.message}
+                  </div>
+                ))
+              )}
+              <div ref={orphanLogsEndRef} />
             </div>
           </TabsContent>
         </Tabs>

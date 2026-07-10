@@ -812,7 +812,7 @@ export function AttendanceReviewPanel({
           </div>
           <div className="p-6">
             {appointmentToReschedule && (
-              <PatientForm initialData={appointmentToReschedule} onRescheduleComplete={() => {
+              <PatientForm key={`${appointmentToReschedule.id}-${appointmentToReschedule.dataAgendamento}-${appointmentToReschedule.horario}`} initialData={appointmentToReschedule} onRescheduleComplete={() => {
                   setIsRescheduleFormOpen(false);
                   const key = getRowKey({ _unit: appointmentToReschedule.unidade, _date: appointmentToReschedule.dataAgendamento, _time: appointmentToReschedule.horario, nomePaciente: appointmentToReschedule.nomePaciente } as any);
                   

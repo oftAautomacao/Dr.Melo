@@ -80,6 +80,32 @@ interface Exame {
   nome: string;
 }
 
+function normalizeSelectedExames(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item.trim();
+        if (item && typeof item === "object" && "id" in item && typeof (item as { id?: unknown }).id === "string") {
+          return ((item as { id: string }).id || "").trim();
+        }
+        if (item && typeof item === "object" && "nome" in item && typeof (item as { nome?: unknown }).nome === "string") {
+          return ((item as { nome: string }).nome || "").trim();
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+}
+
 function formatUnitName(unitId: string, unitDetails: any): string {
   if (unitDetails && typeof unitDetails.unidade === 'string' && unitDetails.unidade.trim() !== '') {
     return unitDetails.unidade;
@@ -156,7 +182,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
           : undefined,
         horario: initialData.horario ?? "",
         convenio: initialData.convenio ?? "",
-        exames: initialData.exames ?? [],
+        exames: normalizeSelectedExames(initialData.exames),
         motivacao: initialData.motivacao ?? "",
         local: initialData.unidade ?? "",
         telefone: initialData.telefone ?? "",
@@ -229,7 +255,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
           : undefined,
         horario: initialData.horario ?? "",
         convenio: initialData.convenio ?? "",
-        exames: initialData.exames ?? [],
+        exames: normalizeSelectedExames(initialData.exames),
         motivacao: initialData.motivacao ?? "",
         local: initialData.unidade ?? "",
         telefone: initialData.telefone ?? "",
@@ -269,6 +295,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
       }
     }
 
+    vals.exames = normalizeSelectedExames(vals.exames);
     vals.origem = normalizePatientOrigin(vals.origem);
 
     // Normalizar "Particular" se necessário
@@ -1219,28 +1246,31 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                               key={exame.id}
                               control={form.control}
                               name="exames"
-                              render={({ field: examesField }) => (
-                                <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={examesField.value?.includes(exame.id)}
-                                      onCheckedChange={(checked) => {
-                                        const currentExames = examesField.value || [];
-                                        if (checked) {
-                                          examesField.onChange([...currentExames, exame.id]);
-                                        } else {
-                                          examesField.onChange(
-                                            currentExames.filter((value) => value !== exame.id)
-                                          );
-                                        }
-                                      }}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="font-normal text-sm">
-                                    {exame.nome}
-                                  </FormLabel>
-                                </FormItem>
-                              )}
+                              render={({ field: examesField }) => {
+                                const currentExames = normalizeSelectedExames(examesField.value);
+
+                                return (
+                                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                    <FormControl>
+                                      <Checkbox
+                                        checked={currentExames.includes(exame.id)}
+                                        onCheckedChange={(checked) => {
+                                          if (checked) {
+                                            examesField.onChange([...currentExames, exame.id]);
+                                          } else {
+                                            examesField.onChange(
+                                              currentExames.filter((value) => value !== exame.id)
+                                            );
+                                          }
+                                        }}
+                                      />
+                                    </FormControl>
+                                    <FormLabel className="font-normal text-sm">
+                                      {exame.nome}
+                                    </FormLabel>
+                                  </FormItem>
+                                );
+                              }}
                             />
                           ))}
                         </div>

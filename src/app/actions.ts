@@ -643,6 +643,21 @@ export interface ConversasLegacyCleanupPreviewResult {
   scannedCount: number;
 }
 
+export interface UnitOrphanOriginPreviewItem {
+  target: OriginSyncTarget;
+  unidade: string;
+  date: string;
+  time: string;
+  origem: string;
+}
+
+export interface UnitOrphanOriginPreviewResult {
+  items: UnitOrphanOriginPreviewItem[];
+  nextCursor: string | null;
+  done: boolean;
+  scannedCount: number;
+}
+
 export async function getConversasOriginsPreviewAction(
   firebaseBase: string,
   environment: "teste" | "producao",
@@ -743,6 +758,16 @@ export interface PhoneAppointmentsCopyResult {
 
 export interface ConversasLegacyCleanupResult {
   phone: string;
+  nodesRemoved: number;
+  success: boolean;
+  error?: string;
+}
+
+export interface UnitOrphanOriginCleanupResult {
+  target: OriginSyncTarget;
+  unidade: string;
+  date: string;
+  time: string;
   nodesRemoved: number;
   success: boolean;
   error?: string;
@@ -927,6 +952,74 @@ export async function getConversasLegacyCleanupPreviewAction(
   }
 }
 
+export async function getUnitOrphanOriginPreviewAction(
+  firebaseBase: string,
+  environment: "teste" | "producao",
+  requestedSize: number,
+  cursor: string | null,
+  target: OriginSyncTarget = "consultasAgendadas"
+): Promise<UnitOrphanOriginPreviewResult> {
+  try {
+    const dbInstance = getDatabaseInstance(environment);
+    const path = `/${firebaseBase}/agendamentoWhatsApp/operacional/${target}/unidades`;
+    const snap = await get(ref(dbInstance, path));
+
+    if (!snap.exists()) {
+      return { items: [], nextCursor: null, done: true, scannedCount: 0 };
+    }
+
+    const raw = snap.val() as Record<string, any>;
+    const matches: UnitOrphanOriginPreviewItem[] = [];
+    let scannedCount = 0;
+
+    for (const unidade of Object.keys(raw).sort()) {
+      const dates = raw[unidade];
+      if (!dates || typeof dates !== "object") continue;
+
+      for (const date of Object.keys(dates).sort()) {
+        if (!/^2026-(06|07|08)-/.test(date)) continue;
+
+        const times = dates[date];
+        if (!times || typeof times !== "object") continue;
+
+        for (const time of Object.keys(times).sort()) {
+          scannedCount++;
+          const appt = times[time];
+          if (!appt || typeof appt !== "object") continue;
+
+          const propNames = Object.keys(appt);
+          if (propNames.length === 1 && propNames[0] === "origem") {
+            matches.push({
+              target,
+              unidade,
+              date,
+              time,
+              origem: typeof appt.origem === "string" ? appt.origem : "",
+            });
+          }
+        }
+      }
+    }
+
+    const startIndex = cursor ? Number(cursor) : 0;
+    const safeStartIndex = Number.isFinite(startIndex) && startIndex > 0 ? startIndex : 0;
+    const batchSize = Math.max(1, Math.min(requestedSize, 1000));
+    const items = matches.slice(safeStartIndex, safeStartIndex + batchSize);
+    const nextIndex = safeStartIndex + items.length;
+    const done = nextIndex >= matches.length;
+
+    return {
+      items,
+      nextCursor: done ? null : String(nextIndex),
+      done,
+      scannedCount,
+    };
+  } catch (e) {
+    console.error("Erro ao carregar previa dos nos com apenas origem em unidades:", e);
+    throw e;
+  }
+}
+
 export async function migratePhoneOriginAction(
   firebaseBase: string,
   phone: string,
@@ -1062,6 +1155,52 @@ export async function cleanupConversasLegacyNodesAction(
   } catch (err: any) {
     console.error(`Erro ao limpar nos legados do telefone ${phone}:`, err);
     return { phone, nodesRemoved: 0, success: false, error: err.message || String(err) };
+  }
+}
+
+export async function cleanupUnitOrphanOriginAction(
+  firebaseBase: string,
+  target: OriginSyncTarget,
+  unidade: string,
+  date: string,
+  time: string,
+  environment: "teste" | "producao"
+): Promise<UnitOrphanOriginCleanupResult> {
+  try {
+    const dbInstance = getDatabaseInstance(environment);
+    const path = `/${firebaseBase}/agendamentoWhatsApp/operacional/${target}/unidades/${unidade}/${date}/${time}`;
+    const snap = await get(ref(dbInstance, path));
+
+    if (!snap.exists()) {
+      return { target, unidade, date, time, nodesRemoved: 0, success: true };
+    }
+
+    const data = snap.val();
+    if (!data || typeof data !== "object") {
+      return { target, unidade, date, time, nodesRemoved: 0, success: true };
+    }
+
+    const propNames = Object.keys(data);
+    if (propNames.length !== 1 || propNames[0] !== "origem") {
+      return { target, unidade, date, time, nodesRemoved: 0, success: true };
+    }
+
+    const updates: Record<string, any> = {};
+    updates[path] = null;
+    await update(ref(dbInstance), updates);
+
+    return { target, unidade, date, time, nodesRemoved: 1, success: true };
+  } catch (err: any) {
+    console.error(`Erro ao limpar no com apenas origem em ${target}/${unidade}/${date}/${time}:`, err);
+    return {
+      target,
+      unidade,
+      date,
+      time,
+      nodesRemoved: 0,
+      success: false,
+      error: err.message || String(err),
+    };
   }
 }
 

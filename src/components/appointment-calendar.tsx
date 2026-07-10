@@ -927,7 +927,9 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                       )}
                                       <p className="flex items-center">
                                         <strong>Telefone:</strong>
-                                        <span className="ml-2">{app.telefone}</span>
+                                        <span className="ml-2">{app.telefone || "-"}</span>
+                                        {app.telefone && (
+                                          <>
                                         <button
                                           type="button"
                                           title="Copiar número"
@@ -945,6 +947,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                         >
                                           <InternalChatIcon className="h-5 w-5" />
                                         </Link>
+                                          </>
+                                        )}
                                       </p>
                                       <p>
                                         <strong>Convênio:</strong> {app.convenio}
@@ -1209,6 +1213,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
           <ScrollArea className="h-[calc(100vh-200px)]">
             {appointmentToReschedule && (
               <PatientForm
+                key={`${appointmentToReschedule.id}-${appointmentToReschedule.dataAgendamento}-${appointmentToReschedule.horario}`}
                 initialData={appointmentToReschedule}
                 onRescheduleComplete={() => {
                   setIsRescheduleFormOpen(false);

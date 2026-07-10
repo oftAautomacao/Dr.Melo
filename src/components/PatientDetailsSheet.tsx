@@ -53,6 +53,41 @@ export function PatientDetailsSheet({
     const [searchTerm, setSearchTerm] = useState("");
     const { toast } = useToast();
 
+    const copyPhoneNumber = async (phone: string) => {
+        const cleanPhone = phone.replace(/\D/g, "");
+
+        if (!cleanPhone) {
+            return;
+        }
+
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(cleanPhone);
+            } else {
+                const tempInput = document.createElement("textarea");
+                tempInput.value = cleanPhone;
+                tempInput.setAttribute("readonly", "");
+                tempInput.style.position = "absolute";
+                tempInput.style.left = "-9999px";
+                document.body.appendChild(tempInput);
+                tempInput.select();
+                document.execCommand("copy");
+                document.body.removeChild(tempInput);
+            }
+
+            toast({
+                title: "N\u00FAmero copiado",
+                description: cleanPhone,
+            });
+        } catch {
+            toast({
+                title: "Erro ao copiar",
+                description: "N\u00E3o foi poss\u00EDvel copiar o n\u00FAmero.",
+                variant: "destructive",
+            });
+        }
+    };
+
     const filteredPatients = useMemo(() => {
         return patients.filter((p) =>
             p.nome.toLowerCase().includes(searchTerm.toLowerCase())
@@ -170,14 +205,7 @@ export function PatientDetailsSheet({
                                                     <button
                                                         type="button"
                                                         className="flex items-center gap-1.5 text-emerald-600 hover:text-emerald-700 font-bold transition-colors"
-                                                        onClick={() => {
-                                                            const cleanPhone = patient.telefone.replace(/\D/g, "");
-                                                            void navigator.clipboard.writeText(cleanPhone);
-                                                            toast({
-                                                                title: "N\u00FAmero copiado",
-                                                                description: cleanPhone,
-                                                            });
-                                                        }}
+                                                        onClick={() => void copyPhoneNumber(patient.telefone)}
                                                     >
                                                         <Phone className="h-3.5 w-3.5 shrink-0" />
                                                         <span className="leading-none tracking-tight">{patient.telefone}</span>

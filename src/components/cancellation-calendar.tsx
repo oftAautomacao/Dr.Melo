@@ -542,13 +542,15 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                       </p>
                                       <p className="flex items-center">
                                         <strong>Telefone:</strong>
+                                        <span className="ml-2">{app.telefone || "-"}</span>
+                                        {app.telefone && (
+                                          <>
                                         <a
                                           href={`https://wa.me/${app.telefone.replace(/\D/g, '')}`}
                                           target="_blank"
                                           rel="noopener noreferrer"
                                           className="ml-2 flex items-center text-primary hover:underline"
                                         >
-                                          {app.telefone}
                                           <WhatsAppIcon className="ml-1 h-4 w-4" />
                                         </a>
                                         <Link
@@ -557,6 +559,8 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                         >
                                           <InternalChatIcon className="h-5 w-5" />
                                         </Link>
+                                          </>
+                                        )}
                                       </p>
                                       <p>
                                         <strong>Convênio:</strong> {app.convenio}

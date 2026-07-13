@@ -9,9 +9,10 @@ interface SidebarLayoutProps {
   children: ReactNode;
   unit: 'DRM' | 'OFT/45' | null; // Adiciona a prop unit
   bgColor?: string; // Optional background color class
+  contentClassName?: string;
 }
 
-const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }) => {
+const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor, contentClassName }) => {
   console.log("SidebarLayout received unit prop:", unit);
   return (
     <div className="flex min-h-screen">
@@ -69,7 +70,7 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor }
       </div>
 
       {/* Main Content */}
-      <div className={`flex-1 p-6 ${bgColor || 'bg-gray-100'}`}>
+      <div className={`flex-1 ${contentClassName || "p-6"} ${bgColor || 'bg-gray-100'}`}>
         {children}
       </div>
     </div>

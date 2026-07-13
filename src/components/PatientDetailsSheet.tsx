@@ -35,6 +35,9 @@ export interface AppointmentDetail {
     exames: string[];
     telefone: string;
     origem?: string;
+    motivoCancelamento?: string;
+    avaliacaoEstrelas?: number;
+    avaliacaoTexto?: string;
 }
 
 interface PatientDetailsSheetProps {
@@ -192,6 +195,25 @@ export function PatientDetailsSheet({
                                                             })()
                                                         )}
                                                     </div>
+                                                    {patient.motivoCancelamento && (
+                                                        <div className="mt-1.5 rounded-md border border-red-100 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700 leading-snug">
+                                                            Motivo: {patient.motivoCancelamento}
+                                                        </div>
+                                                    )}
+                                                    {(patient.avaliacaoEstrelas || patient.avaliacaoTexto) && (
+                                                        <div className="mt-1.5 flex flex-col gap-1">
+                                                            {patient.avaliacaoEstrelas ? (
+                                                                <div className="rounded-md border border-amber-100 bg-amber-50 px-2 py-1 text-[10px] font-semibold text-amber-700 leading-snug">
+                                                                    {"★"} {patient.avaliacaoEstrelas} estrela{patient.avaliacaoEstrelas > 1 ? "s" : ""}
+                                                                </div>
+                                                            ) : null}
+                                                            {patient.avaliacaoTexto ? (
+                                                                <div className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-600 leading-snug">
+                                                                    Comentário: {patient.avaliacaoTexto}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </TableCell>

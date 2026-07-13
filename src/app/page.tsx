@@ -4,7 +4,7 @@ import SidebarLayout from "@/components/layout/sidebar-layout";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Building2, UserX, MessageSquare } from "lucide-react";
+import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, UserX, MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ref, onValue } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
@@ -87,8 +87,6 @@ const getAgeBucket = (nascimento: string) => {
 
 /* ---------- Types ---------- */
 type StatType = "unidades" | "convenios" | "faixaEtaria" | "exames" | "historico" | "origem" | "motivacao" | "cirurgia";
-type DashboardMode = "simple" | "advanced";
-
 type FilterCategory = "unidade" | "convenio" | "faixaEtaria" | "exame" | "origem" | "motivacao" | "cirurgia";
 
 interface FilterOptionItem {
@@ -109,7 +107,7 @@ interface CardData {
   topUnidades?: { name: string; count: number; value: number }[]; // For unit breakdown
   ratingSum?: number;
   ratingCount?: number;
-  noShows?: number;
+  cancellationCount?: number;
 }
 
 /* =============================================================
@@ -119,12 +117,11 @@ export default function Home() {
   const router = useRouter();
   /* ---------- state ---------- */
   const [patientData, setPatientData] = useState<Record<string, Record<string, any>>>({});
+  const [cancellationData, setCancellationData] = useState<Record<string, Record<string, any>>>({});
   const [unitConfig, setUnitConfig] = useState<Record<string, { bairro?: string; empresa?: string }>>({});
   const [examConfig, setExamConfig] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
 
-  // Dashboard Mode State
-  const [dashboardMode, setDashboardMode] = useState<DashboardMode>("simple");
   const [periodMode, setPeriodMode] = useState<'month' | 'year'>('month');
 
   // Filters (Shared)
@@ -145,7 +142,7 @@ export default function Home() {
   const [activeDrillDown, setActiveDrillDown] = useState<{ title: string; patients: AppointmentDetail[] } | null>(null);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const analyticSelectItemClassName =
-    "text-xs font-medium text-slate-900 data-[highlighted]:bg-blue-700 data-[highlighted]:text-white";
+    "text-[13px] font-medium text-slate-900 data-[highlighted]:bg-blue-700 data-[highlighted]:text-white";
 
   const toggleCardExpansion = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -183,9 +180,13 @@ export default function Home() {
     const node = pathBase === 'OFT/45' ? 'medicos' : 'unidades';
 
     const agRef = ref(db, `/${pathBase}/agendamentoWhatsApp/operacional/consultasAgendadas/${node}`);
+    const cancelRef = ref(db, `/${pathBase}/agendamentoWhatsApp/operacional/consultasCanceladas/${node}`);
     const offAg = onValue(agRef, snap => {
       setPatientData(snap.exists() ? (snap.val() as any) : {});
       setLoading(false);
+    });
+    const offCancel = onValue(cancelRef, snap => {
+      setCancellationData(snap.exists() ? (snap.val() as any) : {});
     });
 
     const cfgRef = ref(db, `/${pathBase}/agendamentoWhatsApp/configuracoes/${node}`);
@@ -200,21 +201,11 @@ export default function Home() {
 
     return () => {
       offAg();
+      offCancel();
       offCfg();
       offExames();
     };
   }, []);
-
-  /* ---------- Reset Filters on Mode Change ---------- */
-  useEffect(() => {
-    if (dashboardMode === 'simple') {
-      // Force defaults for simple mode
-      setStatType('unidades');
-      setFilterCategory('unidade');
-      setFilterValue('all');
-      setViewMode('cards');
-    }
-  }, [dashboardMode]);
 
   /* ---------- Sync Filter Category with Stat Type ---------- */
   useEffect(() => {
@@ -588,6 +579,67 @@ export default function Home() {
     return appointments;
   }, [patientData, filter, statType, filterCategory, filterValue, examConfig, selectedUnit, unitConfig]);
 
+  const filteredCancellations = useMemo(() => {
+    if (!filter) return [];
+
+    const cancellations: any[] = [];
+    const filterYear = filter === 'all' ? null : (filter.includes(" de ") ? filter.split(" de ")[1] : filter);
+    const filterMonthStr = filter.includes(" de ") ? filter : null;
+
+    for (const unit in cancellationData) {
+      for (const date in cancellationData[unit]) {
+        const cancelMonthStr = obterNomeMes(date);
+        const cancelYear = obterAno(date);
+
+        const hours = cancellationData[unit][date];
+        for (const time in hours) {
+          let include = false;
+
+          if (statType === 'historico') {
+            if (filterYear === null || cancelYear === filterYear) include = true;
+          } else {
+            if (filterMonthStr) {
+              if (cancelMonthStr === filterMonthStr) include = true;
+            } else if (filterYear) {
+              if (cancelYear === filterYear) include = true;
+            }
+          }
+
+          if (include) {
+            const app = { ...hours[time], _unit: unit, _date: date, _time: time };
+
+            if (filterCategory === 'convenio' && filterValue && filterValue !== 'all' && !matchesSearchText(app.convenio || "", filterValue)) continue;
+            if (filterCategory === 'exame' && filterValue && filterValue !== 'all') {
+              if (!Array.isArray(app.exames) || !app.exames.some((ex: string) => matchesSearchText(ex, filterValue))) continue;
+            }
+            if (filterCategory === 'faixaEtaria' && filterValue && filterValue !== 'all') {
+              const bucket = getAgeBucket(app.nascimento);
+              if (bucket !== filterValue) continue;
+            }
+            if (filterCategory === 'unidade' && filterValue && filterValue !== 'all') {
+              const unitLabel = `${unitConfig?.[app._unit]?.empresa ?? app._unit}${unitConfig?.[app._unit]?.bairro ? ` - ${unitConfig?.[app._unit]?.bairro}` : ""}`;
+              if (!matchesSearchText(unitLabel, filterValue) && !matchesSearchText(app._unit, filterValue)) continue;
+            }
+            if (filterCategory === 'origem' && filterValue && filterValue !== 'all') {
+              const origVal = normalizePatientOrigin(app.origem);
+              if (!matchesSearchText(origVal, filterValue)) continue;
+            }
+            if (filterCategory === 'motivacao' && filterValue && filterValue !== 'all') {
+              if (!matchesSearchText(app.motivacao || "", filterValue)) continue;
+            }
+            if (filterCategory === 'cirurgia' && filterValue && filterValue !== 'all') {
+              if (!matchesSearchText(app.cirurgia || "", filterValue)) continue;
+            }
+
+            cancellations.push(app);
+          }
+        }
+      }
+    }
+
+    return cancellations;
+  }, [cancellationData, filter, statType, filterCategory, filterValue, unitConfig]);
+
   const displayData = useMemo<CardData[]>(() => {
     const appointments = filteredAppointments;
     if (appointments.length === 0) return [];
@@ -626,6 +678,11 @@ export default function Home() {
     }
 
     if (statType === "unidades") {
+      const cancellationCountsByUnit = filteredCancellations.reduce<Record<string, number>>((acc, app) => {
+        acc[app._unit] = (acc[app._unit] || 0) + 1;
+        return acc;
+      }, {});
+
       // Logic for "Unidades" + "Convenio" + "All" => Show Top 3 Convenios per Unit
       if (filterCategory === 'convenio' && filterValue === 'all') {
         const unitConvenios: Record<string, Record<string, { count: number, value: number }>> = {};
@@ -663,8 +720,7 @@ export default function Home() {
             value: unitCounts[unit].value,
             ratingSum: unitCounts[unit].ratingSum,
             ratingCount: unitCounts[unit].ratingCount,
-            noShows: unitCounts[unit].noShows,
-            icon: <Building2 className="h-5 w-5 text-blue-500" />,
+            cancellationCount: cancellationCountsByUnit[unit] || 0,
             topConvenios: top3
           };
         });
@@ -708,8 +764,7 @@ export default function Home() {
             value: unitCounts[unit].value,
             ratingSum: unitCounts[unit].ratingSum,
             ratingCount: unitCounts[unit].ratingCount,
-            noShows: unitCounts[unit].noShows,
-            icon: <Building2 className="h-5 w-5 text-blue-500" />,
+            cancellationCount: cancellationCountsByUnit[unit] || 0,
             topFaixas: faixas
           };
         });
@@ -754,8 +809,7 @@ export default function Home() {
             value: unitCounts[unit].value,
             ratingSum: unitCounts[unit].ratingSum,
             ratingCount: unitCounts[unit].ratingCount,
-            noShows: unitCounts[unit].noShows,
-            icon: <Building2 className="h-5 w-5 text-blue-500" />,
+            cancellationCount: cancellationCountsByUnit[unit] || 0,
             topExames: top3
           };
         });
@@ -784,8 +838,7 @@ export default function Home() {
         value: counts[unit].value,
         ratingSum: counts[unit].ratingSum,
         ratingCount: counts[unit].ratingCount,
-        noShows: counts[unit].noShows,
-        icon: <Building2 className="h-5 w-5 text-blue-500" />
+        cancellationCount: cancellationCountsByUnit[unit] || 0
       }));
     }
 
@@ -1581,7 +1634,7 @@ export default function Home() {
     }
 
     return [];
-  }, [filteredAppointments, statType, unitConfig, filterCategory, filterValue]);
+  }, [filteredAppointments, filteredCancellations, statType, unitConfig, filterCategory, filterValue]);
 
   const totalPacientes = useMemo(() => filteredAppointments.length, [filteredAppointments]);
   const totalEstimado = useMemo(() => filteredAppointments.reduce((acc, app) => acc + (app._value || 0), 0), [filteredAppointments]);
@@ -1644,19 +1697,76 @@ export default function Home() {
 
 
 
+  const buildAppointmentDetail = (app: any): AppointmentDetail => ({
+    nome: app.nomePaciente || app.nome || "N\u00E3o informado",
+    nascimento: app.nascimento || "-",
+    idade: calculateAge(app.nascimento),
+    convenio: app.convenio || "N\u00E3o informado",
+    unidade: app._unit,
+    unidadeName: unitConfig?.[app._unit]?.empresa ?? app._unit,
+    dataConsulta: app._date.split("-").reverse().join("/"),
+    horario: app._time || "-",
+    exames: Array.isArray(app.exames) ? app.exames : [],
+    telefone: app.telefone || "",
+    origem: normalizePatientOrigin(app.origem),
+    motivoCancelamento: String(app.motivoCancelamento || "").trim() || undefined,
+    avaliacaoEstrelas: Number(app.pesquisaSatisfacao?.estrelas) || undefined,
+    avaliacaoTexto: String(app.pesquisaSatisfacao?.texto || "").trim() || undefined,
+  });
+
+  const openCancellationDrillDown = (item: CardData) => {
+    const matches = filteredCancellations
+      .filter((app: any) => app._unit === item.id)
+      .sort((a: any, b: any) => {
+        const reasonA = String(a.motivoCancelamento || "N\u00E3o informado").trim() || "N\u00E3o informado";
+        const reasonB = String(b.motivoCancelamento || "N\u00E3o informado").trim() || "N\u00E3o informado";
+        const reasonCompare = reasonA.localeCompare(reasonB, "pt-BR");
+        if (reasonCompare !== 0) return reasonCompare;
+        const dateCompare = a._date.localeCompare(b._date);
+        if (dateCompare !== 0) return dateCompare;
+        return a._time.localeCompare(b._time);
+      });
+
+    setActiveDrillDown({
+      title: `${item.title} \u203A Motivo do Cancelamento`,
+      patients: matches.map(buildAppointmentDetail),
+    });
+    setDrillDownOpen(true);
+  };
+
+  const openRatingDrillDown = (item: CardData) => {
+    const matches = filteredAppointments
+      .filter((app: any) => app._unit === item.id)
+      .filter((app: any) => {
+        const stars = Number(app.pesquisaSatisfacao?.estrelas) || 0;
+        const text = String(app.pesquisaSatisfacao?.texto || "").trim();
+        return stars > 0 || !!text;
+      })
+      .sort((a: any, b: any) => {
+        const starsA = Number(a.pesquisaSatisfacao?.estrelas) || 0;
+        const starsB = Number(b.pesquisaSatisfacao?.estrelas) || 0;
+        if (starsA !== starsB) return starsB - starsA;
+        const textA = String(a.pesquisaSatisfacao?.texto || "").trim();
+        const textB = String(b.pesquisaSatisfacao?.texto || "").trim();
+        if (!!textA !== !!textB) return textA ? -1 : 1;
+        const textCompare = textA.localeCompare(textB, "pt-BR");
+        if (textCompare !== 0) return textCompare;
+        const dateCompare = a._date.localeCompare(b._date);
+        if (dateCompare !== 0) return dateCompare;
+        return a._time.localeCompare(b._time);
+      });
+
+    setActiveDrillDown({
+      title: `${item.title} \u203A Estrelas e Coment\u00E1rios`,
+      patients: matches.map(buildAppointmentDetail),
+    });
+    setDrillDownOpen(true);
+  };
+
   // Function to handle card click for detailed records
   const handleDrillDown = (item: CardData, subItemName?: string) => {
-    // If NOT in analytic mode, navigate to unit calendar if it's a unit card
-    if (dashboardMode === 'simple') {
-      if (statType === 'unidades') {
-        router.push(`/visualizar-agendamentos?unidade=${encodeURIComponent(item.id)}&filtro=${encodeURIComponent(filter)}`);
-      }
-      return;
-    }
-
-    // In Analytic Mode: Only drill down if there's no breakdown OR if it's a subItem click
     const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
-    if (hasBreakdown && !subItemName) return;
+    if (hasBreakdown && !subItemName && statType !== "unidades") return;
 
     // Filter appointments for this item from filteredAppointments
     let matches: any[] = [];
@@ -1691,19 +1801,7 @@ export default function Home() {
       }
     }
 
-    const details: AppointmentDetail[] = matches.map((app: any) => ({
-      nome: app.nomePaciente || app.nome || "N\u00E3o informado",
-      nascimento: app.nascimento || "-",
-      idade: calculateAge(app.nascimento),
-      convenio: app.convenio || "N\u00E3o informado",
-      unidade: app._unit,
-      unidadeName: unitConfig?.[app._unit]?.empresa ?? app._unit,
-      dataConsulta: app._date.split("-").reverse().join("/"),
-      horario: app._time || "-",
-      exames: Array.isArray(app.exames) ? app.exames : [],
-      telefone: app.telefone || "",
-      origem: normalizePatientOrigin(app.origem)
-    }));
+    const details: AppointmentDetail[] = matches.map(buildAppointmentDetail);
 
     const finalTitle = subItemName ? `${item.title} \u203A ${subItemName}` : item.title;
     setActiveDrillDown({ title: finalTitle, patients: details });
@@ -1712,7 +1810,7 @@ export default function Home() {
 
   /* ---------- UI ---------- */
   return (
-    <SidebarLayout unit={selectedUnit}>
+    <SidebarLayout unit={selectedUnit} bgColor="bg-transparent" contentClassName="p-0">
       <div className="flex flex-col items-center px-6 pb-6 pt-2 md:px-10 md:pb-10 md:pt-4 lg:px-16 lg:pb-16 lg:pt-6 bg-gradient-to-b from-blue-100 via-white to-blue-100 min-h-screen w-full relative overflow-auto">
 
         {/* Patient Details Sheet (Drill-down) */}
@@ -1725,40 +1823,14 @@ export default function Home() {
           />
         )}
 
-        {/* Top section: Header, Logo, and Mode Toggle */}
-        <section className="w-full flex flex-col xl:flex-row xl:items-start xl:justify-between mb-8 gap-4">
-
-          <div className="w-full flex justify-start xl:w-auto xl:order-1">
-            <button
-              onClick={() => setDashboardMode(prev => prev === 'simple' ? 'advanced' : 'simple')}
-              className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5 text-center"
-            >
-              <BarChart3 className="w-4 h-4 shrink-0" />
-              <span className="leading-tight text-center">
-                {dashboardMode === 'simple' ? (
-                  <>
-                    Ativar
-                    <br />
-                    Modo Anal{"\u00ED"}tico
-                  </>
-                ) : (
-                  <>
-                    Voltar ao
-                    <br />
-                    Modo Simples
-                  </>
-                )}
-              </span>
-            </button>
-          </div>
-
-          {/* Controls Container - Only show robust checks in Advanced Mode */}
-          {dashboardMode === 'advanced' && (
-            <div className="relative z-40 flex flex-col sm:flex-row sm:flex-wrap gap-2.5 items-stretch sm:items-end w-full xl:w-auto xl:ml-auto xl:order-2 bg-white/60 p-3 rounded-xl border border-blue-100/50 backdrop-blur-sm shadow-sm animate-in fade-in slide-in-from-top-2">
+        {/* Unified Filters */}
+        <section className="w-full mb-8">
+          <div className="relative z-40 flex flex-col gap-3 rounded-2xl border border-blue-100/70 bg-white/75 p-4 shadow-sm backdrop-blur-sm">
+            <div className="flex flex-col gap-2.5 xl:flex-row xl:flex-wrap xl:items-end">
               <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-                <label className="text-[10px] font-semibold text-blue-900 uppercase tracking-wider ml-1">Agrupar Por</label>
+                <label className="text-[11px] font-semibold text-blue-900 uppercase tracking-wider ml-1">Agrupar Por</label>
                 <Select value={statType} onValueChange={(v) => setStatType(v as StatType)}>
-                  <SelectTrigger className="w-full sm:w-[160px] bg-white text-xs"><SelectValue placeholder="Tipo" /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[170px] bg-white text-[13px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem className={analyticSelectItemClassName} value="unidades">{selectedUnit === 'OFT/45' ? 'M\u00E9dicos' : 'Unidades'}</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="convenios">{"Conv\u00EAnios"}</SelectItem>
@@ -1773,9 +1845,9 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-                <label className="text-[10px] font-semibold text-blue-900 uppercase tracking-wider ml-1">Filtrar por</label>
+                <label className="text-[11px] font-semibold text-blue-900 uppercase tracking-wider ml-1">Filtrar por</label>
                 <Select value={filterCategory} onValueChange={(v: any) => setFilterCategory(v)}>
-                  <SelectTrigger className="w-full sm:w-[160px] bg-white text-xs"><SelectValue placeholder="Categoria" /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-[170px] bg-white text-[13px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem className={analyticSelectItemClassName} value="unidade">{selectedUnit === 'OFT/45' ? 'M\u00E9dico' : 'Unidade'}</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="convenio">{"Conv\u00EAnio"}</SelectItem>
@@ -1788,13 +1860,13 @@ export default function Home() {
                 </Select>
               </div>
 
-              <div className="flex flex-col gap-1.5 w-full sm:w-auto animate-in fade-in">
-                <label className="text-[10px] font-semibold text-blue-900 uppercase tracking-wider ml-1">{"Op\u00E7\u00E3o"}</label>
-                <div className="relative z-50 w-full sm:w-[160px]">
+              <div className="flex flex-col gap-1.5 w-full sm:w-auto">
+                <label className="text-[11px] font-semibold text-blue-900 uppercase tracking-wider ml-1">{"Op\u00E7\u00E3o"}</label>
+                <div className="relative z-50 w-full sm:w-[170px]">
                   <Input
                     value={optionQuery}
                     placeholder="Digite para filtrar..."
-                    className="bg-white text-xs placeholder:text-xs"
+                    className="bg-white text-[13px] placeholder:text-[13px]"
                     onChange={(e) => {
                       const nextValue = e.target.value;
                       setOptionQuery(nextValue);
@@ -1811,7 +1883,7 @@ export default function Home() {
                         <button
                           key={`${option.value}-${option.label}`}
                           type="button"
-                          className="flex w-full items-start rounded-md px-3 py-2 text-left text-xs font-medium leading-5 text-slate-900 hover:bg-blue-700 hover:text-white"
+                          className="flex w-full items-start rounded-md px-3 py-2 text-left text-[13px] font-medium leading-5 text-slate-900 hover:bg-blue-700 hover:text-white"
                           onMouseDown={(e) => e.preventDefault()}
                           onClick={() => {
                             setOptionQuery(option.label);
@@ -1828,8 +1900,8 @@ export default function Home() {
               </div>
 
               <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-                <label className="text-[10px] font-semibold text-blue-900 uppercase tracking-wider ml-1">{"Per\u00EDodo"}</label>
-                <div className="flex h-10 items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100 w-full sm:w-[160px]">
+                <label className="text-[11px] font-semibold text-blue-900 uppercase tracking-wider ml-1">{"Per\u00EDodo"}</label>
+                <div className="flex h-10 items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100 w-full sm:w-[170px]">
                   <button
                     onClick={() => handlePeriodChange('prev')}
                     disabled={isPrevDisabled}
@@ -1840,7 +1912,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={togglePeriodMode}
-                    className="flex-1 h-full px-2 text-xs font-medium text-slate-700 hover:text-blue-600 text-center transition-colors cursor-pointer"
+                    className="flex-1 h-full px-2 text-[13px] font-medium text-slate-700 hover:text-blue-600 text-center transition-colors cursor-pointer"
                     title={`Clique para ver por ${periodMode === 'year' ? 'M\u00EAs' : 'Ano'}`}
                   >
                     {filter}
@@ -1856,46 +1928,12 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm self-start sm:self-end">
+              <div className="flex bg-white rounded-lg p-1 border border-gray-200 shadow-sm self-start xl:self-end">
                 <button onClick={() => setViewMode("cards")} className={`p-2 rounded-md ${viewMode === "cards" ? "bg-blue-100 text-blue-700" : "text-gray-400 hover:text-gray-600"}`}><LayoutGrid className="w-5 h-5" /></button>
                 <button onClick={() => setViewMode("table")} className={`p-2 rounded-md ${viewMode === "table" ? "bg-blue-100 text-blue-700" : "text-gray-400 hover:text-gray-600"}`}><List className="w-5 h-5" /></button>
               </div>
             </div>
-          )}
-
-          {/* Basic Period Filter (Visible ONLY in Simple Mode) */}
-          {dashboardMode === 'simple' && (
-            <div className="flex flex-col items-start pt-1 w-full xl:w-auto xl:ml-auto xl:order-2 xl:items-end">
-              <div className="flex flex-col items-start gap-1 xl:items-end">
-                <div className="flex items-center bg-white rounded-xl border border-slate-200 shadow-sm divide-x divide-slate-100">
-                  <button
-                    onClick={() => handlePeriodChange('prev')}
-                    disabled={isPrevDisabled}
-                    className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
-                    title="Anterior"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={togglePeriodMode}
-                    className="px-6 py-2 text-[11px] font-medium text-slate-700 hover:text-blue-600 min-w-[148px] text-center tracking-wide transition-colors cursor-pointer"
-                    title={`Clique para ver por ${periodMode === 'year' ? 'M\u00EAs' : 'Ano'}`}
-                  >
-                    {filter}
-                  </button>
-                  <button
-                    onClick={() => handlePeriodChange('next')}
-                    disabled={isNextDisabled}
-                    className="px-3 py-2.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 transition-colors"
-                    title="Pr\u00F3ximo"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
+          </div>
         </section>
 
 
@@ -1997,48 +2035,73 @@ export default function Home() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 justify-items-center animate-in fade-in zoom-in-95 duration-300">
                   {sortedDisplayData.map((item) => {
                     const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
-                    const isClickable = dashboardMode === 'simple' || !hasBreakdown;
+                    const isClickable = statType === "unidades" || !hasBreakdown;
 
                     return (
-                      <Card
-                        key={item.id}
-                        className={`w-full max-w-sm rounded-xl shadow-lg bg-white p-2 transition-transform duration-200 relative 
-                            ${isClickable ? "cursor-pointer hover:scale-105" : ""}`}
-                        onClick={() => handleDrillDown(item)}
-                      >
-                        <div className="relative z-10 flex flex-col h-full">
-                          <CardHeader className="p-0 pb-1 flex flex-row items-start justify-between space-y-0 w-full">
-                            <div className="flex flex-col truncate pr-2">
+                      <div key={item.id} className="w-full max-w-sm">
+                        <Card
+                          className={`w-full rounded-xl shadow-lg bg-white p-2 transition-transform duration-200 relative 
+                              ${isClickable ? "cursor-pointer hover:scale-105" : ""}`}
+                          onClick={() => handleDrillDown(item)}
+                        >
+                          <div className="relative z-10 flex flex-col h-full">
+                          <CardHeader className="relative p-0 pb-1 flex flex-row items-start justify-between space-y-0 w-full">
+                            <div className={`flex flex-col truncate ${statType === "unidades" ? "pr-12" : "pr-2"}`}>
                               <span className="text-sm font-semibold text-blue-700 truncate" title={item.title}>{item.title}</span>
                               <span className="text-[11px] text-gray-500 truncate">{item.subtitle}</span>
                               {statType === "unidades" && (
-                                <div className="flex flex-row items-center gap-3 mt-1.5 text-[11px] font-semibold">
-                                  <span title="Faltas" className="flex items-center gap-1 text-red-600">
-                                    <UserX className="w-3.5 h-3.5" />
-                                    {item.noShows || 0}
-                                  </span>
-                                  <span title="M\u00E9dia de Avalia\u00E7\u00F5es" className="flex items-center gap-1 text-yellow-600">
-                                    {"\u2605"} {item.ratingCount ? (item.ratingSum! / item.ratingCount!).toFixed(1) : "-"}
-                                  </span>
+                                <div className="mt-1.5 flex flex-col items-start gap-1.5 text-[11px] font-semibold">
+                                  <div className="flex flex-wrap items-center gap-3">
+                                    <button
+                                      type="button"
+                                      title="Ver pacientes cancelados por motivo de cancelamento"
+                                      className="flex items-center gap-1 text-red-600 transition-colors hover:text-red-700"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openCancellationDrillDown(item);
+                                      }}
+                                    >
+                                      <UserX className="w-3.5 h-3.5" />
+                                      {item.cancellationCount || 0}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="Ver pacientes organizados por estrelas e comentário"
+                                      className="flex items-center gap-1 text-yellow-600 transition-colors hover:text-yellow-700"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openRatingDrillDown(item);
+                                      }}
+                                    >
+                                      {"\u2605"} {item.ratingCount ? (item.ratingSum! / item.ratingCount!).toFixed(1) : "-"}
+                                    </button>
+                                  </div>
                                 </div>
                               )}
                             </div>
 
-                            {/* Default Home Actions: Render ONLY if Unidades + Simple */}
-                            {statType === "unidades" && dashboardMode === 'simple' && (
-                              <div className="flex flex-row items-center gap-2 relative z-20" onClick={(e) => e.stopPropagation()}>
+                            {statType === "unidades" ? (
+                              <div className="absolute right-0 top-0 flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
                                 <Link
                                   href={`/novo-agendamento?unidade=${encodeURIComponent(item.id)}`}
-                                  className="shrink-0 p-1.5 bg-green-50/50 hover:bg-green-100/80 hover:scale-110 shadow-sm border border-green-100 rounded-full transition-all duration-200 group/btn"
+                                  className="rounded-full border border-green-100 bg-green-50/95 p-1.5 shadow-sm transition-all duration-200 hover:scale-110 hover:bg-green-100 group/btn"
                                   title="Novo Agendamento"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   <Plus className="h-4 w-4 text-green-600 group-hover/btn:text-green-700" />
                                 </Link>
+                                <Link
+                                  href={`/visualizar-agendamentos?unidade=${encodeURIComponent(item.id)}&filtro=${encodeURIComponent(filter)}`}
+                                  className="rounded-full border border-blue-100 bg-blue-50/95 p-1.5 shadow-sm transition-all duration-200 hover:scale-110 hover:bg-blue-100 group/btn"
+                                  title="Ver Agenda"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <FileText className="h-4 w-4 text-blue-600 group-hover/btn:text-blue-700" />
+                                </Link>
                                 <Sheet>
                                   <SheetTrigger asChild>
                                     <button
-                                      className="shrink-0 p-1.5 bg-green-50/50 hover:bg-green-100/80 hover:scale-110 shadow-sm border border-green-100 rounded-full transition-all duration-200 group/btn"
+                                      className="rounded-full border border-green-100 bg-green-50/95 p-1.5 shadow-sm transition-all duration-200 hover:scale-110 hover:bg-green-100 group/btn"
                                       title="Ver Financeiro"
                                       onClick={(e) => e.stopPropagation()}
                                     >
@@ -2056,12 +2119,7 @@ export default function Home() {
                                   </SheetContent>
                                 </Sheet>
                               </div>
-                            )}
-
-                            {/* Only show Icon in Advanced (Analytic) Mode */}
-                            {dashboardMode === 'advanced' && (
-                              <div className="shrink-0 opacity-80">{item.icon}</div>
-                            )}
+                            ) : item.icon ? <div className="shrink-0 opacity-80">{item.icon}</div> : null}
                           </CardHeader>
 
                           <CardContent className="p-0 text-center flex-grow flex flex-col justify-center mt-0.5">
@@ -2225,8 +2283,9 @@ export default function Home() {
                               </>
                             )}
                           </CardContent>
-                        </div>
-                      </Card>
+                          </div>
+                        </Card>
+                      </div>
                     );
                   })}
                 </div>

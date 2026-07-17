@@ -4,7 +4,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import SidebarLayout from '@/components/layout/sidebar-layout';
 import { useState, useEffect, useRef, Suspense, useCallback } from "react";
-import { MessagesSquare, RefreshCcw, Send, ArrowLeft, Sparkles, Info, BrainCircuit, Download, Zap, MessageSquare } from "lucide-react";
+import { MessagesSquare, RefreshCcw, Send, ArrowLeft, Sparkles, Info, BrainCircuit, Download, Zap, MessageSquare, X, Building } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getFirestoreInstance, getDatabaseInstance } from "@/lib/firebase";
@@ -286,6 +286,19 @@ function EnviarMensagemComponent() {
   const [environment, setEnvironment] = useState<"teste" | "producao">("teste");
   const searchParams = useSearchParams();
 
+  interface UnitConfig {
+    id: string;
+    nome: string;
+    whatsApp: string;
+  }
+
+  const [unidadesEnvio, setUnidadesEnvio] = useState<UnitConfig[]>([]);
+  const [selectedUnidadesEnvio, setSelectedUnidadesEnvio] = useState<string[]>([]);
+  const [showBulkPanel, setShowBulkPanel] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState("");
+  const [sendingBulk, setSendingBulk] = useState(false);
+  const [loadingUnidades, setLoadingUnidades] = useState(false);
+
   /* ---------- get config from localStorage ---------- */
   useEffect(() => {
     const storedPathBase = localStorage.getItem("FIREBASE_PATH_BASE") as "DRM" | "OFT/45" | null;
@@ -294,6 +307,177 @@ function EnviarMensagemComponent() {
     const storedEnv = localStorage.getItem("APP_ENVIRONMENT") as "teste" | "producao" | null;
     if (storedEnv) setEnvironment(storedEnv);
   }, []);
+
+  /* --------------------- carrega lista de unidades ------------------ */
+  useEffect(() => {
+    if (!selectedUnit) return;
+    (async () => {
+      setLoadingUnidades(true);
+      try {
+        const dbRTDB = getDatabaseInstance(environment);
+        const basePath = `${selectedUnit}/agendamentoWhatsApp/configuracoes/unidades`;
+        const snapshot = await get(ref(dbRTDB, `/${basePath}`));
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          const list: UnitConfig[] = [];
+          Object.entries(data).forEach(([key, val]: [string, any]) => {
+            if (val) {
+              const whatsApp = val.whatsApp?.toString() || val.whatsapp?.toString() || "";
+              list.push({
+                id: key,
+                nome: val.empresa ? `${val.empresa} (${val.bairro || key})` : key,
+                whatsApp: whatsApp,
+              });
+            }
+          });
+          // Filtra apenas as unidades que possuem whatsapp configurado
+          const filteredList = list.filter(u => u.whatsApp.trim() !== "");
+          setUnidadesEnvio(filteredList.sort((a, b) => a.nome.localeCompare(b.nome)));
+          // Pré-seleciona todas as unidades
+          setSelectedUnidadesEnvio(filteredList.map(u => u.id));
+        } else {
+          setUnidadesEnvio([]);
+          setSelectedUnidadesEnvio([]);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar unidades:", err);
+        toast.error("Erro ao carregar lista de unidades.");
+      } finally {
+        setLoadingUnidades(false);
+      }
+    })();
+  }, [selectedUnit, environment]);
+
+  const toggleUnidadeEnvio = (unitId: string) => {
+    setSelectedUnidadesEnvio(prev =>
+      prev.includes(unitId) ? prev.filter(id => id !== unitId) : [...prev, unitId]
+    );
+  };
+
+  const selectAllUnidades = () => {
+    setSelectedUnidadesEnvio(unidadesEnvio.map(u => u.id));
+  };
+
+  const deselectAllUnidades = () => {
+    setSelectedUnidadesEnvio([]);
+  };
+
+  /* -------------------- envia mensagem em massa para clinicas -------------------- */
+  const handleSendBulkMessage = async () => {
+    const content = bulkMessage.trim();
+    if (!content) {
+      toast.warning("A mensagem não pode estar vazia.");
+      return;
+    }
+    if (selectedUnidadesEnvio.length === 0) {
+      toast.warning("Nenhuma unidade selecionada.");
+      return;
+    }
+
+    setSendingBulk(true);
+
+    let apiCredentials: { id: string; token: string; };
+    if (environment === "teste") {
+      apiCredentials = {
+        id: "3B74CE9AFF0D20904A9E9E548CC778EF",
+        token: "A8F754F1402CAE3625D5D578",
+      };
+    } else { // Ambiente de PRODUÇÃO
+      if (selectedUnit === "DRM") {
+        apiCredentials = {
+          id: "3D460A6CB6DA10A09FAD12D00F179132",
+          token: "1D2897F0A38EEEC81D2F66EE",
+        };
+      } else if (selectedUnit === "OFT/45") {
+        apiCredentials = {
+          id: "39C7A89881E470CC246252059E828D91",
+          token: "B1CA83DE10E84496AECE8028",
+        };
+      } else {
+        toast.error("Unidade de produção não reconhecida.");
+        setSendingBulk(false);
+        return;
+      }
+    }
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const unitId of selectedUnidadesEnvio) {
+      const unit = unidadesEnvio.find(u => u.id === unitId);
+      if (!unit || !unit.whatsApp) continue;
+
+      const rawPhone = unit.whatsApp.replace(/\D/g, "");
+      let formattedPhone = rawPhone;
+      if (formattedPhone.startsWith("55") && formattedPhone.length > 11) {
+        // já tem DDI
+      } else if (formattedPhone.length === 10 || formattedPhone.length === 11) {
+        formattedPhone = "55" + formattedPhone;
+      }
+
+      try {
+        const response = await fetch(
+          `https://api.z-api.io/instances/${apiCredentials.id}/token/${apiCredentials.token}/send-text`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Client-Token": "Fe948ba6a317942849b010c88cd9e6105S",
+            },
+            body: JSON.stringify({ phone: formattedPhone, message: content }),
+          }
+        );
+
+        if (response.ok) {
+          successCount++;
+          
+          // Salva no Firestore sob o número de telefone da clínica
+          try {
+            const historyKey =
+              selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
+            const refChat = doc(getFirestoreInstance(environment), historyKey, formattedPhone);
+            const snap = await getDoc(refChat);
+            const data = snap.exists() ? snap.data() : null;
+            const currentHistory = (data && data.glbHistoricoDaConversa && Array.isArray(data.glbHistoricoDaConversa))
+              ? data.glbHistoricoDaConversa
+              : [];
+            const updated = [...currentHistory, { content, role: "assistant" }];
+            await updateDoc(refChat, { glbHistoricoDaConversa: updated });
+          } catch (fireErr) {
+            console.error("Erro ao salvar histórico do firestore para clínica:", formattedPhone, fireErr);
+          }
+
+        } else {
+          failCount++;
+          console.error(`Erro ao enviar para clínica ${unit.nome}:`, response.statusText);
+        }
+      } catch (err) {
+        failCount++;
+        console.error(`Erro de rede ao enviar para clínica ${unit.nome}:`, err);
+      }
+    }
+
+    setSendingBulk(false);
+    if (successCount > 0) {
+      toast.success(`Mensagem enviada com sucesso para ${successCount} clínica(s)!`);
+      setBulkMessage("");
+      setShowBulkPanel(false);
+    }
+    if (failCount > 0) {
+      toast.error(`Falha ao enviar mensagem para ${failCount} clínica(s).`);
+    }
+
+    // Se o paciente atual for uma das clínicas que enviamos mensagem, recarrega a conversa para atualizar na tela
+    if (selectedPatient && selectedUnidadesEnvio.some(uid => {
+      const u = unidadesEnvio.find(un => un.id === uid);
+      if (!u) return false;
+      const raw = u.whatsApp.replace(/\D/g, "");
+      const formatted = (raw.startsWith("55") && raw.length > 11) ? raw : "55" + raw;
+      return formatted === selectedPatient;
+    })) {
+      handlePatientSelect(selectedPatient);
+    }
+  };
 
   /* ------------------------------ estado ----------------------------- */
   const [searchTerm, setSearchTerm] = useState("");
@@ -539,103 +723,219 @@ function EnviarMensagemComponent() {
         </aside>
 
         {/* painel direito */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden bg-blue-50">
-          <header className="flex items-center px-4 py-2 bg-blue-600 text-white shadow-sm flex-shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="mr-2 text-white hover:bg-blue-700 hover:text-white flex-shrink-0"
-              onClick={handleBack}
-            >
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <MessagesSquare className="mr-2 h-5 w-5 flex-shrink-0" />
-            <h1 className="text-base font-medium mr-4 truncate">Conversa</h1>
+        <main className="flex-1 flex flex-row min-w-0 overflow-hidden bg-blue-50">
+          <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+            <header className="flex items-center px-4 py-2 bg-blue-600 text-white shadow-sm flex-shrink-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="mr-2 text-white hover:bg-blue-700 hover:text-white flex-shrink-0"
+                onClick={handleBack}
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <MessagesSquare className="mr-2 h-5 w-5 flex-shrink-0" />
+              <h1 className="text-base font-medium mr-4 truncate">Conversa</h1>
 
-            {/* AI Control in Header */}
-            <div className="ml-auto flex items-center gap-2 flex-shrink-0 min-w-0">
-              <DownloadHeaderControl
-                patientId={selectedPatient}
-                environment={environment}
-                unit={selectedUnit}
-              />
-              <PatientSourceHeaderControl
-                patientId={selectedPatient}
-                history={conversationHistory}
-              />
-            </div>
-          </header>
-
-          {/* ========================================================================================= */}
-          {/* ÁREA DE CONVERSA */}
-          {/* ========================================================================================= */}
-          <section className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-blue-50 relative min-h-0"> {/* fixed overflow-y, and added overflow-x-hidden */}
-
-
-            <div className="space-y-3">
-              {conversationHistory.map((m, i) => (
-                <div
-                  key={i}
-                  className={`flex ${m.role === "user" ? "justify-start" : "justify-end"
-                    }`}
+              {/* AI Control in Header */}
+              <div className="ml-auto flex items-center gap-2 flex-shrink-0 min-w-0">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="bg-blue-500 hover:bg-blue-400 text-white border-none shadow-none gap-2 h-8"
+                  onClick={() => setShowBulkPanel(prev => !prev)}
                 >
+                  <Building className="h-4 w-4" />
+                  <span className="hidden lg:inline">Enviar Clínicas</span>
+                </Button>
+                <DownloadHeaderControl
+                  patientId={selectedPatient}
+                  environment={environment}
+                  unit={selectedUnit}
+                />
+                <PatientSourceHeaderControl
+                  patientId={selectedPatient}
+                  history={conversationHistory}
+                />
+              </div>
+            </header>
+
+            {/* ========================================================================================= */}
+            {/* ÁREA DE CONVERSA */}
+            {/* ========================================================================================= */}
+            <section className="flex-1 overflow-y-auto overflow-x-hidden p-4 bg-blue-50 relative min-h-0"> {/* fixed overflow-y, and added overflow-x-hidden */}
+              <div className="space-y-3">
+                {conversationHistory.map((m, i) => (
                   <div
-                    className={`max-w-[85%] sm:max-w-[60%] px-3 py-1.5 rounded-2xl text-sm leading-relaxed break-words break-all whitespace-pre-wrap ${m.role === "user"
-                      ? "bg-white text-gray-800"
-                      : "bg-blue-600 text-white"
+                    key={i}
+                    className={`flex ${m.role === "user" ? "justify-start" : "justify-end"
                       }`}
                   >
-                    {(() => {
-                      const content = m.content;
-                      if (typeof content === 'string') return content;
-                      if (Array.isArray(content)) {
-                        return content.map((part: any) => {
-                          if (typeof part === 'string') return part;
-                          if (part.type === 'text') return part.text;
-                          return '';
-                        }).join(' ');
-                      }
-                      if (typeof content === 'object' && content !== null) {
-                        // @ts-ignore
-                        if (content.text) return content.text;
-                        return JSON.stringify(content);
-                      }
-                      return String(content);
-                    })()}
+                    <div
+                      className={`max-w-[85%] sm:max-w-[60%] px-3 py-1.5 rounded-2xl text-sm leading-relaxed break-words break-all whitespace-pre-wrap ${m.role === "user"
+                        ? "bg-white text-gray-800"
+                        : "bg-blue-600 text-white"
+                        }`}
+                    >
+                      {(() => {
+                        const content = m.content;
+                        if (typeof content === 'string') return content;
+                        if (Array.isArray(content)) {
+                          return content.map((part: any) => {
+                            if (typeof part === 'string') return part;
+                            if (part.type === 'text') return part.text;
+                            return '';
+                          }).join(' ');
+                        }
+                        if (typeof content === 'object' && content !== null) {
+                          // @ts-ignore
+                          if (content.text) return content.text;
+                          return JSON.stringify(content);
+                        }
+                        return String(content);
+                      })()}
+                    </div>
                   </div>
-                </div>
-              ))}
-              <div ref={endRef} />
-            </div>
-          </section>
+                ))}
+                <div ref={endRef} />
+              </div>
+            </section>
 
-          {/* campo de envio */}
-          <footer className="px-4 py-2 bg-white border-t border-gray-200 flex items-center space-x-2 flex-shrink-0">
-            <Textarea
-              placeholder="Digite uma mensagem"
-              value={messageContent}
-              onChange={(e) => setMessageContent(e.target.value)}
-              onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-              className="flex-1 resize-none h-9 min-h-0 min-w-0 rounded-full bg-blue-50 px-5 py-2 text-sm focus:ring-2 focus:ring-blue-300"
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() =>
-                selectedPatient && handlePatientSelect(selectedPatient)
-              }
-              title="Recarregar Histórico"
-            >
-              <RefreshCcw className="h-5 w-5 text-blue-600" />
-            </Button>
-            <Button
-              size="icon"
-              onClick={handleSendMessage}
-              title="Enviar Mensagem"
-            >
-              <Send className="h-5 w-5 text-white" />
-            </Button>
-          </footer>
+            {/* campo de envio */}
+            <footer className="px-4 py-2 bg-white border-t border-gray-200 flex items-center space-x-2 flex-shrink-0">
+              <Textarea
+                placeholder="Digite uma mensagem"
+                value={messageContent}
+                onChange={(e) => setMessageContent(e.target.value)}
+                onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                className="flex-1 resize-none h-9 min-h-0 min-w-0 rounded-full bg-blue-50 px-5 py-2 text-sm focus:ring-2 focus:ring-blue-300"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() =>
+                  selectedPatient && handlePatientSelect(selectedPatient)
+                }
+                title="Recarregar Histórico"
+              >
+                <RefreshCcw className="h-5 w-5 text-blue-600" />
+              </Button>
+              <Button
+                size="icon"
+                onClick={handleSendMessage}
+                title="Enviar Mensagem"
+              >
+                <Send className="h-5 w-5 text-white" />
+              </Button>
+            </footer>
+          </div>
+
+          {/* Painel Lateral de Envio em Massa */}
+          {showBulkPanel && (
+            <aside className="w-96 bg-white border-l shadow-2xl flex flex-col z-30 animate-in slide-in-from-right duration-300 flex-shrink-0">
+              {/* Header do painel */}
+              <div className="p-4 border-b bg-blue-600 text-white flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <MessagesSquare className="h-5 w-5" />
+                  <h2 className="font-bold text-sm uppercase tracking-tight">Enviar para Clínicas</h2>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="text-white hover:bg-blue-700" 
+                  onClick={() => setShowBulkPanel(false)}
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Conteúdo: Lista de unidades com checkboxes */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between border-b pb-2">
+                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Unidades</span>
+                    <div className="flex gap-2">
+                      <button 
+                        type="button"
+                        onClick={selectAllUnidades}
+                        className="text-[10px] font-black text-blue-600 hover:underline"
+                      >
+                        Selecionar todas
+                      </button>
+                      <span className="text-gray-300">|</span>
+                      <button 
+                        type="button"
+                        onClick={deselectAllUnidades}
+                        className="text-[10px] font-black text-rose-600 hover:underline"
+                      >
+                        Limpar todas
+                      </button>
+                    </div>
+                  </div>
+                  {loadingUnidades ? (
+                    <div className="flex items-center justify-center py-8 text-blue-600 gap-2">
+                      <RefreshCcw className="h-4 w-4 animate-spin" />
+                      <span className="text-xs font-semibold">Carregando unidades...</span>
+                    </div>
+                  ) : unidadesEnvio.length === 0 ? (
+                    <p className="text-xs text-gray-500 italic">Nenhuma unidade com WhatsApp configurado.</p>
+                  ) : (
+                    <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                      {unidadesEnvio.map(unit => {
+                        const isSelected = selectedUnidadesEnvio.includes(unit.id);
+                        return (
+                          <div 
+                            key={unit.id}
+                            onClick={() => toggleUnidadeEnvio(unit.id)}
+                            className={`flex items-center gap-2.5 p-2 rounded-lg border cursor-pointer transition-colors
+                              ${isSelected ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-100 hover:bg-gray-50'}`}
+                          >
+                            <Checkbox checked={isSelected} className="h-4 w-4 shrink-0" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-black text-gray-800 truncate">{unit.nome}</span>
+                              <span className="text-[10px] text-gray-500 font-medium">{unit.whatsApp || "Sem WhatsApp"}</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Textarea para a mensagem */}
+                <div className="space-y-2 pt-2 border-t">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mensagem</label>
+                  <Textarea
+                    placeholder="Escreva a mensagem que deseja enviar para todas as clínicas selecionadas..."
+                    value={bulkMessage}
+                    onChange={(e) => setBulkMessage(e.target.value)}
+                    className="min-h-[140px] text-xs resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Footer com botão de Envio */}
+              <div className="p-4 border-t bg-gray-50 flex flex-col gap-2">
+                <Button
+                  onClick={handleSendBulkMessage}
+                  disabled={sendingBulk || selectedUnidadesEnvio.length === 0 || !bulkMessage.trim()}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold h-10 flex items-center justify-center gap-2"
+                >
+                  {sendingBulk ? (
+                    <>
+                      <RefreshCcw className="h-4 w-4 animate-spin" />
+                      <span>Enviando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-4 w-4" />
+                      <span>Enviar para {selectedUnidadesEnvio.length} unidade(s)</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </aside>
+          )}
         </main>
       </div>
     </SidebarLayout>

@@ -21,7 +21,7 @@ export default function BuscaHorarios() {
     buscar, gerarResposta, getNextDiscoveryDate,
   } = useBuscaHorarios();
 
-  const [convenio, setConvenio] = useState("");
+  const [convenio, setConvenio] = useState("Particular");
   const [selectedUnidades, setSelectedUnidades] = useState<string[]>([]);
   const [subplano, setSubplano] = useState("");
   const [procedimentos, setProcedimentos] = useState<string[]>([]);
@@ -30,6 +30,7 @@ export default function BuscaHorarios() {
   const [selectedDateObjects, setSelectedDateObjects] = useState<Date[]>([]);
   
   const [procSearch, setProcSearch] = useState("");
+  const [unitSearch, setUnitSearch] = useState("");
   const [showProcDropdown, setShowProcDropdown] = useState(false);
   const [showUnidadeDropdown, setShowUnidadeDropdown] = useState(false);
   const [selectedByIncludedOption, setSelectedByIncludedOption] = useState(false);
@@ -95,22 +96,40 @@ export default function BuscaHorarios() {
     setSelectedByIncludedOption(false);
   };
 
+  const filteredUnidades = useMemo(() => {
+    const search = unitSearch.toLowerCase();
+    return unidadesList
+      .filter(u => !selectedUnidades.includes(u))
+      .filter(u => !search || u.toLowerCase().includes(search) || u.replace(/([A-Z])/g, ' $1').trim().toLowerCase().includes(search));
+  }, [unidadesList, selectedUnidades, unitSearch]);
+
+  const addUnidade = (unit: string) => {
+    setSelectedUnidades(prev => [...prev, unit]);
+    setUnitSearch("");
+    setShowUnidadeDropdown(false);
+  };
+
+  const removeUnidade = (unit: string) => {
+    setSelectedUnidades(prev => prev.filter(u => u !== unit));
+  };
+
   const handleBuscar = () => {
     if (!convenio && procedimentos.length === 0 && selectedUnidades.length === 0) return;
     buscar({ convenio, subplano, procedimentos, periodo, selectedDates: selectedDatesStrings, unidades: selectedUnidades });
   };
 
   const handleLimpar = () => {
-    setConvenio("");
+    setConvenio("Particular");
     setSelectedUnidades([]);
     setSubplano("");
     setProcedimentos([]);
     setSelectedByIncludedOption(false);
     setPeriodo("Ambos");
     setSelectedDateObjects([]);
+    setUnitSearch("");
     // To clear results, we need to call a clear function in the hook or set results to null
     // Assuming 'buscar' with empty params or a new clear function
-    buscar({ convenio: "", subplano: "", procedimentos: [], periodo: "Ambos", selectedDates: [], unidades: [] });
+    buscar({ convenio: "Particular", subplano: "", procedimentos: [], periodo: "Ambos", selectedDates: [], unidades: [] });
   };
 
   const examPrices = useMemo(() => {
@@ -318,58 +337,63 @@ export default function BuscaHorarios() {
               <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Critérios de Busca</h2>
             </div>
             <div className="space-y-4">
-              {/* Unidades (Opcional) */}
-              <div className="relative space-y-1.5">
+              {/* Unidades */}
+              <div className="space-y-1.5">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                  <MapPin className="h-3 w-3 text-primary" /> Unidades (Opcional)
+                  <MapPin className="h-3.5 w-3.5 text-primary" /> Unidades (Opcional)
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowUnidadeDropdown(prev => !prev)}
-                  className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all flex items-center justify-between"
-                >
-                  <span className="truncate text-left">
-                    {selectedUnidades.length === 0
-                      ? "Todas as Unidades"
-                      : selectedUnidades.length === 1
-                      ? selectedUnidades[0].replace(/([A-Z])/g, ' $1').trim()
-                      : `${selectedUnidades.length} unidades selecionadas`}
-                  </span>
-                  <ChevronDown className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ${showUnidadeDropdown ? 'rotate-180' : ''}`} />
-                </button>
-                {showUnidadeDropdown && (
-                  <div className="absolute z-20 mt-1 w-full bg-card border border-input rounded-xl shadow-2xl p-1 max-h-56 overflow-y-auto scrollbar-thin">
-                    {selectedUnidades.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedUnidades([])}
-                        className="w-full text-left px-3 py-1.5 text-[10px] font-black text-rose-500 hover:bg-red-50 rounded-lg transition-colors border-b mb-1"
-                      >
-                        ✕ Limpar (Todas as Unidades)
-                      </button>
-                    )}
-                    {unidadesList.map(unit => {
-                      const isSelected = selectedUnidades.includes(unit);
-                      return (
+                <div className="relative mb-3">
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                    <Search className="h-4 w-4 text-muted-foreground" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Adicionar unidade..."
+                    value={unitSearch}
+                    onChange={e => { setUnitSearch(e.target.value); setShowUnidadeDropdown(true); }}
+                    onFocus={() => setShowUnidadeDropdown(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (filteredUnidades.length > 0) {
+                          addUnidade(filteredUnidades[0]);
+                        }
+                      }
+                    }}
+                    className="w-full rounded-lg border border-input pl-10 pr-4 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none bg-muted hover:bg-card"
+                  />
+                  {showUnidadeDropdown && filteredUnidades.length > 0 && (
+                    <div className="absolute z-20 mt-2 w-full bg-card border border-input rounded-xl shadow-2xl max-h-56 overflow-y-auto p-1">
+                      {filteredUnidades.slice(0, 15).map(unit => (
                         <button
                           key={unit}
                           type="button"
-                          onClick={() => {
-                            setSelectedUnidades(prev =>
-                              isSelected ? prev.filter(u => u !== unit) : [...prev, unit]
-                            );
-                          }}
-                          className={`w-full text-left px-3 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-2
-                            ${isSelected ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-gray-700'}`}
+                          onClick={() => addUnidade(unit)}
+                          className="w-full text-left px-4 py-2 text-sm font-bold hover:bg-muted rounded-lg transition-colors border-b last:border-0"
                         >
-                          <span className={`h-3.5 w-3.5 rounded border flex items-center justify-center shrink-0 transition-all
-                            ${isSelected ? 'bg-primary border-primary' : 'border-gray-300'}`}>
-                            {isSelected && <span className="text-white text-[8px] leading-none font-black">✓</span>}
-                          </span>
                           {unit.replace(/([A-Z])/g, ' $1').trim()}
                         </button>
-                      );
-                    })}
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {selectedUnidades.length > 0 && (
+                  <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                    {selectedUnidades.map(unit => (
+                      <div key={unit} className="flex items-center justify-between bg-muted px-3 py-2 rounded-lg border">
+                        <span className="text-xs font-bold text-foreground">
+                          {unit.replace(/([A-Z])/g, ' $1').trim()}
+                        </span>
+                        <button 
+                          type="button" 
+                          onClick={() => removeUnidade(unit)} 
+                          className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -545,8 +569,8 @@ export default function BuscaHorarios() {
         </div>
       </div>
 
-      {showProcDropdown && (
-        <div className="fixed inset-0 z-10" onClick={() => setShowProcDropdown(false)} />
+      {(showProcDropdown || showUnidadeDropdown) && (
+        <div className="fixed inset-0 z-10" onClick={() => { setShowProcDropdown(false); setShowUnidadeDropdown(false); }} />
       )}
     </div>
   );

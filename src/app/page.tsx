@@ -42,6 +42,15 @@ const MESES = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
 ];
 
+const ORIGIN_LABELS: Record<string, string> = {
+  Google: "Google",
+  Instagram: "Instagram",
+  Desconhecido: "Desconhecida",
+};
+
+const getOriginLabel = (origin: string) => ORIGIN_LABELS[origin] || origin;
+const getOriginValueFromLabel = (label: string) => (label === "Desconhecida" ? "Desconhecido" : label);
+
 const obterNomeMes = (dataStr: string) => {
   const [ano, mes] = dataStr.split("-");
   const idx = Number(mes) - 1;
@@ -105,6 +114,9 @@ interface CardData {
   topFaixas?: { name: string; count: number; value: number }[]; // For age breakdown
   topExames?: { name: string; count: number; value: number }[]; // For exam breakdown
   topUnidades?: { name: string; count: number; value: number }[]; // For unit breakdown
+  topOrigens?: { name: string; count: number; value: number }[];
+  topMotivacoes?: { name: string; count: number; value: number }[];
+  topCirurgias?: { name: string; count: number; value: number }[];
   ratingSum?: number;
   ratingCount?: number;
   cancellationCount?: number;
@@ -650,6 +662,282 @@ export default function Home() {
 
     // 2. Aggregate
     if (statType === "historico") {
+      const sortMonths = ([a]: [string, any], [b]: [string, any]) => {
+        const [mA, yA] = a.split(" de ");
+        const [mB, yB] = b.split(" de ");
+        const idxA = MESES.indexOf(mA);
+        const idxB = MESES.indexOf(mB);
+        return Number(yA) === Number(yB) ? idxA - idxB : Number(yA) - Number(yB);
+      };
+
+      if (filterCategory === "unidade" && filterValue === "all") {
+        const monthlyUnits: Record<string, Record<string, { count: number; value: number }>> = {};
+        const monthlyCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const month = obterNomeMes(app._date);
+          if (!month) return;
+
+          if (!monthlyCounts[month]) monthlyCounts[month] = { count: 0, value: 0 };
+          monthlyCounts[month].count += 1;
+          monthlyCounts[month].value += app._value;
+
+          if (!monthlyUnits[month]) monthlyUnits[month] = {};
+          if (!monthlyUnits[month][app._unit]) monthlyUnits[month][app._unit] = { count: 0, value: 0 };
+          monthlyUnits[month][app._unit].count += 1;
+          monthlyUnits[month][app._unit].value += app._value;
+        });
+
+        return Object.entries(monthlyCounts)
+          .sort(sortMonths)
+          .map(([name, data]) => ({
+            id: name,
+            title: name.split(" de ")[0],
+            subtitle: name.split(" de ")[1],
+            count: data.count,
+            value: data.value,
+            icon: <BarChart3 className="h-5 w-5 text-indigo-500" />,
+            topUnidades: Object.entries(monthlyUnits[name] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([unit, breakdown]) => ({
+                name: unitConfig?.[unit]?.empresa ?? unit,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "convenio" && filterValue === "all") {
+        const monthlyConvenios: Record<string, Record<string, { count: number; value: number }>> = {};
+        const monthlyCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const month = obterNomeMes(app._date);
+          if (!month) return;
+
+          const convenio = app.convenio || "Não informado";
+          if (!monthlyCounts[month]) monthlyCounts[month] = { count: 0, value: 0 };
+          monthlyCounts[month].count += 1;
+          monthlyCounts[month].value += app._value;
+
+          if (!monthlyConvenios[month]) monthlyConvenios[month] = {};
+          if (!monthlyConvenios[month][convenio]) monthlyConvenios[month][convenio] = { count: 0, value: 0 };
+          monthlyConvenios[month][convenio].count += 1;
+          monthlyConvenios[month][convenio].value += app._value;
+        });
+
+        return Object.entries(monthlyCounts)
+          .sort(sortMonths)
+          .map(([name, data]) => ({
+            id: name,
+            title: name.split(" de ")[0],
+            subtitle: name.split(" de ")[1],
+            count: data.count,
+            value: data.value,
+            icon: <BarChart3 className="h-5 w-5 text-indigo-500" />,
+            topConvenios: Object.entries(monthlyConvenios[name] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([convenio, breakdown]) => ({
+                name: convenio,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "faixaEtaria" && filterValue === "all") {
+        const monthlyFaixas: Record<string, Record<string, { count: number; value: number }>> = {};
+        const monthlyCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const month = obterNomeMes(app._date);
+          if (!month) return;
+
+          const faixa = getAgeBucket(app.nascimento) || "Desconhecido";
+          if (!monthlyCounts[month]) monthlyCounts[month] = { count: 0, value: 0 };
+          monthlyCounts[month].count += 1;
+          monthlyCounts[month].value += app._value;
+
+          if (!monthlyFaixas[month]) monthlyFaixas[month] = {};
+          if (!monthlyFaixas[month][faixa]) monthlyFaixas[month][faixa] = { count: 0, value: 0 };
+          monthlyFaixas[month][faixa].count += 1;
+          monthlyFaixas[month][faixa].value += app._value;
+        });
+
+        return Object.entries(monthlyCounts)
+          .sort(sortMonths)
+          .map(([name, data]) => ({
+            id: name,
+            title: name.split(" de ")[0],
+            subtitle: name.split(" de ")[1],
+            count: data.count,
+            value: data.value,
+            icon: <BarChart3 className="h-5 w-5 text-indigo-500" />,
+            topFaixas: Object.entries(monthlyFaixas[name] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([faixa, breakdown]) => ({
+                name: faixa,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "exame" && filterValue === "all") {
+        const monthlyExames: Record<string, Record<string, { count: number; value: number }>> = {};
+        const monthlyCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const month = obterNomeMes(app._date);
+          if (!month) return;
+
+          if (!monthlyCounts[month]) monthlyCounts[month] = { count: 0, value: 0 };
+          monthlyCounts[month].count += 1;
+          monthlyCounts[month].value += app._value;
+
+          if (!monthlyExames[month]) monthlyExames[month] = {};
+          if (Array.isArray(app.exames)) {
+            app.exames.forEach((exam: string) => {
+              if (!monthlyExames[month][exam]) monthlyExames[month][exam] = { count: 0, value: 0 };
+              monthlyExames[month][exam].count += 1;
+              monthlyExames[month][exam].value += getExamValue(exam, app);
+            });
+          }
+        });
+
+        return Object.entries(monthlyCounts)
+          .sort(sortMonths)
+          .map(([name, data]) => ({
+            id: name,
+            title: name.split(" de ")[0],
+            subtitle: name.split(" de ")[1],
+            count: data.count,
+            value: data.value,
+            icon: <BarChart3 className="h-5 w-5 text-indigo-500" />,
+            topExames: Object.entries(monthlyExames[name] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([exam, breakdown]) => ({
+                name: exam,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "origem" && filterValue === "all") {
+        const monthlyOrigens: Record<string, Record<string, { count: number; value: number }>> = {};
+        const monthlyCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const month = obterNomeMes(app._date);
+          if (!month) return;
+
+          const origem = normalizePatientOrigin(app.origem);
+          if (!monthlyCounts[month]) monthlyCounts[month] = { count: 0, value: 0 };
+          monthlyCounts[month].count += 1;
+          monthlyCounts[month].value += app._value;
+
+          if (!monthlyOrigens[month]) monthlyOrigens[month] = {};
+          if (!monthlyOrigens[month][origem]) monthlyOrigens[month][origem] = { count: 0, value: 0 };
+          monthlyOrigens[month][origem].count += 1;
+          monthlyOrigens[month][origem].value += app._value;
+        });
+
+        return Object.entries(monthlyCounts)
+          .sort(sortMonths)
+          .map(([name, data]) => ({
+            id: name,
+            title: name.split(" de ")[0],
+            subtitle: name.split(" de ")[1],
+            count: data.count,
+            value: data.value,
+            icon: <BarChart3 className="h-5 w-5 text-indigo-500" />,
+            topOrigens: Object.entries(monthlyOrigens[name] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([origem, breakdown]) => ({
+                name: getOriginLabel(origem),
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "motivacao" && filterValue === "all") {
+        const monthlyMotivacoes: Record<string, Record<string, { count: number; value: number }>> = {};
+        const monthlyCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const month = obterNomeMes(app._date);
+          if (!month) return;
+
+          const motivacao = String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado";
+          if (!monthlyCounts[month]) monthlyCounts[month] = { count: 0, value: 0 };
+          monthlyCounts[month].count += 1;
+          monthlyCounts[month].value += app._value;
+
+          if (!monthlyMotivacoes[month]) monthlyMotivacoes[month] = {};
+          if (!monthlyMotivacoes[month][motivacao]) monthlyMotivacoes[month][motivacao] = { count: 0, value: 0 };
+          monthlyMotivacoes[month][motivacao].count += 1;
+          monthlyMotivacoes[month][motivacao].value += app._value;
+        });
+
+        return Object.entries(monthlyCounts)
+          .sort(sortMonths)
+          .map(([name, data]) => ({
+            id: name,
+            title: name.split(" de ")[0],
+            subtitle: name.split(" de ")[1],
+            count: data.count,
+            value: data.value,
+            icon: <BarChart3 className="h-5 w-5 text-indigo-500" />,
+            topMotivacoes: Object.entries(monthlyMotivacoes[name] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([motivacao, breakdown]) => ({
+                name: motivacao,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "cirurgia" && filterValue === "all") {
+        const monthlyCirurgias: Record<string, Record<string, { count: number; value: number }>> = {};
+        const monthlyCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const month = obterNomeMes(app._date);
+          if (!month) return;
+
+          const cirurgia = String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado";
+          if (!monthlyCounts[month]) monthlyCounts[month] = { count: 0, value: 0 };
+          monthlyCounts[month].count += 1;
+          monthlyCounts[month].value += app._value;
+
+          if (!monthlyCirurgias[month]) monthlyCirurgias[month] = {};
+          if (!monthlyCirurgias[month][cirurgia]) monthlyCirurgias[month][cirurgia] = { count: 0, value: 0 };
+          monthlyCirurgias[month][cirurgia].count += 1;
+          monthlyCirurgias[month][cirurgia].value += app._value;
+        });
+
+        return Object.entries(monthlyCounts)
+          .sort(sortMonths)
+          .map(([name, data]) => ({
+            id: name,
+            title: name.split(" de ")[0],
+            subtitle: name.split(" de ")[1],
+            count: data.count,
+            value: data.value,
+            icon: <BarChart3 className="h-5 w-5 text-indigo-500" />,
+            topCirurgias: Object.entries(monthlyCirurgias[name] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([cirurgia, breakdown]) => ({
+                name: cirurgia,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
       const monthlyCounts: Record<string, number> = {};
       const monthlyValues: Record<string, number> = {};
       appointments.forEach(app => {
@@ -660,13 +948,7 @@ export default function Home() {
         }
       });
       return Object.entries(monthlyCounts)
-        .sort(([a], [b]) => {
-          const [mA, yA] = a.split(" de ");
-          const [mB, yB] = b.split(" de ");
-          const idxA = MESES.indexOf(mA);
-          const idxB = MESES.indexOf(mB);
-          return Number(yA) === Number(yB) ? idxA - idxB : Number(yA) - Number(yB);
-        })
+        .sort(sortMonths)
         .map(([name, count]) => ({
           id: name,
           title: name.split(" de ")[0],
@@ -1347,6 +1629,197 @@ export default function Home() {
           });
       }
 
+      if (filterCategory === "convenio" && filterValue === "all") {
+        const origemConvenios: Record<string, Record<string, { count: number; value: number }>> = {};
+        const origemCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const origem = normalizePatientOrigin(app.origem);
+          const convenio = app.convenio || "Não informado";
+
+          if (!origemCounts[origem]) origemCounts[origem] = { count: 0, value: 0 };
+          origemCounts[origem].count += 1;
+          origemCounts[origem].value += app._value;
+
+          if (!origemConvenios[origem]) origemConvenios[origem] = {};
+          if (!origemConvenios[origem][convenio]) origemConvenios[origem][convenio] = { count: 0, value: 0 };
+          origemConvenios[origem][convenio].count += 1;
+          origemConvenios[origem][convenio].value += app._value;
+        });
+
+        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
+        return Object.entries(origemCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([origem, data]) => ({
+            id: origem,
+            title: labels[origem] || origem,
+            subtitle: "Origem do Paciente",
+            count: data.count,
+            value: data.value,
+            icon: <Users className="h-5 w-5 text-indigo-500" />,
+            topConvenios: Object.entries(origemConvenios[origem] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([convenio, breakdown]) => ({
+                name: convenio,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "faixaEtaria" && filterValue === "all") {
+        const origemFaixas: Record<string, Record<string, { count: number; value: number }>> = {};
+        const origemCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const origem = normalizePatientOrigin(app.origem);
+          const faixa = getAgeBucket(app.nascimento) || "Desconhecido";
+
+          if (!origemCounts[origem]) origemCounts[origem] = { count: 0, value: 0 };
+          origemCounts[origem].count += 1;
+          origemCounts[origem].value += app._value;
+
+          if (!origemFaixas[origem]) origemFaixas[origem] = {};
+          if (!origemFaixas[origem][faixa]) origemFaixas[origem][faixa] = { count: 0, value: 0 };
+          origemFaixas[origem][faixa].count += 1;
+          origemFaixas[origem][faixa].value += app._value;
+        });
+
+        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
+        return Object.entries(origemCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([origem, data]) => ({
+            id: origem,
+            title: labels[origem] || origem,
+            subtitle: "Origem do Paciente",
+            count: data.count,
+            value: data.value,
+            icon: <Users className="h-5 w-5 text-indigo-500" />,
+            topFaixas: Object.entries(origemFaixas[origem] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([faixa, breakdown]) => ({
+                name: faixa,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "exame" && filterValue === "all") {
+        const origemExames: Record<string, Record<string, { count: number; value: number }>> = {};
+        const origemCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const origem = normalizePatientOrigin(app.origem);
+
+          if (!origemCounts[origem]) origemCounts[origem] = { count: 0, value: 0 };
+          origemCounts[origem].count += 1;
+          origemCounts[origem].value += app._value;
+
+          if (!origemExames[origem]) origemExames[origem] = {};
+          if (Array.isArray(app.exames)) {
+            app.exames.forEach((exam: string) => {
+              if (!origemExames[origem][exam]) origemExames[origem][exam] = { count: 0, value: 0 };
+              origemExames[origem][exam].count += 1;
+              origemExames[origem][exam].value += getExamValue(exam, app);
+            });
+          }
+        });
+
+        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
+        return Object.entries(origemCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([origem, data]) => ({
+            id: origem,
+            title: labels[origem] || origem,
+            subtitle: "Origem do Paciente",
+            count: data.count,
+            value: data.value,
+            icon: <Users className="h-5 w-5 text-indigo-500" />,
+            topExames: Object.entries(origemExames[origem] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([exam, breakdown]) => ({
+                name: exam,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "motivacao" && filterValue === "all") {
+        const origemMotivacoes: Record<string, Record<string, { count: number; value: number }>> = {};
+        const origemCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const origem = normalizePatientOrigin(app.origem);
+          const motivacao = String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado";
+
+          if (!origemCounts[origem]) origemCounts[origem] = { count: 0, value: 0 };
+          origemCounts[origem].count += 1;
+          origemCounts[origem].value += app._value;
+
+          if (!origemMotivacoes[origem]) origemMotivacoes[origem] = {};
+          if (!origemMotivacoes[origem][motivacao]) origemMotivacoes[origem][motivacao] = { count: 0, value: 0 };
+          origemMotivacoes[origem][motivacao].count += 1;
+          origemMotivacoes[origem][motivacao].value += app._value;
+        });
+
+        return Object.entries(origemCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([origem, data]) => ({
+            id: origem,
+            title: getOriginLabel(origem),
+            subtitle: "Origem do Paciente",
+            count: data.count,
+            value: data.value,
+            icon: <Users className="h-5 w-5 text-indigo-500" />,
+            topMotivacoes: Object.entries(origemMotivacoes[origem] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([motivacao, breakdown]) => ({
+                name: motivacao,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
+      if (filterCategory === "cirurgia" && filterValue === "all") {
+        const origemCirurgias: Record<string, Record<string, { count: number; value: number }>> = {};
+        const origemCounts: Record<string, { count: number; value: number }> = {};
+
+        appointments.forEach((app) => {
+          const origem = normalizePatientOrigin(app.origem);
+          const cirurgia = String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado";
+
+          if (!origemCounts[origem]) origemCounts[origem] = { count: 0, value: 0 };
+          origemCounts[origem].count += 1;
+          origemCounts[origem].value += app._value;
+
+          if (!origemCirurgias[origem]) origemCirurgias[origem] = {};
+          if (!origemCirurgias[origem][cirurgia]) origemCirurgias[origem][cirurgia] = { count: 0, value: 0 };
+          origemCirurgias[origem][cirurgia].count += 1;
+          origemCirurgias[origem][cirurgia].value += app._value;
+        });
+
+        return Object.entries(origemCounts)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([origem, data]) => ({
+            id: origem,
+            title: getOriginLabel(origem),
+            subtitle: "Origem do Paciente",
+            count: data.count,
+            value: data.value,
+            icon: <Users className="h-5 w-5 text-indigo-500" />,
+            topCirurgias: Object.entries(origemCirurgias[origem] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([cirurgia, breakdown]) => ({
+                name: cirurgia,
+                count: breakdown.count,
+                value: breakdown.value,
+              })),
+          }));
+      }
+
       // Default Logic for Origem
       const counts: Record<string, { count: number, value: number }> = {};
       appointments.forEach(app => {
@@ -1714,6 +2187,17 @@ export default function Home() {
     avaliacaoTexto: String(app.pesquisaSatisfacao?.texto || "").trim() || undefined,
   });
 
+  const getBreakdownMeta = (item: CardData) => {
+    if (item.topUnidades) return { kind: "unidade" as const, items: item.topUnidades };
+    if (item.topConvenios) return { kind: "convenio" as const, items: item.topConvenios };
+    if (item.topFaixas) return { kind: "faixaEtaria" as const, items: item.topFaixas };
+    if (item.topExames) return { kind: "exame" as const, items: item.topExames };
+    if (item.topOrigens) return { kind: "origem" as const, items: item.topOrigens };
+    if (item.topMotivacoes) return { kind: "motivacao" as const, items: item.topMotivacoes };
+    if (item.topCirurgias) return { kind: "cirurgia" as const, items: item.topCirurgias };
+    return null;
+  };
+
   const openCancellationDrillDown = (item: CardData) => {
     const matches = filteredCancellations
       .filter((app: any) => app._unit === item.id)
@@ -1765,7 +2249,8 @@ export default function Home() {
 
   // Function to handle card click for detailed records
   const handleDrillDown = (item: CardData, subItemName?: string) => {
-    const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
+    const breakdown = getBreakdownMeta(item);
+    const hasBreakdown = !!breakdown;
     if (hasBreakdown && !subItemName && statType !== "unidades") return;
 
     // Filter appointments for this item from filteredAppointments
@@ -1789,15 +2274,21 @@ export default function Home() {
     }
 
     // Secondary filter if subItemName is provided
-    if (subItemName) {
-      if (item.topUnidades) {
+    if (subItemName && breakdown) {
+      if (breakdown.kind === "unidade") {
         matches = matches.filter((app: any) => (unitConfig?.[app._unit]?.empresa ?? app._unit) === subItemName);
-      } else if (item.topConvenios) {
+      } else if (breakdown.kind === "convenio") {
         matches = matches.filter((app: any) => (app.convenio || "N\u00E3o informado") === subItemName);
-      } else if (item.topFaixas) {
+      } else if (breakdown.kind === "faixaEtaria") {
         matches = matches.filter((app: any) => getAgeBucket(app.nascimento) === subItemName);
-      } else if (item.topExames) {
+      } else if (breakdown.kind === "exame") {
         matches = matches.filter((app: any) => Array.isArray(app.exames) && app.exames.includes(subItemName));
+      } else if (breakdown.kind === "origem") {
+        matches = matches.filter((app: any) => normalizePatientOrigin(app.origem) === getOriginValueFromLabel(subItemName));
+      } else if (breakdown.kind === "motivacao") {
+        matches = matches.filter((app: any) => (String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado") === subItemName);
+      } else if (breakdown.kind === "cirurgia") {
+        matches = matches.filter((app: any) => (String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado") === subItemName);
       }
     }
 
@@ -2034,7 +2525,8 @@ export default function Home() {
               {viewMode === "cards" && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 justify-items-center animate-in fade-in zoom-in-95 duration-300">
                   {sortedDisplayData.map((item) => {
-                    const hasBreakdown = !!(item.topConvenios || item.topFaixas || item.topExames || item.topUnidades);
+                    const breakdown = getBreakdownMeta(item);
+                    const hasBreakdown = !!breakdown;
                     const isClickable = statType === "unidades" || !hasBreakdown;
 
                     return (
@@ -2123,20 +2615,20 @@ export default function Home() {
                           </CardHeader>
 
                           <CardContent className="p-0 text-center flex-grow flex flex-col justify-center mt-0.5">
-                            {item.topUnidades ? (
+                            {breakdown ? (
                               <div className="flex flex-col justify-between w-full h-full px-1 pt-1 pb-1">
                                 <div className="flex flex-col gap-1 w-full">
-                                  {(expandedCards.has(item.id) ? item.topUnidades : item.topUnidades.slice(0, 3)).map((u, i) => (
+                                  {(expandedCards.has(item.id) ? breakdown.items : breakdown.items.slice(0, 3)).map((entry, i) => (
                                     <div 
                                       key={i} 
                                       className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group"
-                                      onClick={() => handleDrillDown(item, u.name)}
-                                      title={`Ver pacientes de ${u.name}`}
+                                      onClick={() => handleDrillDown(item, entry.name)}
+                                      title={`Ver pacientes de ${entry.name}`}
                                     >
-                                      <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={u.name}>{u.name}</span>
+                                      <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={entry.name}>{entry.name}</span>
                                       <div className="flex gap-1.5 px-0.5">
-                                        <span className="font-bold text-gray-900">{u.count}</span>
-                                        <span className="font-mono text-green-600">R${u.value}</span>
+                                        <span className="font-bold text-gray-900">{entry.count}</span>
+                                        <span className="font-mono text-green-600">R${entry.value}</span>
                                       </div>
                                     </div>
                                   ))}
@@ -2149,118 +2641,7 @@ export default function Home() {
                                       <span className="font-mono text-green-700">R${item.value || 0}</span>
                                     </div>
                                   </div>
-                                  {item.topUnidades.length > 3 && (
-                                    <button 
-                                      onClick={(e) => toggleCardExpansion(item.id, e)} 
-                                      className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"
-                                      title={expandedCards.has(item.id) ? "Ver menos" : "Ver todos"}
-                                    >
-                                      {expandedCards.has(item.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ) : item.topConvenios ? (
-                              <div className="flex flex-col justify-between w-full h-full px-1 pt-1 pb-1">
-                                <div className="flex flex-col gap-1 w-full">
-                                  {(expandedCards.has(item.id) ? item.topConvenios : item.topConvenios.slice(0, 3)).map((c, i) => (
-                                    <div 
-                                      key={i} 
-                                      className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group"
-                                      onClick={() => handleDrillDown(item, c.name)}
-                                      title={`Ver pacientes de ${c.name}`}
-                                    >
-                                      <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={c.name}>{c.name}</span>
-                                      <div className="flex gap-1.5 px-0.5">
-                                        <span className="font-bold text-gray-900">{c.count}</span>
-                                        <span className="font-mono text-green-600">R${c.value}</span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="flex items-center gap-1 mt-1">
-                                  <div className="flex-grow flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 shadow-inner">
-                                    <span className="font-semibold text-blue-800">Total</span>
-                                    <div className="flex gap-1.5">
-                                      <span className="font-bold text-blue-900">{item.count}</span>
-                                      <span className="font-mono text-green-700">R${item.value || 0}</span>
-                                    </div>
-                                  </div>
-                                  {item.topConvenios.length > 3 && (
-                                    <button 
-                                      onClick={(e) => toggleCardExpansion(item.id, e)} 
-                                      className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"
-                                      title={expandedCards.has(item.id) ? "Ver menos" : "Ver todos"}
-                                    >
-                                      {expandedCards.has(item.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ) : item.topFaixas ? (
-                              <div className="flex flex-col justify-between w-full h-full px-1 pt-1 pb-1">
-                                <div className="flex flex-col gap-1 w-full">
-                                  {(expandedCards.has(item.id) ? item.topFaixas : item.topFaixas.slice(0, 3)).map((f, i) => (
-                                    <div 
-                                      key={i} 
-                                      className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group"
-                                      onClick={() => handleDrillDown(item, f.name)}
-                                      title={`Ver pacientes de ${f.name}`}
-                                    >
-                                      <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={f.name}>{f.name}</span>
-                                      <div className="flex gap-1.5 px-0.5">
-                                        <span className="font-bold text-gray-900">{f.count}</span>
-                                        <span className="font-mono text-green-600">R${f.value}</span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="flex items-center gap-1 mt-1">
-                                  <div className="flex-grow flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 shadow-inner">
-                                    <span className="font-semibold text-blue-800">Total</span>
-                                    <div className="flex gap-1.5">
-                                      <span className="font-bold text-blue-900">{item.count}</span>
-                                      <span className="font-mono text-green-700">R${item.value || 0}</span>
-                                    </div>
-                                  </div>
-                                  {item.topFaixas.length > 3 && (
-                                    <button 
-                                      onClick={(e) => toggleCardExpansion(item.id, e)} 
-                                      className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"
-                                      title={expandedCards.has(item.id) ? "Ver menos" : "Ver todos"}
-                                    >
-                                      {expandedCards.has(item.id) ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                                    </button>
-                                  )}
-                                </div>
-                              </div>
-                            ) : item.topExames ? (
-                              <div className="flex flex-col justify-between w-full h-full px-1 pt-1 pb-1">
-                                <div className="flex flex-col gap-1 w-full">
-                                  {(expandedCards.has(item.id) ? item.topExames : item.topExames.slice(0, 3)).map((e, i) => (
-                                    <div 
-                                      key={i} 
-                                      className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group"
-                                      onClick={() => handleDrillDown(item, e.name)}
-                                      title={`Ver pacientes de ${e.name}`}
-                                    >
-                                      <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={e.name}>{e.name}</span>
-                                      <div className="flex gap-1.5 px-0.5">
-                                        <span className="font-bold text-gray-900">{e.count}</span>
-                                        <span className="font-mono text-green-600">R${e.value}</span>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="flex items-center gap-1 mt-1">
-                                  <div className="flex-grow flex justify-between items-center text-[10px] bg-blue-50 p-0.5 rounded border border-blue-100 shadow-inner">
-                                    <span className="font-semibold text-blue-800">Total</span>
-                                    <div className="flex gap-1.5">
-                                      <span className="font-bold text-blue-900">{item.count}</span>
-                                      <span className="font-mono text-green-700">R${item.value || 0}</span>
-                                    </div>
-                                  </div>
-                                  {item.topExames.length > 3 && (
+                                  {breakdown.items.length > 3 && (
                                     <button 
                                       onClick={(e) => toggleCardExpansion(item.id, e)} 
                                       className="text-blue-500 hover:text-blue-700 transition-colors p-0.5"

@@ -1,18 +1,42 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  explainExamAction,
+  ExamExplanationResult,
+} from "@/app/actions/exam-assistant";
 import { useBuscaHorarios } from "@/hooks/useBuscaHorarios";
+import {
+  cloneInternalExamAliasEntries,
+  findInternalExamMatches,
+  formatProcedureName,
+  InternalExamAliasEntry,
+  InternalExamMatch,
+  INTERNAL_EXAM_ALIAS_ENTRIES,
+} from "@/lib/exam-internal-search";
+import { PatientSearchResult, PatientSearchSheet } from "@/components/patient-search-sheet";
 import { UnidadeResultCard } from "./UnidadeResultCard";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ptBR } from "date-fns/locale";
 import { format, getDay, parseISO, isValid, startOfDay } from "date-fns";
 import { 
   Search, Plus, X, Loader2, Clock, Sun, Moon, SunMoon, 
-  AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy, MapPin, ChevronDown
+  AlertCircle, Calendar as CalendarIcon, CalendarCheck2, CheckCircle2, Copy, MapPin, CircleHelp, Pencil, List, Trash2
 } from "lucide-react";
 import { toast } from "sonner";
 
 const INCLUDED_IN_CONSULTA_OPTION = "__included_in_consulta__";
+const INTERNAL_LIST_STORAGE_KEY = "busca-horarios-internal-aliases-v1";
+
+function buildDefaultSearchWeek() {
+  const today = startOfDay(new Date());
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate() + index);
+    return date;
+  });
+}
 
 export default function BuscaHorarios() {
   const {
@@ -27,13 +51,28 @@ export default function BuscaHorarios() {
   const [procedimentos, setProcedimentos] = useState<string[]>([]);
   const [periodo, setPeriodo] = useState<"Manha" | "Tarde" | "Ambos">("Ambos");
   
-  const [selectedDateObjects, setSelectedDateObjects] = useState<Date[]>([]);
+  const [selectedDateObjects, setSelectedDateObjects] = useState<Date[]>(() => buildDefaultSearchWeek());
   
   const [procSearch, setProcSearch] = useState("");
   const [unitSearch, setUnitSearch] = useState("");
   const [showProcDropdown, setShowProcDropdown] = useState(false);
   const [showUnidadeDropdown, setShowUnidadeDropdown] = useState(false);
   const [selectedByIncludedOption, setSelectedByIncludedOption] = useState(false);
+  const [isPatientSearchOpen, setIsPatientSearchOpen] = useState(false);
+  const [internalAliasEntries, setInternalAliasEntries] = useState<InternalExamAliasEntry[]>(() =>
+    cloneInternalExamAliasEntries(INTERNAL_EXAM_ALIAS_ENTRIES)
+  );
+  const [isLookupOpen, setIsLookupOpen] = useState(false);
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupMatches, setLookupMatches] = useState<InternalExamMatch[]>([]);
+  const [isLookupEditMode, setIsLookupEditMode] = useState(false);
+  const [showLookupAssociationList, setShowLookupAssociationList] = useState(false);
+  const [editEntryId, setEditEntryId] = useState<string | null>(null);
+  const [editCanonical, setEditCanonical] = useState("");
+  const [editAliasesText, setEditAliasesText] = useState("");
+  const [openExamInfoFor, setOpenExamInfoFor] = useState<string | null>(null);
+  const [examInfoLoadingFor, setExamInfoLoadingFor] = useState<string | null>(null);
+  const [examExplanationMap, setExamExplanationMap] = useState<Record<string, ExamExplanationResult>>({});
 
   const selectedDatesStrings = useMemo(() => {
     return selectedDateObjects.map(d => format(d, "yyyy-MM-dd"));
@@ -58,6 +97,47 @@ export default function BuscaHorarios() {
       return startOfDay(new Date(y, m - 1, d));
     }).filter(Boolean) as Date[];
   }, [feriadosData]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(INTERNAL_LIST_STORAGE_KEY);
+      if (!raw) return;
+
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+
+      const sanitized = parsed
+        .filter((entry) => entry && typeof entry === "object")
+        .map((entry: any, index: number) => ({
+          id: String(entry.id || `custom_${index + 1}`),
+          canonical: String(entry.canonical || "").trim(),
+          aliases: Array.isArray(entry.aliases)
+            ? entry.aliases.map((value: unknown) => String(value || "").trim()).filter(Boolean)
+            : [],
+          searchTerms: Array.isArray(entry.searchTerms)
+            ? entry.searchTerms.map((value: unknown) => String(value || "").trim()).filter(Boolean)
+            : [],
+        }))
+        .filter((entry: InternalExamAliasEntry) => entry.canonical && entry.aliases.length > 0);
+
+      if (sanitized.length > 0) {
+        setInternalAliasEntries(sanitized);
+      }
+    } catch (error) {
+      console.warn("Nao foi possivel carregar a lista interna personalizada.", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        INTERNAL_LIST_STORAGE_KEY,
+        JSON.stringify(internalAliasEntries)
+      );
+    } catch (error) {
+      console.warn("Nao foi possivel salvar a lista interna personalizada.", error);
+    }
+  }, [internalAliasEntries]);
 
   const includedProcedimentos = useMemo(() => {
     return procedimentosList.filter((proc) => examesMetadata[proc]?.incluso);
@@ -125,8 +205,10 @@ export default function BuscaHorarios() {
     setProcedimentos([]);
     setSelectedByIncludedOption(false);
     setPeriodo("Ambos");
-    setSelectedDateObjects([]);
+    setSelectedDateObjects(buildDefaultSearchWeek());
     setUnitSearch("");
+    setOpenExamInfoFor(null);
+    setExamInfoLoadingFor(null);
     // To clear results, we need to call a clear function in the hook or set results to null
     // Assuming 'buscar' with empty params or a new clear function
     buscar({ convenio: "Particular", subplano: "", procedimentos: [], periodo: "Ambos", selectedDates: [], unidades: [] });
@@ -164,11 +246,146 @@ export default function BuscaHorarios() {
     return examPrices.items.length > 0 && examPrices.items.every((item) => item.label === "Incluso");
   }, [examPrices]);
 
-  const friendlyName = (name: string) => {
-    return name
-      .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, s => s.toUpperCase())
-      .trim();
+  const friendlyName = (name: string) => formatProcedureName(name);
+
+  const buildLookupMatches = (query: string) => {
+    return findInternalExamMatches(query, procedimentosList, internalAliasEntries);
+  };
+
+  const fillLookupEditor = (query: string, match?: InternalExamMatch | null) => {
+    if (match) {
+      setEditEntryId(match.id);
+      setEditCanonical(match.canonical);
+      setEditAliasesText(match.aliases.join("\n"));
+      return;
+    }
+
+    setEditEntryId(null);
+    setEditCanonical(query.trim());
+    setEditAliasesText(query.trim());
+  };
+
+  const parseAliasesText = (value: string) => {
+    return Array.from(
+      new Set(
+        value
+          .split(/[\n,=]+/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      )
+    );
+  };
+
+  const openLookupEditor = () => {
+    fillLookupEditor(lookupQuery || procSearch, lookupMatches[0] || null);
+    setIsLookupEditMode(true);
+    setShowLookupAssociationList(false);
+  };
+
+  const handleLookupSearch = () => {
+    const query = procSearch.trim();
+    if (!query) {
+      toast.error("Digite um exame para usar a lupa.");
+      return;
+    }
+
+    setShowProcDropdown(false);
+    const matches = buildLookupMatches(query);
+    setLookupQuery(query);
+    setLookupMatches(matches);
+    fillLookupEditor(query, matches[0] || null);
+    setIsLookupEditMode(false);
+    setShowLookupAssociationList(false);
+    setIsLookupOpen(true);
+  };
+
+  const handleSaveLookupEntry = () => {
+    const canonical = editCanonical.trim();
+    const aliases = parseAliasesText(editAliasesText);
+
+    if (!canonical) {
+      toast.error("Preencha o nome principal do exame.");
+      return;
+    }
+
+    if (aliases.length === 0) {
+      toast.error("Adicione ao menos uma correspondencia.");
+      return;
+    }
+
+    const nextEntry: InternalExamAliasEntry = {
+      id:
+        editEntryId ||
+        `custom_${canonical.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "_")}`,
+      canonical,
+      aliases: Array.from(new Set([canonical, ...aliases])),
+      searchTerms: Array.from(new Set([canonical, ...aliases])),
+    };
+
+    setInternalAliasEntries((prev) => {
+      const existingIndex = prev.findIndex((entry) => entry.id === nextEntry.id);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = nextEntry;
+        return updated;
+      }
+
+      return [...prev, nextEntry];
+    });
+
+    const refreshedMatches = findInternalExamMatches(lookupQuery || procSearch, procedimentosList, [
+      ...internalAliasEntries.filter((entry) => entry.id !== nextEntry.id),
+      nextEntry,
+    ]);
+    setLookupMatches(refreshedMatches);
+    fillLookupEditor(lookupQuery || procSearch, refreshedMatches[0] || nextEntry as any);
+    setIsLookupEditMode(false);
+    toast.success("Lista interna atualizada.");
+  };
+
+  const handleDeleteLookupEntry = (entryId: string) => {
+    setInternalAliasEntries((prev) => prev.filter((entry) => entry.id !== entryId));
+    setLookupMatches((prev) => prev.filter((entry) => entry.id !== entryId));
+
+    if (editEntryId === entryId) {
+      setEditEntryId(null);
+      setEditCanonical("");
+      setEditAliasesText("");
+      setIsLookupEditMode(false);
+    }
+
+    toast.success("Associacao removida da lista.");
+  };
+
+  const handleExamInfoOpenChange = async (examRaw: string, open: boolean) => {
+    setOpenExamInfoFor(open ? examRaw : null);
+
+    if (!open || examExplanationMap[examRaw]) return;
+
+    setExamInfoLoadingFor(examRaw);
+    try {
+      const result = await explainExamAction({ examName: friendlyName(examRaw) });
+      if (result) {
+        setExamExplanationMap((prev) => ({ ...prev, [examRaw]: result }));
+      }
+    } finally {
+      setExamInfoLoadingFor((current) => (current === examRaw ? null : current));
+    }
+  };
+
+  const copyExamExplanation = (examRaw: string) => {
+    const explanation = examExplanationMap[examRaw];
+    if (!explanation?.patientCopy) return;
+    navigator.clipboard.writeText(explanation.patientCopy);
+    toast.success("Explicacao copiada.");
+  };
+
+  const handlePatientSearchSelect = (record: PatientSearchResult) => {
+    setIsPatientSearchOpen(false);
+    const statusLabel = record.status === "agendado" ? "Agendado" : "Cancelado";
+    toast.message(
+      `${statusLabel}: ${record.nomePaciente} em ${record.dataAgendamento.split("-").reverse().join("/")} às ${record.horario}.`
+    );
   };
 
   if (loading) {
@@ -183,7 +400,16 @@ export default function BuscaHorarios() {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between bg-card px-6 py-3.5 rounded-xl shadow-sm border">
+      <div className="relative flex items-center justify-between bg-card px-6 py-3.5 rounded-xl shadow-sm border [&>div:last-child]:hidden">
+        <button
+          type="button"
+          onClick={() => setIsPatientSearchOpen(true)}
+          className="absolute right-6 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 p-2 text-sky-700 transition-colors hover:bg-sky-100 hover:text-sky-800"
+          title="Buscar paciente agendado"
+          aria-label="Buscar paciente agendado"
+        >
+          <CalendarCheck2 className="h-4 w-4" />
+        </button>
         <div className="flex items-center gap-3">
           <div className="bg-primary p-2 rounded-lg">
             <Search className="h-5 w-5 text-primary-foreground" />
@@ -229,7 +455,7 @@ export default function BuscaHorarios() {
               {hasSubplanos && (
                 <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                    Subplano Específico
+                    Subplano
                   </label>
                   <select
                     value={subplano}
@@ -260,7 +486,10 @@ export default function BuscaHorarios() {
                 type="text"
                 placeholder="Adicionar exame..."
                 value={procSearch}
-                onChange={e => { setProcSearch(e.target.value); setShowProcDropdown(true); }}
+                onChange={e => {
+                  setProcSearch(e.target.value);
+                  setShowProcDropdown(true);
+                }}
                 onFocus={() => setShowProcDropdown(true)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -270,8 +499,214 @@ export default function BuscaHorarios() {
                     }
                   }
                 }}
-                className="w-full rounded-lg border border-input pl-10 pr-4 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none bg-muted hover:bg-card"
+                className="w-full rounded-lg border border-input pl-10 pr-20 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none bg-muted hover:bg-card"
               />
+              <Popover open={isLookupOpen} onOpenChange={setIsLookupOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={handleLookupSearch}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-md border border-amber-200 bg-amber-50 text-amber-700 transition-colors hover:bg-amber-100 hover:text-amber-800"
+                    title="Consultar lista interna"
+                  >
+                    <Search className="h-4 w-4" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent align="end" side="bottom" sideOffset={12} className="w-[420px] space-y-3 rounded-2xl p-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-primary">
+                      Lista interna
+                    </p>
+                  </div>
+
+                  {lookupMatches.length > 0 ? (
+                    <div className="space-y-3">
+                      {(() => {
+                        const bestMatch = lookupMatches[0];
+                        const bestProcedure = bestMatch.resolvedProcedures[0];
+
+                        return (
+                          <div className="rounded-2xl border bg-muted/40 p-4">
+                            <div className="space-y-2 text-sm">
+                              <p>
+                                <span className="font-black text-foreground">Voce digitou:</span>{" "}
+                                <span className="text-muted-foreground">{lookupQuery}</span>
+                              </p>
+                              <div className="flex items-center justify-between gap-3">
+                                <p>
+                                  <span className="font-black text-foreground">Melhor correspondencia:</span>{" "}
+                                  <span className="text-foreground">{bestMatch.canonical}</span>
+                                </p>
+                                <div className="flex items-center gap-1">
+                                  <button
+                                    type="button"
+                                    onClick={openLookupEditor}
+                                    className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white hover:text-primary"
+                                    title="Editar esta correspondencia"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setShowLookupAssociationList((current) => !current);
+                                      setIsLookupEditMode(false);
+                                    }}
+                                    className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white hover:text-primary"
+                                    title="Ver todas as associacoes"
+                                  >
+                                    <List className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+
+                            {bestProcedure ? (
+                              <div className="mt-3">
+                                <div className="flex flex-wrap gap-2">
+                                  {bestMatch.resolvedProcedures.slice(0, 3).map((procedure, index) => (
+                                    <button
+                                      key={`${bestMatch.id}_${procedure.raw}`}
+                                      type="button"
+                                      onClick={() => {
+                                        addProcedimento(procedure.raw);
+                                        setIsLookupOpen(false);
+                                      }}
+                                      disabled={procedimentos.includes(procedure.raw)}
+                                      className={`rounded-full border px-3 py-1 text-[11px] font-black uppercase tracking-wide transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                                        index === 0
+                                          ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                                          : "border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                                      }`}
+                                    >
+                                      {procedimentos.includes(procedure.raw)
+                                        ? "Ja adicionado"
+                                        : index === 0
+                                          ? `Melhor: ${procedure.label}`
+                                          : procedure.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="mt-3 text-xs text-amber-700">
+                                Encontrei a correspondencia pelo nome, mas nao achei qual exame da sua lista deve ser adicionado.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                      <div className="flex items-center justify-between gap-3">
+                        <p>Nao encontrei correspondencia nessa lista local.</p>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={openLookupEditor}
+                            className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white hover:text-primary"
+                            title="Editar esta correspondencia"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowLookupAssociationList((current) => !current);
+                              setIsLookupEditMode(false);
+                            }}
+                            className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-white hover:text-primary"
+                            title="Ver todas as associacoes"
+                          >
+                            <List className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {showLookupAssociationList && (
+                    <div className="rounded-2xl border bg-muted/30 p-3">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        Todas as associacoes
+                      </p>
+                      <div className="mt-2 max-h-48 space-y-2 overflow-y-auto pr-1">
+                        {internalAliasEntries.map((entry) => (
+                          <div
+                            key={entry.id}
+                            className="w-full rounded-xl border bg-white px-3 py-2 text-left transition-colors hover:bg-primary/5"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  fillLookupEditor(lookupQuery || procSearch, {
+                                    id: entry.id,
+                                    canonical: entry.canonical,
+                                    matchedAlias: entry.aliases[0] || entry.canonical,
+                                    aliases: entry.aliases,
+                                    resolvedProcedures: [],
+                                  });
+                                  setIsLookupEditMode(true);
+                                  setShowLookupAssociationList(false);
+                                }}
+                                className="min-w-0 flex-1 text-left"
+                              >
+                                <p className="text-sm font-black text-foreground">{entry.canonical}</p>
+                                <p className="mt-1 text-xs text-muted-foreground">{entry.aliases.join(" = ")}</p>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteLookupEntry(entry.id)}
+                                className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600"
+                                title="Excluir associacao"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {isLookupEditMode && (
+                      <div className="space-y-3 rounded-2xl border bg-muted/30 p-3">
+                        <div>
+                          <label className="mb-1 block text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                            Nome principal do exame
+                          </label>
+                          <input
+                            type="text"
+                            value={editCanonical}
+                            onChange={(e) => setEditCanonical(e.target.value)}
+                            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                            Outros nomes que significam a mesma coisa
+                          </label>
+                          <textarea
+                            value={editAliasesText}
+                            onChange={(e) => setEditAliasesText(e.target.value)}
+                            rows={5}
+                            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-primary/20"
+                            placeholder="Um por linha. Ex: Fundoscopia"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleSaveLookupEntry}
+                          className="rounded-lg bg-primary px-3 py-2 text-xs font-black uppercase tracking-wide text-primary-foreground transition-colors hover:bg-primary/90"
+                        >
+                          Salvar lista
+                        </button>
+                      </div>
+                    )}
+                </PopoverContent>
+              </Popover>
               {showProcDropdown && filteredProcs.length > 0 && (
                 <div className="absolute z-20 mt-2 w-full bg-card border border-input rounded-xl shadow-2xl max-h-56 overflow-y-auto p-1">
                   {filteredProcs.slice(0, 15).map(proc => (
@@ -295,9 +730,91 @@ export default function BuscaHorarios() {
                       {item.label}
                     </span>
                   </div>
-                  <button onClick={() => removeProcedimento(item.nome)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
-                    <X className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <Popover
+                      open={openExamInfoFor === item.nome}
+                      onOpenChange={(open) => {
+                        void handleExamInfoOpenChange(item.nome, open);
+                      }}
+                    >
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary"
+                          title="Detalhes do exame"
+                        >
+                          <CircleHelp className="h-4 w-4" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent align="end" className="w-[360px] space-y-3">
+                        {examInfoLoadingFor === item.nome ? (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Carregando explicacao...
+                          </div>
+                        ) : examExplanationMap[item.nome] ? (
+                          <>
+                            <div>
+                              <p className="text-xs font-black uppercase tracking-widest text-primary">
+                                {examExplanationMap[item.nome].title}
+                              </p>
+                              <p className="mt-1 text-sm text-foreground">
+                                {examExplanationMap[item.nome].summary}
+                              </p>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                              <p>
+                                <span className="font-black text-foreground">Para que serve:</span>{" "}
+                                <span className="text-muted-foreground">{examExplanationMap[item.nome].servesFor}</span>
+                              </p>
+                              <p>
+                                <span className="font-black text-foreground">O que avalia:</span>{" "}
+                                <span className="text-muted-foreground">{examExplanationMap[item.nome].evaluates}</span>
+                              </p>
+                              <p>
+                                <span className="font-black text-foreground">Como e feito:</span>{" "}
+                                <span className="text-muted-foreground">{examExplanationMap[item.nome].howItsDone}</span>
+                              </p>
+                              <p>
+                                <span className="font-black text-foreground">Dilata a pupila:</span>{" "}
+                                <span className="text-muted-foreground">{examExplanationMap[item.nome].requiresDilation}</span>
+                              </p>
+                              <p>
+                                <span className="font-black text-foreground">Contraste venoso:</span>{" "}
+                                <span className="text-muted-foreground">{examExplanationMap[item.nome].hasVenousContrast}</span>
+                              </p>
+                            </div>
+                            <div className="rounded-lg border bg-muted/50 p-3">
+                              <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground">
+                                Texto para paciente
+                              </p>
+                              <p className="mt-1 text-sm text-foreground">
+                                {examExplanationMap[item.nome].patientCopy}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => copyExamExplanation(item.nome)}
+                              className="inline-flex items-center gap-2 rounded-lg border border-primary/15 bg-primary/5 px-3 py-2 text-xs font-black uppercase tracking-wide text-primary transition-colors hover:bg-primary/10"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                              Copiar explicacao
+                            </button>
+                          </>
+                        ) : (
+                          <p className="text-sm text-muted-foreground">
+                            Nao foi possivel gerar a explicacao agora.
+                          </p>
+                        )}
+                      </PopoverContent>
+                    </Popover>
+                    <button
+                      onClick={() => removeProcedimento(item.nome)}
+                      className="text-muted-foreground hover:text-destructive transition-colors p-1"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -473,7 +990,7 @@ export default function BuscaHorarios() {
                   discovery: "text-emerald-700 border-b-2 border-emerald-500 rounded-none",
                 }}
                 disabled={[
-                  { before: new Date() }
+                  { before: startOfDay(new Date()) }
                 ]}
               />
             </div>
@@ -547,7 +1064,7 @@ export default function BuscaHorarios() {
                   </div>
                 </div>
               )}
-              <div className="grid grid-cols-1 gap-4">
+              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 {results.map(unit => (
                   <UnidadeResultCard key={unit.unidade} result={unit} procedimentos={procedimentos} />
                 ))}
@@ -572,6 +1089,11 @@ export default function BuscaHorarios() {
       {(showProcDropdown || showUnidadeDropdown) && (
         <div className="fixed inset-0 z-10" onClick={() => { setShowProcDropdown(false); setShowUnidadeDropdown(false); }} />
       )}
+      <PatientSearchSheet
+        isOpen={isPatientSearchOpen}
+        onClose={() => setIsPatientSearchOpen(false)}
+        onSelect={handlePatientSearchSelect}
+      />
     </div>
   );
 }

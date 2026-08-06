@@ -1093,6 +1093,7 @@ export default function BuscaHorarios() {
         isOpen={isPatientSearchOpen}
         onClose={() => setIsPatientSearchOpen(false)}
         onSelect={handlePatientSearchSelect}
+        enableInlineActions
       />
     </div>
   );

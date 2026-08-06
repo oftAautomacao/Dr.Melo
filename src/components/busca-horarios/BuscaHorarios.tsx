@@ -414,7 +414,7 @@ export default function BuscaHorarios() {
           <div className="bg-primary p-2 rounded-lg">
             <Search className="h-5 w-5 text-primary-foreground" />
           </div>
-          <h1 className="text-xl font-black text-foreground uppercase tracking-tight">Busca de Horários</h1>
+          <h1 className="text-base font-black text-foreground uppercase tracking-tight">Busca de Horários</h1>
         </div>
         <div className="text-[10px] text-primary font-black uppercase tracking-widest bg-primary/10 px-2 py-1 rounded">CALENDÁRIO ATIVO</div>
       </div>

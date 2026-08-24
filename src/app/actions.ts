@@ -374,9 +374,9 @@ export async function saveAppointmentAction(
 - *Endereço:* ${endereco}
 - *Telefone:* ${telefoneUnidade}${valorString}
 
-IMPORTANTE: esse agendamento está sujeito a alterações não previstas e a erros da assistente virtual. Recomendamos que entre em contato com a unidade até 24 horas antes para confirmar se está tudo certo com o horário agendado, com seu plano de saúde e com os procedimentos a serem realizados.
+*A UNIDADE ENTRARÁ EM CONTATO COM VOCÊ:* esse agendamento está sujeito a alterações não previstas e a erros da assistente virtual. A unidade entrará em contato para garantir que está tudo certo com o seu agendamento ou para realizar alguma alteração/cancelamento.
 
-Se gostou, SALVE nosso contato e COMPARTILHE com um amigo que precisa de um oftalmologista.`;
+Se gostou, *SALVE* nosso contato e *COMPARTILHE* com um amigo que precisa de um oftalmologista.`;
 
       await whatsappService.sendMessage(
         { phone: v.telefone, message },

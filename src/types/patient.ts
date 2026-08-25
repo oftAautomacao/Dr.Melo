@@ -21,7 +21,7 @@ export const PatientFormSchema = z.object({
   motivacao: z.string().min(1, { message: "Motivação é obrigatória." }),
   local: z.string().min(1, { message: "Local é obrigatório." }),
   telefone: z.string().regex(/^\d{10,15}$/, { message: "Telefone inválido. Deve conter apenas números (10 a 15 dígitos)." }),
-  origem: z.enum(PATIENT_ORIGIN_VALUES, { required_error: "Origem Ã© obrigatÃ³ria." }),
+  origem: z.enum(PATIENT_ORIGIN_VALUES, { required_error: "Origem é obrigatória." }),
   observacoes: z.string().optional(),
 }).superRefine((data, ctx) => {
   if (data.dataNascimento instanceof Date && dateFnsIsValid(data.dataNascimento)) {

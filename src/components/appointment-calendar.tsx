@@ -1,8 +1,8 @@
 "use client";
 
 /* =============================================================
-   AppointmentCalendar â€“ agenda por unidade, com cancelamento,
-   feriados e lista de unidades sempre visÃ­vel.
+   AppointmentCalendar – agenda por unidade, com cancelamento,
+   feriados e lista de unidades sempre visível.
    ============================================================= */
 
 import { useState, useEffect, useMemo } from "react";
@@ -88,7 +88,7 @@ import { ENVIRONMENT } from "../../ambiente";
 const MESES = [
   "Janeiro",
   "Fevereiro",
-  "MarÃ§o",
+  "Março",
   "Abril",
   "Maio",
   "Junho",
@@ -259,7 +259,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   const [appointmentToReschedule, setAppointmentToReschedule] =
     useState<CalendarAppointment | undefined>(undefined);
 
-  const [cancelReason, setCancelReason] = useState("NÃ£o compareceu Ã  consulta");
+  const [cancelReason, setCancelReason] = useState("Não compareceu à consulta");
   const [dontSendSecretaryMessage, setDontSendSecretaryMessage] =
     useState(true);
 
@@ -309,7 +309,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
       dataAgendamento: selectedDate ? format(selectedDate, "yyyy-MM-dd") : format(tomorrow, "yyyy-MM-dd"),
       horario: format(now, "HH:mm"),
       convenio: "Particular",
-      motivacao: "RevisÃ£o de Grau",
+      motivacao: "Revisão de Grau",
       local: selectedUnit || (getFirebasePathBase() === "OFT/45" ? "WilsonBarros" : "OftalmoDayTijuca"),
       exames: ["Consulta"],
       observacoes: `Teste de Autopreenchimento ${format(
@@ -321,7 +321,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     setAutoFillKey((k) => k + 1);
   };
 
-  /* ------------------- Limpar formulÃ¡rio ------------------- */
+  /* ------------------- Limpar formulário ------------------- */
   const handleClearForm = () => {
     setDefaults(undefined);
     setAutoFillKey((k) => k + 1);
@@ -351,7 +351,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   const currentPreviewUnitId = newAppointmentPreview.local || selectedUnit;
   const currentPreviewUnitLabel = newAppointmentPreview.localLabel || formatUnitLabel(currentPreviewUnitId);
 
-  /* ---------------------- CARREGA PREÃ‡OS DOS EXAMES ---------------- */
+  /* ---------------------- CARREGA PREÇOS DOS EXAMES ---------------- */
   useEffect(() => {
     const base = getFirebasePathBase();
     const pricesPath = `${base}/agendamentoWhatsApp/configuracoes/exames`;
@@ -489,7 +489,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   useEffect(() => {
     // Executa apenas no cliente
     setClientFirebaseBase(getFirebasePathBase());
-  }, []); // Array de dependÃªncias vazio para executar apenas uma vez apÃ³s a montagem
+  }, []); // Array de dependências vazio para executar apenas uma vez após a montagem
 
 
   /* --------------- MEMOS ---------------- */
@@ -726,7 +726,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   return (
     <>
       <Card className="w-full shadow-lg">
-        {/* ------------------- CABEÃ‡ALHO + lista unidades ---------------- */}
+        {/* ------------------- CABEÇALHO + lista unidades ---------------- */}
         <CardHeader>
           <div className="flex flex-col gap-4">
             <div>
@@ -740,10 +740,10 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
         {/* --------------------- COLUNAS PRINCIPAIS ---------------------- */}
         <CardContent className="flex flex-col md:flex-row gap-6 h-full">
-          {/* --------- COLUNA ESQUERDA â€” UNIDADES --------- */}
+          {/* --------- COLUNA ESQUERDA — UNIDADES --------- */}
           <aside className="w-full md:w-60 shrink-0">
             <Card className="h-full flex flex-col">
-              {/* REMOVIDO O HEADER "MÃ©dicos"/"Unidades" CONFORME SOLICITADO */}
+              {/* REMOVIDO O HEADER "Médicos"/"Unidades" CONFORME SOLICITADO */}
               <ScrollArea className="flex-1 px-4 py-4">
                 <div className="space-y-2">
                   {availableUnitsForSelectedMonth.length === 0 && !isLoading && (
@@ -769,9 +769,9 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             </Card>
           </aside>
 
-          {/* --------- CENTER + RIGHT (calendÃ¡rio + detalhes) --------- */}
+          {/* --------- CENTER + RIGHT (calendário + detalhes) --------- */}
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* --------- CALENDÃRIO --------- */}
+            {/* --------- CALENDÁRIO --------- */}
             <div>
               <Calendar
                 mode="single"
@@ -878,9 +878,9 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 </div>
               )}
 
-              {/* Ãrea RolÃ¡vel */}
+              {/* Área Rolável */}
               <ScrollArea className="flex-1 p-3">
-                {(isLoading || isLoadingHolidays) && <p>Carregandoâ€¦</p>}
+                {(isLoading || isLoadingHolidays) && <p>Carregando…</p>}
 
                 {!isLoading &&
                   !isLoadingHolidays &&
@@ -899,7 +899,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                               <strong>{selectedDateHolidayInfo.name}</strong>
                             </p>
                             <p className="text-xs italic">
-                              Agendamentos nÃ£o sÃ£o permitidos neste dia.
+                              Agendamentos não são permitidos neste dia.
                             </p>
                           </CardContent>
                         </Card>
@@ -911,7 +911,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="text-sm space-y-1 text-blue-700/90">
-                            <p>Este Ã© um domingo. Agendamentos nÃ£o sÃ£o realizados.</p>
+                            <p>Este é um domingo. Agendamentos não são realizados.</p>
                           </CardContent>
                         </Card>
                       ) : (
@@ -953,7 +953,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                     </CardHeader>
                                     <CardContent className="text-sm space-y-1">
                                       <p>
-                                        <strong>HorÃ¡rio:</strong> {app.horario}
+                                        <strong>Horário:</strong> {app.horario}
                                       </p>
                                       {app.cpf && (
                                         <p>
@@ -967,11 +967,11 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                           <>
                                         <button
                                           type="button"
-                                          title="Copiar nÃºmero"
+                                          title="Copiar número"
                                           className="ml-1 flex items-center text-muted-foreground hover:text-primary cursor-pointer"
                                           onClick={() => {
                                             navigator.clipboard.writeText(app.telefone.replace(/\D/g, ''));
-                                            toast({ title: "NÃºmero copiado!", description: app.telefone });
+                                            toast({ title: "Número copiado!", description: app.telefone });
                                           }}
                                         >
                                           <Copy className="h-4 w-4" />
@@ -986,7 +986,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                         )}
                                       </p>
                                       <p>
-                                        <strong>ConvÃªnio:</strong> {app.convenio}
+                                        <strong>Convênio:</strong> {app.convenio}
                                       </p>
                                       <p>
                                         <strong>Exames:</strong>{" "}
@@ -1025,7 +1025,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                                       })()}
                                       <p>
                                         <strong>
-                                          {getFirebasePathBase() === 'OFT/45' ? 'MÃ©dico:' : 'Unidade:'}
+                                          {getFirebasePathBase() === 'OFT/45' ? 'Médico:' : 'Unidade:'}
                                         </strong> {formattedUnit}
                                       </p>
                                       {app.Observacoes && (
@@ -1077,7 +1077,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 {!isLoading &&
                   !isLoadingHolidays &&
                   (!selectedDate || !dateFnsIsValid(selectedDate)) && (
-                    <EmptyMsg msg="Selecione uma data no calendÃ¡rio." />
+                    <EmptyMsg msg="Selecione uma data no calendário." />
                   )}
               </ScrollArea>
             </div>
@@ -1091,7 +1091,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
         onOpenChange={(isOpen) => {
           setIsConfirmCancelDialogOpen(isOpen);
           if (!isOpen) {
-            setCancelReason("NÃ£o compareceu Ã  consulta");
+            setCancelReason("Não compareceu à consulta");
             setDontSendSecretaryMessage(true);
           }
         }}
@@ -1113,8 +1113,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
-                  <SelectItem value="ConvÃªnio nÃ£o aceito na unidade">
-                    ConvÃªnio nÃ£o aceito na unidade
+                  <SelectItem value="Convênio não aceito na unidade">
+                    Convênio não aceito na unidade
                   </SelectItem>
                   <SelectItem value="Consulta reagendada">
                     Consulta reagendada
@@ -1122,23 +1122,23 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   <SelectItem value="Consulta de Retorno">
                     Consulta de Retorno
                   </SelectItem>
-                  <SelectItem value="NÃ£o compareceu Ã  consulta">
-                    NÃ£o compareceu Ã  consulta
+                  <SelectItem value="Não compareceu à consulta">
+                    Não compareceu à consulta
                   </SelectItem>
                   <SelectItem value="Cancelado pelo paciente">
                     Cancelado pelo paciente
                   </SelectItem>
-                  <SelectItem value="Cancelado pela secretÃ¡ria">
-                    Cancelado pela secretÃ¡ria
+                  <SelectItem value="Cancelado pela secretária">
+                    Cancelado pela secretária
                   </SelectItem>
-                  <SelectItem value="Exame nÃ£o aceito pela unidade">
-                    Exame nÃ£o aceito pela unidade
+                  <SelectItem value="Exame não aceito pela unidade">
+                    Exame não aceito pela unidade
                   </SelectItem>
                   <SelectItem value="Paciente Reagendado">
                     Paciente Reagendado
                   </SelectItem>
-                  <SelectItem value="PreÃ§o da consulta">
-                    PreÃ§o da consulta
+                  <SelectItem value="Preço da consulta">
+                    Preço da consulta
                   </SelectItem>
                   <SelectItem value="Erro do sistema">
                     Erro do sistema
@@ -1161,7 +1161,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                 htmlFor="send-secretary-message"
                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
               >
-                Enviar mensagem para a secretÃ¡ria
+                Enviar mensagem para a secretária
               </Label>
             </div>
           </div>
@@ -1223,7 +1223,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   toast({
                     variant: "destructive",
                     title: "Erro Inesperado",
-                    description: "Ocorreu um erro de comunicaÃ§Ã£o. Tente novamente.",
+                    description: "Ocorreu um erro de comunicação. Tente novamente.",
                   });
                 }
               }}
@@ -1241,7 +1241,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             <DialogTitle>Reagendar Agendamento</DialogTitle>
             <DialogDescription>
               Edite os dados e salve para criar um novo agendamento. O antigo
-              serÃ¡ cancelado com o motivo â€œConsulta reagendadaâ€.
+              será cancelado com o motivo “Consulta reagendada”.
             </DialogDescription>
           </DialogHeader>
 

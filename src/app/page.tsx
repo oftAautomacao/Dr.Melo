@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import SidebarLayout from "@/components/layout/sidebar-layout";
 import Image from "next/image";
@@ -123,7 +123,7 @@ interface CardData {
 }
 
 /* =============================================================
-   PÃGINA INICIAL MERGED (HOME + STATISTICS)
+   PÁGINA INICIAL MERGED (HOME + STATISTICS)
    ============================================================= */
 export default function Home() {
   const router = useRouter();
@@ -524,7 +524,7 @@ export default function Home() {
             const examesArray = Array.isArray(hours[time].exames) ? hours[time].exames : [];
             
             if (date < "2026-03-01" || selectedUnit !== "DRM" || !isParticular) {
-               appValue = 30; // Regra antiga / Plano de SaÃºde
+               appValue = 30; // Regra antiga / Plano de Saúde
                const count = examesArray.length;
                if (count > 0) {
                  examesArray.forEach((ex: string) => {
@@ -538,7 +538,7 @@ export default function Home() {
                    const conf = examConfig[exName];
                    let priceDrMelo = conf?.drMelo;
 
-                   // PreparaÃ§Ã£o para futura alteraÃ§Ã£o onde drMelo serÃ¡ separado por unidade
+                   // Preparação para futura alteração onde drMelo será separado por unidade
                    if (priceDrMelo && typeof priceDrMelo === 'object') {
                        priceDrMelo = priceDrMelo[unit] || 0;
                    }

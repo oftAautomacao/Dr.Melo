@@ -2,77 +2,73 @@ import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
-import { Home, CalendarDays, PlusCircle, CalendarX, Search, DollarSign, RotateCcw } from "lucide-react"; // Importando ícones
-import { MessageSquareText, Settings, BarChart, Download } from "lucide-react"; // Importando ícone de mensagem, configurações e download
-import WhatsAppIcon from '@/components/ui/whatsapp-icon';
+import { Home, CalendarDays, CalendarX, Search, DollarSign, RotateCcw } from "lucide-react";
+import { MessageSquareText, Settings } from "lucide-react";
+
 interface SidebarLayoutProps {
   children: ReactNode;
-  unit: 'DRM' | 'OFT/45' | null; // Adiciona a prop unit
-  bgColor?: string; // Optional background color class
+  unit: 'DRM' | 'OFT/45' | null;
+  bgColor?: string;
   contentClassName?: string;
 }
 
 const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor, contentClassName }) => {
-  console.log("SidebarLayout received unit prop:", unit);
   return (
-    <div className="flex min-h-screen">
-      {/* Sidebar - Changed background to dark blue and text to white */}
-      <div className="w-64 bg-blue-900 text-white flex flex-col">
-        <div className={`flex justify-center items-center border-b border-gray-700 ${unit === 'OFT/45' ? 'bg-white py-1' : 'bg-blue-900 p-2'}`}>
+    <div className="min-h-screen md:pl-64">
+      <aside className="w-full bg-blue-900 text-white md:fixed md:inset-y-0 md:left-0 md:z-40 md:w-64 md:overflow-y-auto">
+        <div className={`flex items-center justify-center border-b border-gray-700 ${unit === 'OFT/45' ? 'bg-white py-1' : 'bg-blue-900 p-2'}`}>
           {unit === 'OFT/45' ? (
             <Image src="/images/logo lobo.jpg" alt="OFT Logo" width={120} height={48} className="object-contain" />
           ) : (
             <Image src="/images/image2_semFundo.png" alt="Dr. Melo Logo" width={150} height={60} className="object-contain bg-blue-900" />
           )}
         </div>
-        <nav className="flex flex-col p-4 space-y-2">
-          <Link href="/" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <Home className="mr-3 h-5 w-5" /> {/* Ícone */}
+        <nav className="flex flex-col space-y-2 p-4">
+          <Link href="/" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
+            <Home className="mr-3 h-5 w-5" />
             Início
           </Link>
 
-          <Link href="/visualizar-agendamentos" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <CalendarDays className="mr-3 h-5 w-5" /> {/* Ícone */}
+          <Link href="/visualizar-agendamentos" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
+            <CalendarDays className="mr-3 h-5 w-5" />
             Agendamentos
           </Link>
-          <Link href="/cancelamentos" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <CalendarX className="mr-3 h-5 w-5" /> {/* Ícone */}
+          <Link href="/cancelamentos" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
+            <CalendarX className="mr-3 h-5 w-5" />
             Cancelamentos
           </Link>
-          <Link href="/enviar-mensagem" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <MessageSquareText className="mr-3 h-5 w-5" /> {/* Ícone de Mensagem */}
+          <Link href="/enviar-mensagem" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
+            <MessageSquareText className="mr-3 h-5 w-5" />
             Conversas
           </Link>
 
-          <Link href="/busca-horarios" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <Search className="mr-3 h-5 w-5" /> {/* Ícone de Busca */}
+          <Link href="/busca-horarios" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
+            <Search className="mr-3 h-5 w-5" />
             Busca de Horários
           </Link>
 
-          <Link href="/faturamento" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <DollarSign className="mr-3 h-5 w-5" /> {/* Ícone de Faturamento */}
+          <Link href="/faturamento" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
+            <DollarSign className="mr-3 h-5 w-5" />
             Faturamento
           </Link>
 
-          <Link href="/configuracoes" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-blue-800">
-            <Settings className="mr-3 h-5 w-5" /> {/* Ícone de Configurações */}
+          <Link href="/configuracoes" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
+            <Settings className="mr-3 h-5 w-5" />
             Configurações
           </Link>
 
           {unit === 'DRM' && (
-            <Link href="/migrar-origens" className="flex items-center px-4 py-3 rounded transition-colors hover:bg-yellow-900/30 text-yellow-300 font-semibold">
+            <Link href="/migrar-origens" className="flex items-center rounded px-4 py-3 font-semibold text-yellow-300 transition-colors hover:bg-yellow-900/30">
               <RotateCcw className="mr-3 h-5 w-5" />
               Base de Dados
             </Link>
           )}
-
         </nav>
-      </div>
+      </aside>
 
-      {/* Main Content */}
-      <div className={`flex-1 ${contentClassName || "p-6"} ${bgColor || 'bg-gray-100'}`}>
+      <main className={`min-h-screen ${contentClassName || 'p-6'} ${bgColor || 'bg-gray-100'}`}>
         {children}
-      </div>
+      </main>
     </div>
   );
 };

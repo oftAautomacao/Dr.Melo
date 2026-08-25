@@ -18,13 +18,13 @@ import { PatientSearchResult, PatientSearchSheet } from "@/components/patient-se
 import { UnidadeResultCard } from "./UnidadeResultCard";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { toast as showToast } from "@/hooks/use-toast";
 import { ptBR } from "date-fns/locale";
 import { format, getDay, parseISO, isValid, startOfDay } from "date-fns";
 import { 
   Search, Plus, X, Loader2, Clock, Sun, Moon, SunMoon, 
   AlertCircle, Calendar as CalendarIcon, CalendarCheck2, CheckCircle2, Copy, MapPin, CircleHelp, Pencil, List, Trash2
 } from "lucide-react";
-import { toast } from "sonner";
 
 const INCLUDED_IN_CONSULTA_OPTION = "__included_in_consulta__";
 const INTERNAL_LIST_STORAGE_KEY = "busca-horarios-internal-aliases-v1";
@@ -39,6 +39,17 @@ function buildDefaultSearchWeek() {
 }
 
 export default function BuscaHorarios() {
+  const toast = Object.assign(
+    (props: Parameters<typeof showToast>[0]) => showToast(props),
+    {
+      success: (title: string, description?: string) =>
+        showToast({ title, description }),
+      error: (description: string, title = "Erro") =>
+        showToast({ title, description, variant: "destructive" }),
+      message: (description: string, title?: string) =>
+        showToast({ title, description }),
+    }
+  );
   const {
     loading, searching, results,
     conveniosList, procedimentosList, unidadesList, subplanosMap, examesMetadata, feriadosData,
@@ -77,6 +88,8 @@ export default function BuscaHorarios() {
   const selectedDatesStrings = useMemo(() => {
     return selectedDateObjects.map(d => format(d, "yyyy-MM-dd"));
   }, [selectedDateObjects]);
+
+  const hasSearchResults = Array.isArray(results) && results.length > 0;
 
   const nextDiscoveryDate = useMemo(() => {
     // Find the soonest date for a unit not yet in results
@@ -285,7 +298,11 @@ export default function BuscaHorarios() {
   const handleLookupSearch = () => {
     const query = procSearch.trim();
     if (!query) {
-      toast.error("Digite um exame para usar a lupa.");
+      toast({
+        title: "Exame nao informado",
+        description: "Digite um exame para usar a lupa.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -304,12 +321,20 @@ export default function BuscaHorarios() {
     const aliases = parseAliasesText(editAliasesText);
 
     if (!canonical) {
-      toast.error("Preencha o nome principal do exame.");
+      toast({
+        title: "Nome principal obrigatorio",
+        description: "Preencha o nome principal do exame.",
+        variant: "destructive",
+      });
       return;
     }
 
     if (aliases.length === 0) {
-      toast.error("Adicione ao menos uma correspondencia.");
+      toast({
+        title: "Correspondencia obrigatoria",
+        description: "Adicione ao menos uma correspondencia.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -340,7 +365,9 @@ export default function BuscaHorarios() {
     setLookupMatches(refreshedMatches);
     fillLookupEditor(lookupQuery || procSearch, refreshedMatches[0] || nextEntry as any);
     setIsLookupEditMode(false);
-    toast.success("Lista interna atualizada.");
+    toast({
+      title: "Lista interna atualizada",
+    });
   };
 
   const handleDeleteLookupEntry = (entryId: string) => {
@@ -354,7 +381,9 @@ export default function BuscaHorarios() {
       setIsLookupEditMode(false);
     }
 
-    toast.success("Associacao removida da lista.");
+    toast({
+      title: "Associacao removida",
+    });
   };
 
   const handleExamInfoOpenChange = async (examRaw: string, open: boolean) => {
@@ -373,11 +402,62 @@ export default function BuscaHorarios() {
     }
   };
 
-  const copyExamExplanation = (examRaw: string) => {
+  const copyToClipboard = async (
+    text: string,
+    successTitle: string,
+    successDescription?: string
+  ) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const tempInput = document.createElement("textarea");
+        tempInput.value = text;
+        tempInput.setAttribute("readonly", "");
+        tempInput.style.position = "absolute";
+        tempInput.style.left = "-9999px";
+        document.body.appendChild(tempInput);
+        tempInput.select();
+        document.execCommand("copy");
+        document.body.removeChild(tempInput);
+      }
+
+      toast({
+        title: successTitle,
+        description: successDescription,
+      });
+      return true;
+    } catch {
+      toast({
+        title: "Erro ao copiar",
+        description: "Nao foi possivel copiar o conteudo.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const copyExamExplanation = async (examRaw: string) => {
     const explanation = examExplanationMap[examRaw];
     if (!explanation?.patientCopy) return;
-    navigator.clipboard.writeText(explanation.patientCopy);
-    toast.success("Explicacao copiada.");
+    await copyToClipboard(explanation.patientCopy, "Explicacao copiada");
+  };
+
+  const handleCopyWhatsappResponse = async () => {
+    if (!results || results.length === 0) {
+      toast({
+        title: "Sem resposta para copiar",
+        description: "Busque os horarios antes de copiar a mensagem.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await copyToClipboard(
+      gerarResposta(results),
+      "Resposta copiada",
+      "A mensagem do WhatsApp foi copiada."
+    );
   };
 
   const handlePatientSearchSelect = (record: PatientSearchResult) => {
@@ -400,25 +480,46 @@ export default function BuscaHorarios() {
   return (
     <div className="max-w-6xl mx-auto space-y-4">
       {/* Header */}
-      <div className="relative flex items-center justify-between bg-card px-6 py-3.5 rounded-xl shadow-sm border [&>div:last-child]:hidden">
-        <button
-          type="button"
-          onClick={() => setIsPatientSearchOpen(true)}
-          className="absolute right-6 top-1/2 -translate-y-1/2 inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 p-2 text-sky-700 transition-colors hover:bg-sky-100 hover:text-sky-800"
-          title="Buscar paciente agendado"
-          aria-label="Buscar paciente agendado"
-        >
-          <CalendarCheck2 className="h-4 w-4" />
-        </button>
-        <div className="flex items-center gap-3">
-          <div className="bg-primary p-2 rounded-lg">
-            <Search className="h-5 w-5 text-primary-foreground" />
+      <div className="sticky top-4 z-30">
+        <div className="flex flex-col gap-3 rounded-xl border bg-card px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between md:px-6 md:py-3.5">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary p-2 rounded-lg">
+              <Search className="h-5 w-5 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-base font-black text-foreground uppercase tracking-tight">Busca de Horarios</h1>
+              <div className="text-[10px] text-primary font-black uppercase tracking-widest">Calendario ativo</div>
+            </div>
           </div>
-          <h1 className="text-base font-black text-foreground uppercase tracking-tight">Busca de Horários</h1>
+          <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            <button
+              onClick={handleLimpar}
+              disabled={searching}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-gray-500 transition-all hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50"
+            >
+              <X className="h-4 w-4" />
+              Limpar
+            </button>
+            <button
+              onClick={handleBuscar}
+              disabled={searching || (!convenio && procedimentos.length === 0 && selectedUnidades.length === 0)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-[11px] font-black uppercase tracking-wide text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:bg-muted disabled:text-muted-foreground"
+            >
+              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {searching ? "Buscando..." : "Buscar"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsPatientSearchOpen(true)}
+              className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 p-2 text-sky-700 transition-colors hover:bg-sky-100 hover:text-sky-800"
+              title="Buscar paciente agendado"
+              aria-label="Buscar paciente agendado"
+            >
+              <CalendarCheck2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-        <div className="text-[10px] text-primary font-black uppercase tracking-widest bg-primary/10 px-2 py-1 rounded">CALENDÁRIO ATIVO</div>
       </div>
-
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
         {/* Left Column: Filters */}
         <div className="md:col-span-4 space-y-3">
@@ -1015,25 +1116,6 @@ export default function BuscaHorarios() {
             )}
           </div>
 
-          <div className="flex gap-2">
-            <button
-              onClick={handleLimpar}
-              disabled={searching}
-              className="flex-1 flex items-center justify-center gap-2 py-4 rounded-xl font-black text-xs text-gray-500 transition-all uppercase tracking-widest
-                bg-gray-100 hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50"
-            >
-              <X className="h-4 w-4" /> LIMPAR
-            </button>
-            <button
-              onClick={handleBuscar}
-              disabled={searching || (!convenio && procedimentos.length === 0 && selectedUnidades.length === 0)}
-              className="flex-[2] flex items-center justify-center gap-2 py-4 rounded-xl font-black text-xs text-primary-foreground transition-all uppercase tracking-widest
-                bg-primary hover:bg-primary/90 shadow-xl shadow-primary/10 disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none active:scale-[0.98]"
-            >
-              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              {searching ? "BUSCANDO..." : "BUSCAR"}
-            </button>
-          </div>
         </div>
 
         {/* Right Column: Results */}
@@ -1071,14 +1153,13 @@ export default function BuscaHorarios() {
               </div>
               <div className="flex justify-center pt-4">
                 <button
-                  onClick={() => {
-                    const text = gerarResposta(results);
-                    navigator.clipboard.writeText(text);
-                    alert("✓ Resposta copiada!");
-                  }}
-                  className="inline-flex items-center gap-2 px-8 py-4 bg-emerald-600 text-white rounded-full text-xs font-black uppercase hover:bg-emerald-700 transition-all shadow-xl shadow-emerald-100 active:scale-95"
+                  type="button"
+                  onClick={handleCopyWhatsappResponse}
+                  disabled={!hasSearchResults}
+                  className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-8 py-4 text-xs font-black uppercase text-white transition-all hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-50"
                 >
-                  <Copy className="h-4 w-4" /> Copiar Resposta WhatsApp
+                  <Copy className="h-4 w-4" />
+                  Copiar Resposta WhatsApp
                 </button>
               </div>
             </div>

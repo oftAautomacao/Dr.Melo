@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ref, onValue, get, type DataSnapshot } from "firebase/database";
+import { doc, getDoc } from "firebase/firestore";
 import { getDatabaseInstance } from "@/lib/firebase";
 import { parse as dateFnsParse, format as dateFnsFormat, isValid as dateFnsIsValid } from 'date-fns';
 
@@ -17,6 +18,7 @@ import {
   Clock,
   FileText,
   ClipboardList,
+  MessageCircleMore,
   MessageSquare,
   Phone,
   FileEdit,
@@ -54,7 +56,11 @@ import { getPhoneVariants, normalizePatientOrigin } from "@/lib/patient-origin";
 import { categorizePatientObservations } from "@/ai/flows/categorize-patient-observations";
 import { fetchHolidays, isHoliday as checkIsHoliday, type Holiday as HolidayType } from '@/lib/holidays';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { extractAppointmentFromImageAction } from "@/app/actions/ai-analysis";
+import {
+  extractAppointmentFromConversationAction,
+  extractAppointmentFromImageAction,
+} from "@/app/actions/ai-analysis";
+import { getFirestoreInstance } from "@/lib/firebase";
 
 import type { CalendarAppointment } from "./appointment-calendar"; // Corrected import path
 interface PatientFormProps {
@@ -63,6 +69,11 @@ interface PatientFormProps {
   initialData?: CalendarAppointment | null | undefined; // Added initialData prop
   firebaseBase?: string;
   onRescheduleComplete?: () => void;
+  onPreviewChange?: (preview: {
+    dataAgendamento?: string;
+    local?: string;
+    localLabel?: string;
+  }) => void;
 }
 
 interface Unidade {
@@ -145,10 +156,85 @@ function formatExameName(exameId: string, exameDetails: any): string {
   return exameId.replace(/_/g, ' ').split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
 }
 
+function normalizeLookupValue(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function findBestOptionMatch<T extends { id: string; nome: string }>(
+  rawValue: string,
+  options: T[]
+): T | null {
+  const query = normalizeLookupValue(rawValue);
+  if (!query) return null;
+
+  let bestMatch: T | null = null;
+  let bestScore = 0;
+  const queryTokens = query.split(" ").filter(token => token.length > 1);
+
+  options.forEach((option) => {
+    const optionId = normalizeLookupValue(option.id);
+    const optionName = normalizeLookupValue(option.nome);
+
+    if (query === optionId || query === optionName) {
+      bestMatch = option;
+      bestScore = Number.MAX_SAFE_INTEGER;
+      return;
+    }
+
+    let score = 0;
+
+    if (optionName.includes(query) || query.includes(optionName)) score += 8;
+    if (optionId.includes(query) || query.includes(optionId)) score += 7;
+
+    queryTokens.forEach((token) => {
+      if (optionName.includes(token)) score += 2;
+      if (optionId.includes(token)) score += 2;
+    });
+
+    if (score > bestScore) {
+      bestMatch = option;
+      bestScore = score;
+    }
+  });
+
+  return bestScore >= 2 ? bestMatch : null;
+}
+
+function extractConversationHistoryFromDocument(data: any): { role: string; content: string }[] {
+  if (!data || typeof data !== "object") return [];
+
+  let history: any[] = [];
+
+  if (Array.isArray((data as any).glbHistoricoDaConversa)) {
+    history = (data as any).glbHistoricoDaConversa;
+  } else {
+    for (const key of Object.keys(data)) {
+      if (Array.isArray((data as any)[key])) {
+        history = (data as any)[key];
+        break;
+      }
+    }
+  }
+
+  return history
+    .filter((message) => message && (message.role === "user" || message.role === "assistant"))
+    .map((message) => ({
+      role: message.role,
+      content: typeof message.content === "string"
+        ? message.content
+        : JSON.stringify(message.content ?? ""),
+    }));
+}
+
 
 import { ENVIRONMENT } from "../../ambiente";
 
-export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, defaultValues, initialData, firebaseBase, onRescheduleComplete }) => {
+export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, defaultValues, initialData, firebaseBase, onRescheduleComplete, onPreviewChange }) => {
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
@@ -166,6 +252,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
   const [sendSecretaryMessageOnCreate, setSendSecretaryMessageOnCreate] = useState(false);
   const [sendPatientMessage, setSendPatientMessage] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [isConversationAutofilling, setIsConversationAutofilling] = useState(false);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [isClient, setIsClient] = useState(false);
@@ -196,7 +283,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         dataNascimento: undefined,
         dataAgendamento: undefined,
         horario: "",
-        convenio: "",
+        convenio: "Particular",
         exames: [],
         motivacao: "",
         local: "",
@@ -213,6 +300,25 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
 
   const { reset } = form;
 
+  useEffect(() => {
+    if (conveniosList.length === 0) return;
+
+    const currentConvenio = String(form.getValues("convenio") || "").trim();
+    if (currentConvenio !== "" && currentConvenio !== "Particular") return;
+
+    const particularItem = conveniosList.find(c =>
+      c.id.toLowerCase() === "particular" ||
+      c.nome.toLowerCase() === "particular"
+    );
+
+    if (particularItem) {
+      form.setValue("convenio", particularItem.id, {
+        shouldDirty: false,
+        shouldValidate: true,
+      });
+    }
+  }, [conveniosList, form]);
+
   // Removed redundant useEffect to avoid double resets. The logic is handled by the comprehensive effect below.
 
 
@@ -223,7 +329,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     form.setValue("dataNascimento", "" as any);
     form.setValue("telefone", "");
     form.setValue("horario", "");
-    form.setValue("convenio", "");
+    form.setValue("convenio", "Particular");
     form.setValue("exames", []);
     form.setValue("motivacao", "");
     form.setValue("local", "");
@@ -232,6 +338,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     setAiResult(null);
   };
   const dataAgendadaValue = form.watch("dataAgendamento");
+  const selectedLocalValue = form.watch("local");
 
   // Efeito para aplicar defaultValues/initialData SOMENTE DEPOIS que as unidades carregarem
   // imports garantidos:
@@ -342,6 +449,31 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     }
   }, [defaultValues, initialData, reset, unidadesList, conveniosList]);
 
+  useEffect(() => {
+    if (!onPreviewChange) return;
+
+    let formattedDate: string | undefined;
+    if (dataAgendadaValue instanceof Date && dateFnsIsValid(dataAgendadaValue)) {
+      formattedDate = dateFnsFormat(dataAgendadaValue, "yyyy-MM-dd");
+    } else if (typeof dataAgendadaValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dataAgendadaValue)) {
+      formattedDate = dataAgendadaValue;
+    }
+
+    const localId = String(selectedLocalValue || "").trim() || undefined;
+    const matchedUnit = localId
+      ? unidadesList.find((unit) => unit.id === localId)
+      : undefined;
+    const localLabel = localId
+      ? matchedUnit?.nome ?? localId.replace(/([A-Z])/g, " $1").trim()
+      : undefined;
+
+    onPreviewChange({
+      dataAgendamento: formattedDate,
+      local: localId,
+      localLabel,
+    });
+  }, [dataAgendadaValue, onPreviewChange, selectedLocalValue, unidadesList]);
+
 
   const selectedPatientPhoneNumber = form.watch("telefone"); // Watching the phone field for auto-fill button
 
@@ -399,6 +531,166 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     // form.setValue('motivacao', 'Motivação Auto-preenchida');
 
     toast({ title: "Auto Preencher (Placeholder)", description: "A funcionalidade de auto preenchimento precisa ser implementada." });
+  };
+
+  const applyConversationAutofill = (result: Awaited<ReturnType<typeof extractAppointmentFromConversationAction>>) => {
+    if (!result) return 0;
+
+    let appliedFields = 0;
+
+    if (result.nomePaciente) {
+      form.setValue("nomePaciente", result.nomePaciente, { shouldDirty: true, shouldValidate: true });
+      appliedFields += 1;
+    }
+
+    if (result.cpf) {
+      form.setValue("cpf", result.cpf.replace(/\D/g, ""), { shouldDirty: true, shouldValidate: true });
+      appliedFields += 1;
+    }
+
+    if (result.dataNascimento) {
+      const parsedBirthDate = dateFnsParse(result.dataNascimento, "dd/MM/yyyy", new Date());
+      if (dateFnsIsValid(parsedBirthDate)) {
+        form.setValue("dataNascimento", parsedBirthDate, { shouldDirty: true, shouldValidate: true });
+        appliedFields += 1;
+      }
+    }
+
+    if (result.dataAgendamento) {
+      const parsedAppointmentDate = dateFnsParse(result.dataAgendamento, "yyyy-MM-dd", new Date());
+      if (dateFnsIsValid(parsedAppointmentDate)) {
+        form.setValue("dataAgendamento", parsedAppointmentDate, { shouldDirty: true, shouldValidate: true });
+        appliedFields += 1;
+      }
+    }
+
+    if (result.horario) {
+      form.setValue("horario", result.horario, { shouldDirty: true, shouldValidate: true });
+      appliedFields += 1;
+    }
+
+    if (result.motivacao) {
+      form.setValue("motivacao", result.motivacao, { shouldDirty: true, shouldValidate: true });
+      appliedFields += 1;
+    }
+
+    if (result.observacoes) {
+      form.setValue("observacoes", result.observacoes, { shouldDirty: true, shouldValidate: true });
+      appliedFields += 1;
+    }
+
+    if (result.convenio && conveniosList.length > 0) {
+      const matchedConvenio = findBestOptionMatch(result.convenio, conveniosList);
+      if (matchedConvenio) {
+        form.setValue("convenio", matchedConvenio.id, { shouldDirty: true, shouldValidate: true });
+        appliedFields += 1;
+      }
+    }
+
+    if (result.unidade && unidadesList.length > 0) {
+      const matchedUnit = findBestOptionMatch(result.unidade, unidadesList);
+      if (matchedUnit) {
+        form.setValue("local", matchedUnit.id, { shouldDirty: true, shouldValidate: true });
+        appliedFields += 1;
+      }
+    }
+
+    if (result.exames.length > 0 && examesList.length > 0) {
+      const matchedExamIds = Array.from(
+        new Set(
+          result.exames
+            .map((examName) => findBestOptionMatch(examName, examesList)?.id)
+            .filter((examId): examId is string => Boolean(examId))
+        )
+      );
+
+      if (matchedExamIds.length > 0) {
+        form.setValue("exames", matchedExamIds, { shouldDirty: true, shouldValidate: true });
+        appliedFields += 1;
+      }
+    }
+
+    return appliedFields;
+  };
+
+  const handleConversationAutoFill = async (rawPhone?: string) => {
+    const cleanPhone = String(rawPhone ?? selectedPatientPhoneNumber ?? "").replace(/\D/g, "");
+    if (cleanPhone.length < 10) {
+      toast({
+        title: "Telefone incompleto",
+        description: "Digite um telefone valido para buscar a conversa do paciente.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsConversationAutofilling(true);
+
+    try {
+      const effectiveFirebaseBase = firebaseBase || getFirebasePathBase();
+      const historyKey =
+        effectiveFirebaseBase === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
+
+      let conversationHistory: { role: string; content: string }[] = [];
+
+      for (const variant of getPhoneVariants(cleanPhone)) {
+        const chatRef = doc(getFirestoreInstance(ENVIRONMENT), historyKey, variant);
+        const snapshot = await getDoc(chatRef);
+
+        if (!snapshot.exists()) continue;
+
+        conversationHistory = extractConversationHistoryFromDocument(snapshot.data());
+        if (conversationHistory.length > 0) break;
+      }
+
+      if (conversationHistory.length === 0) {
+        toast({
+          title: "Conversa nao encontrada",
+          description: "Nao foi encontrada conversa no Firestore para esse telefone.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const result = await extractAppointmentFromConversationAction({
+        history: conversationHistory,
+      });
+
+      if (!result) {
+        toast({
+          title: "Falha na analise",
+          description: "A IA nao conseguiu interpretar a conversa do paciente.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const appliedFields = applyConversationAutofill(result);
+
+      if (appliedFields === 0) {
+        toast({
+          title: "Nenhum campo preenchido",
+          description: "A conversa foi encontrada, mas nao havia dados confirmados suficientes para preencher o formulario.",
+          variant: "default",
+        });
+        return;
+      }
+
+      const warningText = result.warnings.filter(Boolean).slice(0, 2).join(" ");
+      toast({
+        title: "Formulario preenchido pela conversa",
+        description: warningText || "Revise os dados antes de salvar o agendamento.",
+      });
+    } catch (error) {
+      console.error("PATIENT_FORM: Falha ao preencher pela conversa:", error);
+      toast({
+        title: "Erro ao buscar conversa",
+        description: "Nao foi possivel preencher os dados a partir da conversa do paciente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsConversationAutofilling(false);
+    }
   };
 
 
@@ -926,23 +1218,23 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6" onPaste={handleImagePaste}>
 
             {/* Seção de Extração IA por Print */}
-            <div className="mb-6 p-4 border-2 border-dashed border-blue-200 rounded-xl bg-blue-50/30 hover:bg-blue-50/50 transition-all group relative overflow-hidden">
+            <div className="mb-4 p-3 border border-dashed border-blue-200 rounded-xl bg-blue-50/40 transition-all group relative overflow-hidden">
               <div className="absolute top-0 right-0 p-1 opacity-5 group-hover:opacity-10 transition-opacity pointer-events-none">
-                <BrainCircuit className="h-16 w-16 text-blue-600" />
+                <BrainCircuit className="h-12 w-12 text-blue-600" />
               </div>
 
-              <div className="flex flex-col md:flex-row items-center gap-4">
-                <div className="flex-1 space-y-1.5 text-center md:text-left">
-                  <div className="flex items-center gap-2 justify-center md:justify-start">
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1 space-y-1 text-left">
+                  <div className="flex items-center gap-2">
                     <div className="p-1.5 bg-blue-600 rounded-md">
-                      <Sparkles className="h-4 w-4 text-white" />
+                      <Sparkles className="h-3.5 w-3.5 text-white" />
                     </div>
-                    <h3 className="text-base font-bold text-blue-900 leading-none">Agendamento Inteligente</h3>
+                    <h3 className="text-sm font-bold text-blue-900 leading-none">Agendamento Inteligente</h3>
                   </div>
-                  <p className="text-xs text-blue-700/80 font-medium">
-                    Cole seu print aqui: <kbd className="px-1 py-0.5 rounded bg-blue-100 border border-blue-200 text-blue-800 text-[10px] font-bold">Ctrl+V</kbd>
+                  <p className="text-[11px] text-blue-700/85 font-medium">
+                    Cole o print aqui com <kbd className="px-1 py-0.5 rounded bg-blue-100 border border-blue-200 text-blue-800 text-[10px] font-bold">Ctrl+V</kbd>
                   </p>
-                  <ul className="text-[10px] text-blue-600/70 space-y-0.5 mt-2 flex flex-wrap gap-x-3 justify-center md:justify-start list-none">
+                  <ul className="hidden">
                     <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Nome</li>
                     <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>Nascimento</li>
                     <li className="flex items-center gap-1 italic"><span className="h-0.5 w-0.5 bg-blue-400 rounded-full"></span>CPF</li>
@@ -953,17 +1245,17 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                   </ul>
                 </div>
 
-                <div className="w-full md:w-32 h-20 bg-white rounded-lg border border-blue-100 shadow-sm flex items-center justify-center relative overflow-hidden group/img">
+                <div className="h-16 w-24 shrink-0 bg-white rounded-lg border border-blue-100 shadow-sm flex items-center justify-center relative overflow-hidden group/img">
                   {isExtracting ? (
                     <div className="flex flex-col items-center gap-1">
-                      <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
+                      <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
                       <span className="text-[9px] font-bold text-blue-600 uppercase">Analisando...</span>
                     </div>
                   ) : imagePreview ? (
                     <img src={imagePreview} alt="Preview" className="w-full h-full object-cover opacity-80 group-hover/img:opacity-100 transition-opacity" />
                   ) : (
                     <div className="flex flex-col items-center gap-1 opacity-30">
-                      <ImageIcon className="h-6 w-6 text-blue-400" />
+                      <ImageIcon className="h-5 w-5 text-blue-400" />
                       <span className="text-[8px] font-bold text-blue-400 uppercase">Aguardando Print</span>
                     </div>
                   )}
@@ -976,313 +1268,343 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                 </div>
               )}
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Row 1: Name, Date of Birth, Phone */}
-              <FormField
-                control={form.control}
-                name="nomePaciente"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" />Nome do Paciente</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Gabriel Ferreira da Silva" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="dataNascimento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><CalendarDays className="mr-2 h-4 w-4" />Data de Nascimento</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="date"
-                        {...field}
-                        value={field.value instanceof Date && dateFnsIsValid(field.value) ? dateFnsFormat(field.value, 'yyyy-MM-dd') : (typeof field.value === 'string' ? field.value : '')}
-                        onChange={(e) => {
-                          const dateValue = e.target.value;
-                          const parsedDate = dateFnsParse(dateValue, 'yyyy-MM-dd', new Date());
-                          if (dateFnsIsValid(parsedDate)) {
-                            field.onChange(parsedDate);
-                          } else {
-                            field.onChange(dateValue);
-                          }
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="telefone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" />Telefone do Paciente</FormLabel>
-                    <FormControl>
-                      <Input type="tel" placeholder="Ex: 5521998252849" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                    {field.value && field.value.length >= 10 && !/^55\d{10,11}$/.test(field.value) && (
-                      <p className="text-xs text-amber-600 mt-1">
-                        Número fora do padrão (55 + DDD...).
-                      </p>
-                    )}
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="origem"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4" />Origem</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="telefone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><Phone className="mr-2 h-4 w-4" />Telefone do Paciente</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione a origem" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="Google">Google</SelectItem>
-                        <SelectItem value="Instagram">Instagram</SelectItem>
-                        <SelectItem value="Desconhecido">Desconhecido</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {/* Row 2: Scheduled Date, Time */}
-              <FormField
-                control={form.control}
-                name="dataAgendamento"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><CalendarDays className="mr-2 h-4 w-4" />Data Agendada</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="date"
-                        {...field}
-                        value={field.value instanceof Date && dateFnsIsValid(field.value) ? dateFnsFormat(field.value, 'yyyy-MM-dd') : (typeof field.value === 'string' ? field.value : '')}
-                        onChange={(e) => {
-                          const dateValue = e.target.value;
-                          const parsedDate = dateFnsParse(dateValue, 'yyyy-MM-dd', new Date());
-                          if (dateFnsIsValid(parsedDate)) {
-                            field.onChange(parsedDate);
-                          } else {
-                            field.onChange(dateValue);
-                          }
-                        }}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                    {selectedDateIsHoliday && (
-                      <Alert variant="destructive" className="mt-2">
-                        <AlertTitle>Atenção! A data selecionada é feriado de {selectedDateIsHoliday.name}.</AlertTitle>
-                        <AlertDescription>
-                          Não é possível agendar nesta data.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="horario"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" />Horário</FormLabel>
-                    <FormControl>
-                      <Input type="time" placeholder="Ex: 11:00" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {/* Row 3: Location, Convenio */}
-              <FormField
-                control={form.control}
-                name="local"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center">
-                      {getFirebasePathBase() === 'OFT/45' ? (
-                        <Stethoscope className="mr-2 h-4 w-4" />
-                      ) : (
-                        <Building className="mr-2 h-4 w-4" />
-                      )}
-                      {getFirebasePathBase() === 'OFT/45' ? 'Médicos' : 'Local (Unidade)'}
-                    </FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue
-                            placeholder={
-                              getFirebasePathBase() === 'OFT/45'
-                                ? "Selecione o médico" // This was already updated correctly in a previous step.
-                                : isLoadingUnidades
-                                  ? "Carregando unidades..."
-                                  : unidadesList.length === 0
-                                    ? "Nenhuma unidade disponível"
-                                    : "Selecione a unidade"
-                            }
+                        <div className="relative">
+                          <Input
+                            type="tel"
+                            placeholder="Ex: 5521998252849"
+                            className="pr-40"
+                            {...field}
+                            value={field.value ?? ""}
+                            onChange={(event) => {
+                              field.onChange(event.target.value.replace(/\D/g, ""));
+                            }}
                           />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {isLoadingUnidades ? (
-                          <SelectItem value="loading" disabled>Carregando...</SelectItem>
-                        ) : unidadesList.length === 0 ? (
-                          <SelectItem value="no-units" disabled>Nenhuma unidade configurada.</SelectItem>
-                        ) : (
-                          unidadesList.map(unidade => (
-                            <SelectItem key={unidade.id} value={unidade.id}>
-                              {unidade.nome}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                    {unidadesList.length === 0 && !isLoadingUnidades && (
-                      <p className="text-sm text-destructive mt-1">
-                        A lista de unidades está vazia. Verifique a configuração no Firebase.
-                      </p>
-                    )}
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="convenio"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><HeartPulse className="mr-2 h-4 w-4" />Convênio</FormLabel>
-                    <Select
-                      onValueChange={field.onChange}
-                      value={field.value}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue
-                            placeholder={
-                              isLoadingConvenios
-                                ? "Carregando convênios..."
-                                : (conveniosList.length === 0
-                                  ? "Nenhum convênio disponível"
-                                  : "Selecione o convênio")
-                            }
-                          />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {isLoadingConvenios ? (
-                          <SelectItem value="loading" disabled>Carregando...</SelectItem>
-                        ) : conveniosList.length === 0 ? (
-                          <SelectItem value="no-convenios" disabled>Nenhum convênio configurado.</SelectItem>
-                        ) : (
-                          conveniosList.map(convenio => (
-                            <SelectItem key={convenio.id} value={convenio.id}>
-                              {convenio.nome}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                    {conveniosList.length === 0 && !isLoadingConvenios && (
-                      <p className="text-sm text-destructive mt-1">
-                        A lista de convênios está vazia. Verifique a configuração no Firebase.
-                      </p>
-                    )}
-                  </FormItem>
-                )}
-              />
-              {/* Row 4: Motivation */}
-              <FormField
-                control={form.control}
-                name="motivacao"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" />Motivação</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Ex: Consulta de rotina" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <FormField
-                control={form.control}
-                name="exames"
-                render={() => (
-                  <FormItem>
-                    <FormLabel className="flex items-center"><ClipboardList className="mr-2 h-4 w-4" />Exames</FormLabel>
-                    {isLoadingExames ? (
-                      <div className="flex items-center space-x-2">
-                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                        <p className="text-muted-foreground">Carregando exames...</p>
-                      </div>
-                    ) : examesList.length === 0 ? (
-                      <p className="text-sm text-destructive mt-1">Nenhum exame configurado. Verifique o Firebase.</p>
-                    ) : (
-                      <div className="h-40 w-full rounded-md border p-4 overflow-y-auto">
-                        <div className="space-y-2">
-                          {examesList.map((exame) => (
-                            <FormField
-                              key={exame.id}
-                              control={form.control}
-                              name="exames"
-                              render={({ field: examesField }) => {
-                                const currentExames = normalizeSelectedExames(examesField.value);
-
-                                return (
-                                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                                    <FormControl>
-                                      <Checkbox
-                                        checked={currentExames.includes(exame.id)}
-                                        onCheckedChange={(checked) => {
-                                          if (checked) {
-                                            examesField.onChange([...currentExames, exame.id]);
-                                          } else {
-                                            examesField.onChange(
-                                              currentExames.filter((value) => value !== exame.id)
-                                            );
-                                          }
-                                        }}
-                                      />
-                                    </FormControl>
-                                    <FormLabel className="font-normal text-sm">
-                                      {exame.nome}
-                                    </FormLabel>
-                                  </FormItem>
-                                );
-                              }}
-                            />
-                          ))}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-1 top-1/2 h-8 -translate-y-1/2 gap-1 px-2 text-[11px] font-medium text-blue-600/80 hover:bg-blue-100 hover:text-blue-700"
+                            onClick={() => void handleConversationAutoFill(field.value)}
+                            disabled={isConversationAutofilling || !field.value}
+                            title="Preencher pela conversa"
+                            aria-label="Preencher pela conversa"
+                          >
+                            {isConversationAutofilling ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <MessageCircleMore className="h-4 w-4" />
+                            )}
+                            <span>buscar na conversa</span>
+                          </Button>
                         </div>
-                      </div>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      </FormControl>
+                      <FormMessage />
+                      {field.value && field.value.length >= 10 && !/^55\d{10,11}$/.test(field.value) && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          Número fora do padrão (55 + DDD...).
+                        </p>
+                      )}
+                    </FormItem>
+                  )}
+                />
 
+                <FormField
+                  control={form.control}
+                  name="nomePaciente"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><User className="mr-2 h-4 w-4" />Nome do Paciente</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: Gabriel Ferreira da Silva" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="dataAgendamento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><CalendarDays className="mr-2 h-4 w-4" />Data Agendada</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          {...field}
+                          value={field.value instanceof Date && dateFnsIsValid(field.value) ? dateFnsFormat(field.value, 'yyyy-MM-dd') : (typeof field.value === 'string' ? field.value : '')}
+                          onChange={(e) => {
+                            const dateValue = e.target.value;
+                            const parsedDate = dateFnsParse(dateValue, 'yyyy-MM-dd', new Date());
+                            if (dateFnsIsValid(parsedDate)) {
+                              field.onChange(parsedDate);
+                            } else {
+                              field.onChange(dateValue);
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                      {selectedDateIsHoliday && (
+                        <Alert variant="destructive" className="mt-2">
+                          <AlertTitle>Atenção! A data selecionada é feriado de {selectedDateIsHoliday.name}.</AlertTitle>
+                          <AlertDescription>
+                            Não é possível agendar nesta data.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="motivacao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><MessageSquare className="mr-2 h-4 w-4" />Motivação</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Ex: Consulta de rotina" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="exames"
+                  render={() => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><ClipboardList className="mr-2 h-4 w-4" />Exames</FormLabel>
+                      {isLoadingExames ? (
+                        <div className="flex items-center space-x-2">
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          <p className="text-muted-foreground">Carregando exames...</p>
+                        </div>
+                      ) : examesList.length === 0 ? (
+                        <p className="text-sm text-destructive mt-1">Nenhum exame configurado. Verifique o Firebase.</p>
+                      ) : (
+                        <div className="h-48 w-full rounded-md border p-4 overflow-y-auto">
+                          <div className="space-y-2">
+                            {examesList.map((exame) => (
+                              <FormField
+                                key={exame.id}
+                                control={form.control}
+                                name="exames"
+                                render={({ field: examesField }) => {
+                                  const currentExames = normalizeSelectedExames(examesField.value);
+
+                                  return (
+                                    <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                      <FormControl>
+                                        <Checkbox
+                                          checked={currentExames.includes(exame.id)}
+                                          onCheckedChange={(checked) => {
+                                            if (checked) {
+                                              examesField.onChange([...currentExames, exame.id]);
+                                            } else {
+                                              examesField.onChange(
+                                                currentExames.filter((value) => value !== exame.id)
+                                              );
+                                            }
+                                          }}
+                                        />
+                                      </FormControl>
+                                      <FormLabel className="font-normal text-sm">
+                                        {exame.nome}
+                                      </FormLabel>
+                                    </FormItem>
+                                  );
+                                }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
               <div className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="origem"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><Globe className="mr-2 h-4 w-4" />Origem</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione a origem" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="Google">Google</SelectItem>
+                          <SelectItem value="Instagram">Instagram</SelectItem>
+                          <SelectItem value="Desconhecido">Desconhecido</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="dataNascimento"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><CalendarDays className="mr-2 h-4 w-4" />Data de Nascimento</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          {...field}
+                          value={field.value instanceof Date && dateFnsIsValid(field.value) ? dateFnsFormat(field.value, 'yyyy-MM-dd') : (typeof field.value === 'string' ? field.value : '')}
+                          onChange={(e) => {
+                            const dateValue = e.target.value;
+                            const parsedDate = dateFnsParse(dateValue, 'yyyy-MM-dd', new Date());
+                            if (dateFnsIsValid(parsedDate)) {
+                              field.onChange(parsedDate);
+                            } else {
+                              field.onChange(dateValue);
+                            }
+                          }}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="horario"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" />Horário</FormLabel>
+                      <FormControl>
+                        <Input type="time" placeholder="Ex: 11:00" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="convenio"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><HeartPulse className="mr-2 h-4 w-4" />Convênio</FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                isLoadingConvenios
+                                  ? "Carregando convênios..."
+                                  : (conveniosList.length === 0
+                                    ? "Nenhum convênio disponível"
+                                    : "Selecione o convênio")
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {isLoadingConvenios ? (
+                            <SelectItem value="loading" disabled>Carregando...</SelectItem>
+                          ) : conveniosList.length === 0 ? (
+                            <SelectItem value="no-convenios" disabled>Nenhum convênio configurado.</SelectItem>
+                          ) : (
+                            conveniosList.map(convenio => (
+                              <SelectItem key={convenio.id} value={convenio.id}>
+                                {convenio.nome}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                      {conveniosList.length === 0 && !isLoadingConvenios && (
+                        <p className="text-sm text-destructive mt-1">
+                          A lista de convênios está vazia. Verifique a configuração no Firebase.
+                        </p>
+                      )}
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="local"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center">
+                        {getFirebasePathBase() === 'OFT/45' ? (
+                          <Stethoscope className="mr-2 h-4 w-4" />
+                        ) : (
+                          <Building className="mr-2 h-4 w-4" />
+                        )}
+                        {getFirebasePathBase() === 'OFT/45' ? 'Médicos' : 'Local (Unidade)'}
+                      </FormLabel>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue
+                              placeholder={
+                                getFirebasePathBase() === 'OFT/45'
+                                  ? "Selecione o médico"
+                                  : isLoadingUnidades
+                                    ? "Carregando unidades..."
+                                    : unidadesList.length === 0
+                                      ? "Nenhuma unidade disponível"
+                                      : "Selecione a unidade"
+                              }
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {isLoadingUnidades ? (
+                            <SelectItem value="loading" disabled>Carregando...</SelectItem>
+                          ) : unidadesList.length === 0 ? (
+                            <SelectItem value="no-units" disabled>Nenhuma unidade configurada.</SelectItem>
+                          ) : (
+                            unidadesList.map(unidade => (
+                              <SelectItem key={unidade.id} value={unidade.id}>
+                                {unidade.nome}
+                              </SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                      {unidadesList.length === 0 && !isLoadingUnidades && (
+                        <p className="text-sm text-destructive mt-1">
+                          A lista de unidades está vazia. Verifique a configuração no Firebase.
+                        </p>
+                      )}
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={form.control}
                   name="cpf"

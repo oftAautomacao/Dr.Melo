@@ -1,6 +1,8 @@
 "use server";
 
+import { ai } from "@/ai/genkit";
 import { openaiService, ChatMessage } from "@/lib/ai/openai-service";
+import { z } from "zod";
 
 export interface SourceAnalysisResult {
     source: string;
@@ -79,6 +81,118 @@ export interface AppointmentExtractionResult {
     horario?: string;
     telefone?: string;
     convenio?: string;
+}
+
+const confidenceSchema = z.enum(["alta", "média", "baixa"]);
+
+const conversationAppointmentExtractionSchema = z.object({
+    nomePaciente: z.string().nullable(),
+    dataNascimento: z.string().nullable(),
+    cpf: z.string().nullable(),
+    unidade: z.string().nullable(),
+    dataAgendamento: z.string().nullable(),
+    horario: z.string().nullable(),
+    convenio: z.string().nullable(),
+    motivacao: z.string().nullable(),
+    exames: z.array(z.string()).default([]),
+    observacoes: z.string().nullable(),
+    confidence: confidenceSchema,
+    warnings: z.array(z.string()).default([]),
+});
+
+export type ConversationAppointmentExtractionResult = z.infer<
+    typeof conversationAppointmentExtractionSchema
+>;
+
+function hasGeminiApiKey() {
+    return Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
+}
+
+function hasOpenAiApiKey() {
+    return Boolean(process.env.OPENAI_API_KEY);
+}
+
+function serializeConversationHistory(history: { role: string; content: string }[]): string {
+    let selectedMessages = history;
+
+    if (history.length > 90) {
+        selectedMessages = [...history.slice(0, 20), ...history.slice(-70)];
+    }
+
+    return selectedMessages
+        .map((message, index) => {
+            const role = message.role === "assistant" ? "assistente" : "paciente";
+            const content = String(message.content || "")
+                .replace(/\s+/g, " ")
+                .trim();
+
+            return `${index + 1}. [${role}] ${content}`;
+        })
+        .join("\n");
+}
+
+export async function extractAppointmentFromConversationAction(params: {
+    history: { role: string; content: string }[];
+}): Promise<ConversationAppointmentExtractionResult | null> {
+    if (!params.history.length) return null;
+
+    const conversationText = serializeConversationHistory(params.history);
+    const prompt = `
+Voce e um especialista em leitura de conversas de WhatsApp para clinicas medicas.
+
+Hoje e 24/08/2026.
+
+OBJETIVO:
+- Ler a conversa completa entre paciente e assistente.
+- Extrair apenas os dados CONFIRMADOS ou informados claramente pelo paciente para pre-preencher um formulario de agendamento.
+- Quando houver correcao, considerar sempre o valor MAIS RECENTE dito ou confirmado pelo paciente.
+
+CAMPOS A EXTRAIR:
+- nomePaciente: nome completo do paciente.
+- dataNascimento: formato DD/MM/AAAA.
+- cpf: apenas numeros.
+- unidade: nome da unidade escolhida e confirmada.
+- dataAgendamento: formato AAAA-MM-DD da data escolhida/confirmada.
+- horario: formato HH:MM do horario escolhido/confirmado.
+- convenio: nome do convenio. Se o paciente disser que e particular, sem plano, ou consulta particular, retornar "Particular".
+- motivacao: motivo da consulta ou principal queixa/objetivo do agendamento.
+- exames: lista de exames confirmados. Se a conversa indicar que sera apenas consulta, retornar ["Consulta"].
+- observacoes: observacoes clinicas/logisticas relevantes para a unidade, como cadeirante, bebe, autismo, laudo especifico, gestante, dificuldade de locomocao, urgencia, acompanhante, necessidades especiais ou outros pontos importantes citados.
+- confidence: "alta", "média" ou "baixa".
+- warnings: lista curta de ambiguidades ou pontos que precisam revisao humana.
+
+REGRAS IMPORTANTES:
+- Nao invente dados.
+- Nao use sugestoes do assistente que nao foram aceitas pelo paciente.
+- Se um campo nao estiver claro, retorne null nesse campo.
+- Preserve nomes de unidades e exames do jeito mais proximo possivel ao que foi dito.
+- "observacoes" deve conter apenas informacoes realmente relevantes para a unidade.
+- Se nao houver exame confirmado e tambem nao houver indicacao clara de "apenas consulta", retorne exames como lista vazia.
+- Responda apenas com o objeto estruturado.
+`;
+
+    if (hasGeminiApiKey()) {
+        const { output } = await ai.generate({
+            prompt: `${prompt}\n\nCONVERSA:\n${conversationText}`,
+            output: { schema: conversationAppointmentExtractionSchema },
+        });
+
+        return (output as ConversationAppointmentExtractionResult | null) ?? null;
+    }
+
+    if (hasOpenAiApiKey()) {
+        return openaiService.analyzeTextParsed<ConversationAppointmentExtractionResult>(
+            conversationText,
+            prompt,
+            conversationAppointmentExtractionSchema,
+            "conversation_appointment_extraction",
+            "gpt-4o"
+        );
+    }
+
+    throw new Error(
+        "Nenhuma chave de IA foi configurada. Defina GEMINI_API_KEY, GOOGLE_API_KEY ou OPENAI_API_KEY."
+    );
 }
 
 /**

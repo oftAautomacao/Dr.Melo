@@ -96,6 +96,46 @@ export const openaiService = {
     return this.analyzeConversation([{ role: "user", content: text }], prompt, model);
   },
 
+  async analyzeTextParsed<T>(
+    text: string,
+    prompt: string,
+    schema: any,
+    responseName: string,
+    model: string = "gpt-4o"
+  ): Promise<T | null> {
+    if (!openai) {
+      console.error("OpenAI client not initialized.");
+      return null;
+    }
+
+    try {
+      const responseFormat = zodTextFormat(schema, responseName);
+      const response = await openai.responses.create({
+        model,
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `${prompt}\n\nCONTEUDO:\n${text}`,
+              },
+            ],
+          },
+        ],
+        text: { format: responseFormat },
+        store: false,
+      });
+
+      const content = response.output_text?.trim();
+      if (!content) return null;
+      return JSON.parse(content) as T;
+    } catch (error) {
+      console.error("Erro ao chamar OpenAI Responses parse para texto:", error);
+      return null;
+    }
+  },
+
   async analyzeImage(
     base64Image: string,
     prompt: string,

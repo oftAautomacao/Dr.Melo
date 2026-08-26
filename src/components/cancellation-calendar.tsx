@@ -1,14 +1,13 @@
 "use client";
 
 /* =============================================================
-   AppointmentCalendar – agenda por unidade, com cancelamento,
-   feriados e lista de unidades sempre visível.
+   AppointmentCalendar â€“ agenda por unidade, com cancelamento,
+   feriados e lista de unidades sempre visÃ­vel.
    ============================================================= */
 
 import { useState, useEffect, useMemo } from "react";
 import Link from 'next/link';
 import { Calendar } from "@/components/ui/calendar";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -63,19 +62,16 @@ import {
   isHoliday as checkIsHoliday,
   type Holiday,
 } from "@/lib/holidays";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
-  DialogFooter,
   DialogTitle,
   DialogDescription,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { PatientForm } from "@/components/patient-form";
-import { cancelAppointment, restoreAppointment } from "@/app/actions";
+import { cancelAppointment, removeCancelledAppointmentAfterRestore } from "@/app/actions";
 import { PatientSearchSheet, PatientSearchResult } from "@/components/patient-search-sheet";
 
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
@@ -84,7 +80,7 @@ import { ENVIRONMENT } from "../../ambiente";
 const MESES = [
   "Janeiro",
   "Fevereiro",
-  "Março",
+  "MarÃ§o",
   "Abril",
   "Maio",
   "Junho",
@@ -108,6 +104,7 @@ const EmptyMsg: React.FC<{ msg: string }> = ({ msg }) => (
 export interface CalendarAppointment {
   id: string;
   nomePaciente: string;
+  cpf?: string;
   nascimento: string;
   dataAgendamento: string; // ISO YYYY-MM-DD
   horario: string; // HH:mm
@@ -116,6 +113,7 @@ export interface CalendarAppointment {
   motivacao: string;
   unidade: string;
   telefone: string;
+  origem?: string;
   Observacoes?: string;
   aiCategorization?: AICategorization;
   motivoCancelamento?: string;
@@ -198,7 +196,6 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
   const [isRestoreDialogOpen, setIsRestoreDialogOpen] = useState(false);
   const [appointmentToRestore, setAppointmentToRestore] =
     useState<CalendarAppointment | undefined>(undefined);
-  const [dontSendSecretaryMessage, setDontSendSecretaryMessage] = useState(true);
 
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
 
@@ -212,6 +209,42 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
     
     setSelectedUnit(record.unidade);
     setSelectedDate(parseISO(record.dataAgendamento));
+  };
+
+  const handleRestoreWithEditing = (appointment: CalendarAppointment) => {
+    setAppointmentToRestore(appointment);
+    setIsRestoreDialogOpen(true);
+  };
+
+  const handleRestoreSaved = async () => {
+    if (!appointmentToRestore) return;
+
+    const result = await removeCancelledAppointmentAfterRestore(
+      getFirebasePathBase(),
+      {
+        telefone: appointmentToRestore.telefone,
+        unidade: appointmentToRestore.unidade,
+        dataAgendamento: appointmentToRestore.dataAgendamento,
+        horario: appointmentToRestore.horario,
+      },
+      ENVIRONMENT
+    );
+
+    if (!result.success) {
+      toast({
+        variant: "destructive",
+        title: "Agendamento salvo, mas a restauracao nao foi concluida",
+        description: result.message,
+      });
+      return;
+    }
+
+    toast({
+      title: "Restauracao concluida",
+      description: "O cancelamento antigo foi removido da lista.",
+    });
+    setIsRestoreDialogOpen(false);
+    setAppointmentToRestore(undefined);
   };
 
 
@@ -331,7 +364,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
   useEffect(() => {
     // Executa apenas no cliente
     setClientFirebaseBase(getFirebasePathBase());
-  }, []); // Array de dependências vazio para executar apenas uma vez após a montagem
+  }, []); // Array de dependÃªncias vazio para executar apenas uma vez apÃ³s a montagem
 
 
   /* --------------- MEMOS ---------------- */
@@ -363,7 +396,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
   return (
     <>
       <Card className="w-full shadow-lg">
-        {/* ------------------- CABEÇALHO + lista unidades ---------------- */}
+        {/* ------------------- CABEÃ‡ALHO + lista unidades ---------------- */}
         <CardHeader>
           <div className="flex flex-col gap-4">
             <div>
@@ -377,10 +410,10 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
 
         {/* --------------------- COLUNAS PRINCIPAIS ---------------------- */}
         <CardContent className="flex flex-col md:flex-row gap-6 h-full">
-          {/* --------- COLUNA ESQUERDA — UNIDADES --------- */}
+          {/* --------- COLUNA ESQUERDA â€” UNIDADES --------- */}
           <aside className="w-full md:w-60 shrink-0">
             <Card className="h-[420px] flex flex-col">
-              {/* REMOVIDO O HEADER "Médicos"/"Unidades" CONFORME SOLICITADO */}
+              {/* REMOVIDO O HEADER "MÃ©dicos"/"Unidades" CONFORME SOLICITADO */}
               <ScrollArea className="flex-1 px-4 py-4">
                 <div className="space-y-2">
                   {availableUnits.length === 0 && !isLoading && (
@@ -406,9 +439,9 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
             </Card>
           </aside>
 
-          {/* --------- CENTER + RIGHT (calendário + detalhes) --------- */}
+          {/* --------- CENTER + RIGHT (calendÃ¡rio + detalhes) --------- */}
           <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* --------- CALENDÁRIO --------- */}
+            {/* --------- CALENDÃRIO --------- */}
             <div>
               <Calendar
                 mode="single"
@@ -471,9 +504,9 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                 </div>
               </div>
 
-              {/* Área Rolável */}
+              {/* Ãrea RolÃ¡vel */}
               <ScrollArea className="flex-1 p-3">
-                {(isLoading || isLoadingHolidays) && <p>Carregando…</p>}
+                {(isLoading || isLoadingHolidays) && <p>Carregandoâ€¦</p>}
 
                 {!isLoading &&
                   !isLoadingHolidays &&
@@ -492,7 +525,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                               <strong>{selectedDateHolidayInfo.name}</strong>
                             </p>
                             <p className="text-xs italic">
-                              Agendamentos não são permitidos neste dia.
+                              Agendamentos nÃ£o sÃ£o permitidos neste dia.
                             </p>
                           </CardContent>
                         </Card>
@@ -504,7 +537,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                             </CardTitle>
                           </CardHeader>
                           <CardContent className="text-sm space-y-1 text-red-700/90">
-                            <p>Este é um domingo. Agendamentos não são realizados.</p>
+                            <p>Este Ã© um domingo. Agendamentos nÃ£o sÃ£o realizados.</p>
                           </CardContent>
                         </Card>
                       ) : (
@@ -538,7 +571,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                     </CardHeader>
                                     <CardContent className="text-sm space-y-1">
                                       <p>
-                                        <strong>Horário:</strong> {app.horario}
+                                        <strong>HorÃ¡rio:</strong> {app.horario}
                                       </p>
                                       <p className="flex items-center">
                                         <strong>Telefone:</strong>
@@ -563,7 +596,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                         )}
                                       </p>
                                       <p>
-                                        <strong>Convênio:</strong> {app.convenio}
+                                        <strong>ConvÃªnio:</strong> {app.convenio}
                                       </p>
                                       <p>
                                         <strong>Exames:</strong>{" "}
@@ -571,7 +604,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                       </p>
                                       <p>
                                         <strong>
-                                          {getFirebasePathBase() === 'OFT/45' ? 'Médico:' : 'Unidade:'}
+                                          {getFirebasePathBase() === 'OFT/45' ? 'MÃ©dico:' : 'Unidade:'}
                                         </strong> {formattedUnit}
                                       </p>
                                       {app.Observacoes && (
@@ -591,10 +624,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                                       className="bg-green-100 text-green-800 hover:bg-green-200 border border-green-800 w-full"
                                       variant="secondary"
                                       size="sm"
-                                      onClick={() => {
-                                        setAppointmentToRestore(app);
-                                        setIsRestoreDialogOpen(true);
-                                      }}
+                                      onClick={() => handleRestoreWithEditing(app)}
                                     >
                                       <Undo2 className="mr-2 h-4 w-4" />
                                       Restaurar
@@ -616,7 +646,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                 {!isLoading &&
                   !isLoadingHolidays &&
                   (!selectedDate || !dateFnsIsValid(selectedDate)) && (
-                    <EmptyMsg msg="Selecione uma data no calendário." />
+                    <EmptyMsg msg="Selecione uma data no calendÃ¡rio." />
                   )}
               </ScrollArea>
             </div>
@@ -624,109 +654,49 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
         </CardContent>
       </Card>
 
-      {/* ---------------- CONFIRMAR RESTAURAÇÃO ---------------- */}
+      {/* ---------------- RESTAURAR COM EDICAO ---------------- */}
       <Dialog
         open={isRestoreDialogOpen}
         onOpenChange={(isOpen) => {
           setIsRestoreDialogOpen(isOpen);
           if (!isOpen) {
             setAppointmentToRestore(undefined);
-            setDontSendSecretaryMessage(true);
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="sm:max-w-[425px] md:max-w-2xl lg:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Confirmar Restauração</DialogTitle>
+            <DialogTitle>Restaurar Agendamento</DialogTitle>
             <DialogDescription>
-              Tem certeza que deseja restaurar o agendamento de{" "}
-              <strong>{appointmentToRestore?.nomePaciente}</strong>?
-              <br />
-              <span className="text-sm text-muted-foreground">
-                Data: {appointmentToRestore?.dataAgendamento && format(parseISO(appointmentToRestore.dataAgendamento), "dd/MM/yyyy", { locale: ptBR })} às {appointmentToRestore?.horario}
-              </span>
+              Edite os dados abaixo e salve para recriar o agendamento. O cancelamento antigo sera removido da lista ao concluir.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-4">
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="dont-send-secretary-message"
-                checked={!dontSendSecretaryMessage}
-                onCheckedChange={(checked) =>
-                  setDontSendSecretaryMessage(!checked)
-                }
+          <ScrollArea className="h-[calc(100vh-200px)]">
+            {appointmentToRestore && (
+              <PatientForm
+                key={`${appointmentToRestore.id}-${appointmentToRestore.dataAgendamento}-${appointmentToRestore.horario}`}
+                defaultValues={{
+                  nomePaciente: appointmentToRestore.nomePaciente,
+                  cpf: appointmentToRestore.cpf ?? "",
+                  dataNascimento: appointmentToRestore.nascimento,
+                  telefone: appointmentToRestore.telefone,
+                  dataAgendamento: appointmentToRestore.dataAgendamento,
+                  horario: appointmentToRestore.horario,
+                  convenio: appointmentToRestore.convenio,
+                  motivacao: appointmentToRestore.motivacao,
+                  local: appointmentToRestore.unidade,
+                  exames: appointmentToRestore.exames,
+                  observacoes: appointmentToRestore.Observacoes ?? "",
+                  origem: appointmentToRestore.origem ?? "Desconhecido",
+                }}
+                onAppointmentSaved={() => void handleRestoreSaved()}
+                firebaseBase={getFirebasePathBase()}
               />
-              <Label
-                htmlFor="dont-send-secretary-message"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Enviar mensagem para a secretária
-              </Label>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button variant="outline">Cancelar</Button>
-            </DialogClose>
-            <Button
-              className="bg-green-600 hover:bg-green-700"
-              disabled={!appointmentToRestore}
-              onClick={async () => {
-                if (!appointmentToRestore) return;
-
-                try {
-                  const appointmentRecord: AppointmentFirebaseRecord = {
-                    nomePaciente: appointmentToRestore.nomePaciente,
-                    nascimento: appointmentToRestore.nascimento,
-                    dataAgendamento: appointmentToRestore.dataAgendamento,
-                    horaAgendamento: appointmentToRestore.horario as any,
-                    convenio: appointmentToRestore.convenio,
-                    exames: appointmentToRestore.exames,
-                    motivacao: appointmentToRestore.motivacao,
-                    unidade: appointmentToRestore.unidade,
-                    telefone: appointmentToRestore.telefone,
-                    Observacoes: appointmentToRestore.Observacoes || "",
-                    ...(appointmentToRestore.aiCategorization && {
-                      aiCategorization: appointmentToRestore.aiCategorization,
-                    }),
-                  };
-
-                  const shouldSendMsg = !dontSendSecretaryMessage;
-                  const result = await restoreAppointment(getFirebasePathBase(), appointmentRecord, ENVIRONMENT, shouldSendMsg);
-
-                  if (result.success) {
-                    toast({
-                      title: "Sucesso",
-                      description: "Agendamento restaurado com sucesso!",
-                    });
-                    setIsRestoreDialogOpen(false);
-                    setAppointmentToRestore(undefined);
-                  } else {
-                    toast({
-                      variant: "destructive",
-                      title: "Erro ao Restaurar",
-                      description: result.message,
-                    });
-                  }
-                } catch (error) {
-                  console.error("Erro ao restaurar:", error);
-                  toast({
-                    variant: "destructive",
-                    title: "Erro",
-                    description: "Falha ao processar restauração.",
-                  });
-                }
-              }}
-            >
-              <Undo2 className="mr-2 h-4 w-4" />
-              Confirmar Restauração
-            </Button>
-          </DialogFooter>
+            )}
+          </ScrollArea>
         </DialogContent>
       </Dialog>
-      
       <PatientSearchSheet
         isOpen={isSearchDialogOpen}
         onClose={() => setIsSearchDialogOpen(false)}

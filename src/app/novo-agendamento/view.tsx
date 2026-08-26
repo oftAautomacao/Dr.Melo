@@ -19,7 +19,7 @@ export default function NovoAgendamentoView() {
   const unidadeFromUrl = searchParams.get("unidade");
   const unit = (unidadeFromUrl as Unit) || "DRM";
 
-  /* preenche campo Local + força remontar o formulário */
+  /* preenche campo Local + forca remontar o formulario */
   useEffect(() => {
     const initialDefaults: Record<string, any> = {};
     if (unidadeFromUrl) {
@@ -40,7 +40,7 @@ export default function NovoAgendamentoView() {
       dataAgendamento: tomorrow.format("YYYY-MM-DD"),
       horario: now.format("HH:mm"),
       convenio: "Particular",
-      motivacao: "Revisão de Grau",
+      motivacao: "Revisao de Grau",
       local:
         getFirebasePathBase() === "OFT/45"
           ? "WilsonBarros"
@@ -54,7 +54,7 @@ export default function NovoAgendamentoView() {
     setAutoFillKey((k) => k + 1);
   };
 
-  /* ------------------- Limpar formulário ------------------- */
+  /* ------------------- Limpar formulario ------------------- */
   const handleClearForm = () => {
     setDefaults(undefined);
     setAutoFillKey((k) => k + 1);
@@ -76,7 +76,6 @@ export default function NovoAgendamentoView() {
               Preencha os dados do paciente para criar um novo agendamento.
             </p>
 
-            {/* botões canto superior-direito */}
             <div className="absolute top-6 right-6 flex gap-2">
               <Button
                 variant="ghost"

@@ -508,6 +508,13 @@ interface RestoreAppointmentResult {
   message: string;
 }
 
+interface RemoveCancelledAppointmentAfterRestoreInput {
+  telefone: string;
+  unidade: string;
+  dataAgendamento: string;
+  horario: string;
+}
+
 export async function restoreAppointment(
   firebaseBase: string,
   appointmentData: AppointmentFirebaseRecord,
@@ -579,6 +586,50 @@ export async function restoreAppointment(
     console.error("Error restoring appointment:", error);
     const msg = error instanceof Error ? error.message : "Erro desconhecido";
     return { success: false, message: `Erro ao restaurar agendamento: ${msg}` };
+  }
+}
+
+export async function removeCancelledAppointmentAfterRestore(
+  firebaseBase: string,
+  appointmentData: RemoveCancelledAppointmentAfterRestoreInput,
+  environment: "teste" | "producao"
+): Promise<RestoreAppointmentResult> {
+  try {
+    const { telefone, unidade, dataAgendamento, horario } = appointmentData;
+
+    if (!telefone || !unidade || !dataAgendamento || !horario) {
+      return {
+        success: false,
+        message: "Dados incompletos para finalizar a restauracao.",
+      };
+    }
+
+    const idxNode = getIdxNode(firebaseBase);
+    const cancelBase = `${firebaseBase}/agendamentoWhatsApp/operacional/consultasCanceladas`;
+    const convBase = `${firebaseBase}/agendamentoWhatsApp/operacional/conversas`;
+    const phone = telefone.replace(/\D/g, "");
+    const dbInstance = getDatabaseInstance(environment);
+    const updates: Record<string, any> = {};
+
+    updates[`${cancelBase}/${idxNode}/${unidade}/${dataAgendamento}/${horario}`] = null;
+
+    if (isDRMBase(firebaseBase)) {
+      updates[`${convBase}/${phone}/consultasCanceladas/${dataAgendamento}/${horario}`] = null;
+    }
+
+    await update(ref(dbInstance), updates);
+
+    return {
+      success: true,
+      message: "Cancelamento antigo removido com sucesso.",
+    };
+  } catch (error) {
+    console.error("Error removing cancelled appointment after restore:", error);
+    const msg = error instanceof Error ? error.message : "Erro desconhecido";
+    return {
+      success: false,
+      message: `Erro ao remover cancelamento antigo: ${msg}`,
+    };
   }
 }
 

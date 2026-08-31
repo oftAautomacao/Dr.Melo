@@ -22,7 +22,7 @@ import { toast as showToast } from "@/hooks/use-toast";
 import { ptBR } from "date-fns/locale";
 import { format, getDay, parseISO, isValid, startOfDay } from "date-fns";
 import { 
-  Search, Plus, X, Loader2, Clock, Sun, Moon, SunMoon, 
+  Search, Plus, X, Loader2, Clock,
   AlertCircle, Calendar as CalendarIcon, CalendarCheck2, CheckCircle2, Copy, MapPin, CircleHelp, Pencil, List, Trash2
 } from "lucide-react";
 
@@ -481,105 +481,55 @@ export default function BuscaHorarios() {
     <div className="max-w-6xl mx-auto space-y-4">
       {/* Header */}
       <div className="sticky top-4 z-30">
-        <div className="flex flex-col gap-3 rounded-xl border bg-card px-4 py-3 shadow-sm md:flex-row md:items-center md:justify-between md:px-6 md:py-3.5">
-          <div className="flex items-center gap-3">
-            <div className="bg-primary p-2 rounded-lg">
-              <Search className="h-5 w-5 text-primary-foreground" />
+        <div className="flex flex-col gap-2 rounded-xl border bg-card px-4 py-2 shadow-sm md:flex-row md:items-center md:justify-between md:px-5 md:py-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="rounded-lg bg-primary p-1.5">
+              <Search className="h-4 w-4 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-base font-black text-foreground uppercase tracking-tight">Busca de Horarios</h1>
-              <div className="text-[10px] text-primary font-black uppercase tracking-widest">Calendario ativo</div>
+              <h1 className="text-sm font-black text-foreground uppercase tracking-tight">Busca de Horarios</h1>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
             <button
               onClick={handleLimpar}
               disabled={searching}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-[11px] font-black uppercase tracking-wide text-gray-500 transition-all hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-gray-500 transition-all hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
               Limpar
             </button>
             <button
               onClick={handleBuscar}
               disabled={searching || (!convenio && procedimentos.length === 0 && selectedUnidades.length === 0)}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-[11px] font-black uppercase tracking-wide text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:bg-muted disabled:text-muted-foreground"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:bg-muted disabled:text-muted-foreground"
             >
-              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
               {searching ? "Buscando..." : "Buscar"}
             </button>
             <button
               type="button"
               onClick={() => setIsPatientSearchOpen(true)}
-              className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 p-2 text-sky-700 transition-colors hover:bg-sky-100 hover:text-sky-800"
+              className="inline-flex items-center justify-center rounded-lg border border-sky-200 bg-sky-50 p-1.5 text-sky-700 transition-colors hover:bg-sky-100 hover:text-sky-800"
               title="Buscar paciente agendado"
               aria-label="Buscar paciente agendado"
             >
-              <CalendarCheck2 className="h-4 w-4" />
+              <CalendarCheck2 className="h-3.5 w-3.5" />
             </button>
           </div>
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
         {/* Left Column: Filters */}
-        <div className="md:col-span-4 space-y-3">
-          
-
-          {/* Section 2: Planos & Convênios */}
-          <div className="bg-card rounded-xl shadow-sm border p-5">
-            <div className="flex items-center gap-2 mb-3 border-b pb-2">
-              <CheckCircle2 className="h-5 w-5 text-primary" />
-              <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Planos & Convênios</h2>
-            </div>
-            
-            <div className="space-y-3">
-              {/* Convênio */}
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                  Operadora
-                </label>
-                <select
-                  value={convenio}
-                  onChange={(e) => {
-                    setConvenio(e.target.value);
-                    setSubplano("");
-                  }}
-                  className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all"
-                >
-                  <option value="">Selecione o Convênio</option>
-                  {conveniosList.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </div>
-
-              {hasSubplanos && (
-                <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
-                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                    Subplano
-                  </label>
-                  <select
-                    value={subplano}
-                    onChange={(e) => setSubplano(e.target.value)}
-                    className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all"
-                  >
-                    <option value="">Todos os subplanos</option>
-                    {subplanosMap[convenio]?.map(sp => (
-                      <option key={sp} value={sp}>{sp}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-
+        <div className="md:col-span-4">
+          <div className="bg-card rounded-xl shadow-sm border p-4 space-y-3">
           {/* Section 2: Exames */}
-          <div className="bg-card rounded-xl shadow-sm border p-5">
-            <div className="flex items-center gap-2 mb-3 border-b pb-2">
+          <div>
+            <div className="flex items-center gap-2 mb-2 border-b pb-1.5">
               <Plus className="h-5 w-5 text-emerald-600" />
-              <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Exames & Procedimentos</h2>
+              <h2 className="text-xs font-black text-foreground uppercase tracking-tighter">Exames & Procedimentos</h2>
             </div>
-            <div className="relative mb-3">
+            <div className="relative mb-2">
               <div className="absolute left-3 top-1/2 -translate-y-1/2">
                 <Search className="h-4 w-4 text-muted-foreground" />
               </div>
@@ -600,7 +550,7 @@ export default function BuscaHorarios() {
                     }
                   }
                 }}
-                className="w-full rounded-lg border border-input pl-10 pr-20 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none bg-muted hover:bg-card"
+                className="w-full rounded-lg border border-input pl-10 pr-20 py-2 text-[12px] font-bold focus:ring-2 focus:ring-primary/20 outline-none bg-muted hover:bg-card"
               />
               <Popover open={isLookupOpen} onOpenChange={setIsLookupOpen}>
                 <PopoverTrigger asChild>
@@ -948,19 +898,15 @@ export default function BuscaHorarios() {
             )}
           </div>
 
-          {/* Section 3: Critérios */}
-          <div className="bg-card rounded-xl shadow-sm border p-5">
-            <div className="flex items-center gap-2 mb-3 border-b pb-2">
-              <Clock className="h-5 w-5 text-amber-500" />
-              <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Critérios de Busca</h2>
+          {/* Section 3: Unidades */}
+          <div>
+            <div className="flex items-center gap-2 mb-2 border-b pb-1.5">
+              <MapPin className="h-5 w-5 text-amber-500" />
+              <h2 className="text-xs font-black text-foreground uppercase tracking-tighter">Unidades</h2>
             </div>
             <div className="space-y-4">
-              {/* Unidades */}
               <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5 text-primary" /> Unidades (Opcional)
-                </label>
-                <div className="relative mb-3">
+                <div className="relative mb-2">
                   <div className="absolute left-3 top-1/2 -translate-y-1/2">
                     <Search className="h-4 w-4 text-muted-foreground" />
                   </div>
@@ -978,7 +924,7 @@ export default function BuscaHorarios() {
                         }
                       }
                     }}
-                    className="w-full rounded-lg border border-input pl-10 pr-4 py-2 text-sm font-bold focus:ring-2 focus:ring-primary/20 outline-none bg-muted hover:bg-card"
+                    className="w-full rounded-lg border border-input pl-10 pr-4 py-2 text-[12px] font-bold focus:ring-2 focus:ring-primary/20 outline-none bg-muted hover:bg-card"
                   />
                   {showUnidadeDropdown && filteredUnidades.length > 0 && (
                     <div className="absolute z-20 mt-2 w-full bg-card border border-input rounded-xl shadow-2xl max-h-56 overflow-y-auto p-1">
@@ -1015,38 +961,15 @@ export default function BuscaHorarios() {
                   </div>
                 )}
               </div>
-
-              <div>
-                <label className="block text-[11px] font-black text-muted-foreground uppercase mb-2 ml-1">Turno Preferencial</label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {([
-                  { val: "Manha" as const, icon: <Sun className="h-4 w-4" />, label: "Manhã" },
-                  { val: "Tarde" as const, icon: <Moon className="h-4 w-4" />, label: "Tarde" },
-                  { val: "Ambos" as const, icon: <SunMoon className="h-4 w-4" />, label: "Todos" },
-                ]).map(opt => (
-                  <button
-                    key={opt.val}
-                    onClick={() => setPeriodo(opt.val)}
-                    className={`flex flex-col items-center justify-center py-2.5 rounded-lg text-[10px] font-black border transition-all
-                      ${periodo === opt.val 
-                        ? 'bg-primary border-primary text-primary-foreground shadow-md' 
-                        : 'bg-muted border-input text-muted-foreground hover:border-primary hover:text-primary'}`}
-                  >
-                    {opt.icon}
-                    <span className="mt-1">{opt.label}</span>
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
-        </div>
 
           {/* Section 4: Calendário Estilizado (Highlight month, bg, holidays) */}
-          <div className="bg-card rounded-xl shadow-sm border p-4">
-            <div className="flex items-center justify-between mb-4 border-b pb-2">
+          <div>
+            <div className="flex items-center justify-between mb-3 border-b pb-1.5">
               <div className="flex items-center gap-2">
                 <CalendarIcon className="h-5 w-5 text-primary" />
-                <h2 className="text-sm font-black text-foreground uppercase tracking-tighter">Datas da Busca</h2>
+                <h2 className="text-xs font-black text-foreground uppercase tracking-tighter">Datas da Busca</h2>
               </div>
               {procedimentos.length > 0 && (
                 <div className="flex items-center gap-1.5 animate-pulse">
@@ -1057,28 +980,37 @@ export default function BuscaHorarios() {
             </div>
             
             {procedimentos.length > 0 && nextDiscoveryDate && (
-              <div className="mb-3 px-2 py-1.5 bg-emerald-50/50 border border-emerald-100 rounded-lg">
+              <div className="mb-2 px-2 py-1.5 bg-emerald-50/50 border border-emerald-100 rounded-lg">
                 <p className="text-[10px] text-emerald-800 font-bold leading-tight">
                   💡 A <span className="text-emerald-600 border-b border-emerald-500">próxima data disponível</span> com uma unidade que não apareceu acima é dia <span className="font-black">{nextDiscoveryDate.split('-').slice(1).reverse().join('/')}</span>.
                 </p>
               </div>
             )}
 
-            <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100 shadow-inner">
+            <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-2.5 shadow-inner">
               <CalendarUI
                 mode="multiple"
                 selected={selectedDateObjects}
                 onSelect={(dates) => setSelectedDateObjects(dates || [])}
                 locale={ptBR}
-                className="rounded-md mx-auto"
+                showOutsideDays={false}
+                className="mx-auto max-w-[238px] rounded-md p-0"
                 classNames={{
-                  caption: "flex justify-center pt-2 relative items-center bg-primary text-primary-foreground rounded-lg p-2 mb-4 shadow-md",
-                  caption_label: "text-xs font-black uppercase tracking-widest",
-                  nav_button: "h-6 w-6 bg-primary-foreground/20 hover:bg-primary-foreground/40 text-primary-foreground border-transparent",
+                  months: "space-y-0",
+                  month: "space-y-2",
+                  caption: "relative mb-1.5 flex items-center justify-center rounded-lg bg-primary px-1.5 py-1.5 text-primary-foreground shadow-sm",
+                  caption_label: "text-[10px] font-black uppercase tracking-wide",
+                  nav: "flex items-center gap-0.5",
+                  nav_button: "h-4.5 w-4.5 border-0 bg-primary-foreground/20 p-0 text-primary-foreground opacity-100 hover:bg-primary-foreground/40 hover:text-primary-foreground",
+                  nav_button_previous: "absolute left-1",
+                  nav_button_next: "absolute right-1",
                   table: "w-full border-collapse",
-                  head_cell: "text-primary/50 font-black uppercase text-[10px] w-9",
-                  day: "h-9 w-9 p-0 font-bold aria-selected:opacity-100 rounded-lg hover:bg-primary/10 transition-all relative",
-                  day_selected: "bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105 z-10 hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                  head_row: "flex",
+                  head_cell: "w-8 text-center text-[8px] font-black uppercase text-primary/50",
+                  row: "mt-1 flex w-full",
+                  cell: "h-8 w-8 p-0 text-center text-[10px]",
+                  day: "h-8 w-8 rounded-md p-0 text-[10px] font-bold text-foreground transition-colors hover:bg-primary/10 aria-selected:opacity-100",
+                  day_selected: "bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
                 }}
                 modifiers={{
                   holiday: holidayDates,
@@ -1086,36 +1018,64 @@ export default function BuscaHorarios() {
                   discovery: (d: Date) => format(d, "yyyy-MM-dd") === nextDiscoveryDate,
                 }}
                 modifiersClassNames={{
-                  holiday: "bg-amber-500 text-white rounded-lg font-black shadow-sm",
+                  holiday: "bg-amber-500 text-white rounded-md font-black shadow-sm",
                   sunday: "text-rose-500 font-bold",
-                  discovery: "text-emerald-700 border-b-2 border-emerald-500 rounded-none",
+                  discovery: "border-b-2 border-emerald-500 text-emerald-700 rounded-none",
                 }}
                 disabled={[
                   { before: startOfDay(new Date()) }
                 ]}
               />
             </div>
-
-            {selectedDatesStrings.length > 0 && (
-              <div className="mt-4 pt-3 border-t">
-                <div className="text-[9px] font-black text-muted-foreground uppercase tracking-widest mb-2 px-1">
-                  Selecionados ({selectedDatesStrings.length})
-                </div>
-                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1 scrollbar-thin">
-                  {selectedDatesStrings.sort().map(d => (
-                    <span key={d} className="text-[10px] bg-primary text-primary-foreground px-2 py-1 rounded-lg font-black flex items-center gap-1.5 shadow-sm animate-in fade-in zoom-in duration-200">
-                      {d.split('-').slice(1).reverse().join('/')}
-                      <X 
-                        className="h-3 w-3 cursor-pointer hover:text-rose-200" 
-                        onClick={() => setSelectedDateObjects(prev => prev.filter(obj => format(obj, "yyyy-MM-dd") !== d))} 
-                      />
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
 
+          {/* Section 5: Planos & Convênios */}
+          <div>
+            <div className="flex items-center gap-2 mb-2 border-b pb-1.5">
+              <CheckCircle2 className="h-5 w-5 text-primary" />
+              <h2 className="text-xs font-black text-foreground uppercase tracking-tighter">Planos & Convênios</h2>
+            </div>
+            
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                  Operadora
+                </label>
+                <select
+                  value={convenio}
+                  onChange={(e) => {
+                    setConvenio(e.target.value);
+                    setSubplano("");
+                  }}
+                  className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all"
+                >
+                  <option value="">Selecione o Convênio</option>
+                  {conveniosList.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              {hasSubplanos && (
+                <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                  <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-1">
+                    Subplano
+                  </label>
+                  <select
+                    value={subplano}
+                    onChange={(e) => setSubplano(e.target.value)}
+                    className="w-full h-10 px-3 bg-gray-50 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-700 focus:ring-2 focus:ring-primary/20 transition-all"
+                  >
+                    <option value="">Todos os subplanos</option>
+                    {subplanosMap[convenio]?.map(sp => (
+                      <option key={sp} value={sp}>{sp}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+          </div>
         </div>
 
         {/* Right Column: Results */}

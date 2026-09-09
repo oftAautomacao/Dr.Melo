@@ -23,7 +23,7 @@ import { ptBR } from "date-fns/locale";
 import { format, getDay, parseISO, isValid, startOfDay } from "date-fns";
 import { 
   Search, Plus, X, Loader2, Clock,
-  AlertCircle, Calendar as CalendarIcon, CalendarCheck2, CheckCircle2, Copy, MapPin, CircleHelp, Pencil, List, Trash2
+  AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy, Eraser, MapPin, CircleHelp, Pencil, List, Trash2
 } from "lucide-react";
 
 const INCLUDED_IN_CONSULTA_OPTION = "__included_in_consulta__";
@@ -53,7 +53,7 @@ export default function BuscaHorarios() {
   const {
     loading, searching, results,
     conveniosList, procedimentosList, unidadesList, subplanosMap, examesMetadata, feriadosData,
-    buscar, gerarResposta, getNextDiscoveryDate,
+    buscar, limparResultados, gerarResposta, getNextDiscoveryDate,
   } = useBuscaHorarios();
 
   const [convenio, setConvenio] = useState("Particular");
@@ -206,10 +206,34 @@ export default function BuscaHorarios() {
     setSelectedUnidades(prev => prev.filter(u => u !== unit));
   };
 
-  const handleBuscar = () => {
-    if (!convenio && procedimentos.length === 0 && selectedUnidades.length === 0) return;
-    buscar({ convenio, subplano, procedimentos, periodo, selectedDates: selectedDatesStrings, unidades: selectedUnidades });
-  };
+  useEffect(() => {
+    const hasSearchCriteria = Boolean(
+      convenio || procedimentos.length > 0 || selectedUnidades.length > 0
+    );
+
+    if (!loading && hasSearchCriteria) {
+      buscar({
+        convenio,
+        subplano,
+        procedimentos,
+        periodo,
+        selectedDates: selectedDatesStrings,
+        unidades: selectedUnidades,
+      });
+    } else if (!loading) {
+      limparResultados();
+    }
+  }, [
+    buscar,
+    convenio,
+    limparResultados,
+    loading,
+    periodo,
+    procedimentos,
+    selectedDatesStrings,
+    selectedUnidades,
+    subplano,
+  ]);
 
   const handleLimpar = () => {
     setConvenio("Particular");
@@ -222,9 +246,6 @@ export default function BuscaHorarios() {
     setUnitSearch("");
     setOpenExamInfoFor(null);
     setExamInfoLoadingFor(null);
-    // To clear results, we need to call a clear function in the hook or set results to null
-    // Assuming 'buscar' with empty params or a new clear function
-    buscar({ convenio: "Particular", subplano: "", procedimentos: [], periodo: "Ambos", selectedDates: [], unidades: [] });
   };
 
   const examPrices = useMemo(() => {
@@ -492,20 +513,24 @@ export default function BuscaHorarios() {
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end">
             <button
+              type="button"
               onClick={handleLimpar}
               disabled={searching}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-gray-100 px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-gray-500 transition-all hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 text-gray-500 transition-all hover:bg-gray-200 active:scale-[0.98] disabled:opacity-50"
+              title="Limpar filtros"
+              aria-label="Limpar filtros"
             >
-              <X className="h-3.5 w-3.5" />
-              Limpar
+              <Eraser className="h-4 w-4" />
             </button>
             <button
-              onClick={handleBuscar}
-              disabled={searching || (!convenio && procedimentos.length === 0 && selectedUnidades.length === 0)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-[10px] font-black uppercase tracking-wide text-primary-foreground transition-all hover:bg-primary/90 active:scale-[0.98] disabled:bg-muted disabled:text-muted-foreground"
+              type="button"
+              onClick={handleCopyWhatsappResponse}
+              disabled={searching || !hasSearchResults}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white transition-all hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-50"
+              title={searching ? "Buscando horarios" : "Copiar resposta do WhatsApp"}
+              aria-label={searching ? "Buscando horarios" : "Copiar resposta do WhatsApp"}
             >
-              {searching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-              {searching ? "Buscando..." : "Buscar"}
+              {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
             </button>
             <button
               type="button"
@@ -514,7 +539,7 @@ export default function BuscaHorarios() {
               title="Buscar paciente agendado"
               aria-label="Buscar paciente agendado"
             >
-              <CalendarCheck2 className="h-3.5 w-3.5" />
+              <Search className="h-4 w-4" />
             </button>
           </div>
         </div>
@@ -1110,17 +1135,6 @@ export default function BuscaHorarios() {
                 {results.map(unit => (
                   <UnidadeResultCard key={unit.unidade} result={unit} procedimentos={procedimentos} />
                 ))}
-              </div>
-              <div className="flex justify-center pt-4">
-                <button
-                  type="button"
-                  onClick={handleCopyWhatsappResponse}
-                  disabled={!hasSearchResults}
-                  className="inline-flex items-center gap-2 rounded-full bg-emerald-600 px-8 py-4 text-xs font-black uppercase text-white transition-all hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-50"
-                >
-                  <Copy className="h-4 w-4" />
-                  Copiar Resposta WhatsApp
-                </button>
               </div>
             </div>
           )}

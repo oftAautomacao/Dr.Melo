@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ref, onValue, get, query, orderByKey, startAt, endAt } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
@@ -124,6 +124,7 @@ export function useBuscaHorarios() {
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<UnitResult[] | null>(null);
+  const searchRequestIdRef = useRef(0);
 
   // Load config data from Firebase on mount
   useEffect(() => {
@@ -301,6 +302,7 @@ export function useBuscaHorarios() {
 
   // Main search function
   const buscar = useCallback(async (params: SearchParams) => {
+    const requestId = ++searchRequestIdRef.current;
     setSearching(true);
     setResults(null);
 
@@ -540,13 +542,25 @@ export function useBuscaHorarios() {
         return slotsB - slotsA;
       });
 
-      setResults(unitResults);
+      if (requestId === searchRequestIdRef.current) {
+        setResults(unitResults);
+      }
     } catch (error) {
-      setResults([]);
+      if (requestId === searchRequestIdRef.current) {
+        setResults([]);
+      }
     } finally {
-      setSearching(false);
+      if (requestId === searchRequestIdRef.current) {
+        setSearching(false);
+      }
     }
   }, [turnosCriterios, turnosCriteriosExcecoes, unidadesConfig, subplanosData, getBlockInfo, conveniosList, procedimentosList]);
+
+  const limparResultados = useCallback(() => {
+    searchRequestIdRef.current += 1;
+    setSearching(false);
+    setResults(null);
+  }, []);
 
   // Generate copyable response text
   const gerarResposta = useCallback((resultados: UnitResult[]): string => {
@@ -635,6 +649,7 @@ export function useBuscaHorarios() {
     examesMetadata,
     feriadosData,
     buscar,
+    limparResultados,
     gerarResposta,
     getNextDiscoveryDate,
   };

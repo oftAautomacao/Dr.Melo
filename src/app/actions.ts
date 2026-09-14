@@ -233,6 +233,7 @@ export async function saveAppointmentAction(
       ...appointmentRecord,
       obs: [v.observacoes || ""],
       ...(Object.keys(precos).length > 0 ? { precos } : {}),
+      metodo: "Gerenciador",
     };
 
     updates[`${agBase}/${idxNode}/${setor}/${datePath}/${timePath}`] = appointmentDataToSave;

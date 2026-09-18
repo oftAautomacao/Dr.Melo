@@ -1004,53 +1004,57 @@ export default function BuscaHorarios() {
               )}
             </div>
             
-            {procedimentos.length > 0 && nextDiscoveryDate && (
-              <div className="mb-2 px-2 py-1.5 bg-emerald-50/50 border border-emerald-100 rounded-lg">
-                <p className="text-[10px] text-emerald-800 font-bold leading-tight">
-                  💡 A <span className="text-emerald-600 border-b border-emerald-500">próxima data disponível</span> com uma unidade que não apareceu acima é dia <span className="font-black">{nextDiscoveryDate.split('-').slice(1).reverse().join('/')}</span>.
-                </p>
-              </div>
-            )}
-
             <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-2.5 shadow-inner">
-              <CalendarUI
-                mode="multiple"
-                selected={selectedDateObjects}
-                onSelect={(dates) => setSelectedDateObjects(dates || [])}
-                locale={ptBR}
-                showOutsideDays={false}
-                className="mx-auto max-w-[238px] rounded-md p-0"
-                classNames={{
-                  months: "space-y-0",
-                  month: "space-y-2",
-                  caption: "relative mb-1.5 flex items-center justify-center rounded-lg bg-primary px-1.5 py-1.5 text-primary-foreground shadow-sm",
-                  caption_label: "text-[10px] font-black uppercase tracking-wide",
-                  nav: "flex items-center gap-0.5",
-                  nav_button: "h-4.5 w-4.5 border-0 bg-primary-foreground/20 p-0 text-primary-foreground opacity-100 hover:bg-primary-foreground/40 hover:text-primary-foreground",
-                  nav_button_previous: "absolute left-1",
-                  nav_button_next: "absolute right-1",
-                  table: "w-full border-collapse",
-                  head_row: "flex",
-                  head_cell: "w-8 text-center text-[8px] font-black uppercase text-primary/50",
-                  row: "mt-1 flex w-full",
-                  cell: "h-8 w-8 p-0 text-center text-[10px]",
-                  day: "h-8 w-8 rounded-md p-0 text-[10px] font-bold text-foreground transition-colors hover:bg-primary/10 aria-selected:opacity-100",
-                  day_selected: "bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-                }}
-                modifiers={{
-                  holiday: holidayDates,
-                  sunday: (d: Date) => getDay(d) === 0,
-                  discovery: (d: Date) => format(d, "yyyy-MM-dd") === nextDiscoveryDate,
-                }}
-                modifiersClassNames={{
-                  holiday: "bg-amber-500 text-white rounded-md font-black shadow-sm",
-                  sunday: "text-rose-500 font-bold",
-                  discovery: "border-b-2 border-emerald-500 text-emerald-700 rounded-none",
-                }}
-                disabled={[
-                  { before: startOfDay(new Date()) }
-                ]}
-              />
+              <div className="flex items-start justify-center gap-1.5">
+                <CalendarUI
+                  mode="multiple"
+                  selected={selectedDateObjects}
+                  onSelect={(dates) => setSelectedDateObjects(dates || [])}
+                  locale={ptBR}
+                  showOutsideDays={false}
+                  className="max-w-[238px] rounded-md p-0"
+                  classNames={{
+                    months: "space-y-0",
+                    month: "space-y-2",
+                    caption: "relative mb-1.5 flex items-center justify-center rounded-lg bg-primary px-1.5 py-1.5 text-primary-foreground shadow-sm",
+                    caption_label: "text-[10px] font-black uppercase tracking-wide",
+                    nav: "flex items-center gap-0.5",
+                    nav_button: "h-4.5 w-4.5 border-0 bg-primary-foreground/20 p-0 text-primary-foreground opacity-100 hover:bg-primary-foreground/40 hover:text-primary-foreground",
+                    nav_button_previous: "absolute left-1",
+                    nav_button_next: "absolute right-1",
+                    table: "w-full border-collapse",
+                    head_row: "flex",
+                    head_cell: "w-8 text-center text-[8px] font-black uppercase text-primary/50",
+                    row: "mt-1 flex w-full",
+                    cell: "h-8 w-8 p-0 text-center text-[10px]",
+                    day: "h-8 w-8 rounded-md p-0 text-[10px] font-bold text-foreground transition-colors hover:bg-primary/10 aria-selected:opacity-100",
+                    day_selected: "bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
+                  }}
+                  modifiers={{
+                    holiday: holidayDates,
+                    sunday: (d: Date) => getDay(d) === 0,
+                    discovery: (d: Date) => format(d, "yyyy-MM-dd") === nextDiscoveryDate,
+                  }}
+                  modifiersClassNames={{
+                    holiday: "bg-amber-500 text-white rounded-md font-black shadow-sm",
+                    sunday: "text-rose-500 font-bold",
+                    discovery: "border-b-2 border-emerald-500 text-emerald-700 rounded-none",
+                  }}
+                  disabled={[
+                    { before: startOfDay(new Date()) }
+                  ]}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSelectedDateObjects([])}
+                  disabled={selectedDateObjects.length === 0}
+                  className="mt-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-white text-primary shadow-sm transition-colors hover:bg-primary/10 disabled:cursor-default disabled:opacity-40"
+                  title="Limpar datas selecionadas"
+                  aria-label="Limpar datas selecionadas"
+                >
+                  <Eraser className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 

@@ -1113,14 +1113,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>
                 <SelectContent className="max-h-60">
-                  <SelectItem value="Convênio não aceito na unidade">
-                    Convênio não aceito na unidade
-                  </SelectItem>
                   <SelectItem value="Consulta reagendada">
                     Consulta reagendada
-                  </SelectItem>
-                  <SelectItem value="Consulta de Retorno">
-                    Consulta de Retorno
                   </SelectItem>
                   <SelectItem value="Não compareceu à consulta">
                     Não compareceu à consulta
@@ -1130,15 +1124,6 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   </SelectItem>
                   <SelectItem value="Cancelado pela secretária">
                     Cancelado pela secretária
-                  </SelectItem>
-                  <SelectItem value="Exame não aceito pela unidade">
-                    Exame não aceito pela unidade
-                  </SelectItem>
-                  <SelectItem value="Paciente Reagendado">
-                    Paciente Reagendado
-                  </SelectItem>
-                  <SelectItem value="Preço da consulta">
-                    Preço da consulta
                   </SelectItem>
                   <SelectItem value="Erro do sistema">
                     Erro do sistema

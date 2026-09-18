@@ -1,6 +1,6 @@
 "use client";
 
-import SidebarLayout from "@/components/layout/sidebar-layout";
+import SidebarLayout, { HOME_FILTERS_RESET_EVENT } from "@/components/layout/sidebar-layout";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -87,10 +87,19 @@ const calculateAge = (nascimento: string) => {
   }
 };
 
+const AGE_BUCKETS = ["Crian\u00E7a", "Jovem", "Adulto", "Idoso"] as const;
+const AGE_BUCKET_RANGES: Record<(typeof AGE_BUCKETS)[number], string> = {
+  "Crian\u00E7a": "0-7 anos",
+  "Jovem": "8-17 anos",
+  "Adulto": "18-59 anos",
+  "Idoso": "60+ anos",
+};
+
 const getAgeBucket = (nascimento: string) => {
   const age = calculateAge(nascimento);
-  if (age <= 13) return "Crian\u00E7a";
-  if (age <= 59) return "Adulto"; // Includes adolescents as requested
+  if (age <= 7) return "Crian\u00E7a";
+  if (age <= 17) return "Jovem";
+  if (age <= 59) return "Adulto";
   return "Idoso";
 };
 
@@ -184,6 +193,21 @@ export default function Home() {
     window.addEventListener("storage", handleStorageChange);
     return () => window.removeEventListener("storage", handleStorageChange);
   }, [selectedUnit]);
+
+  useEffect(() => {
+    const resetHomeFilters = () => {
+      setStatType("unidades");
+      setFilterCategory("unidade");
+      setFilterValue("all");
+      setOptionQuery("");
+      setIsOptionInputFocused(false);
+      setPeriodMode("month");
+      setFilter("");
+    };
+
+    window.addEventListener(HOME_FILTERS_RESET_EVENT, resetHomeFilters);
+    return () => window.removeEventListener(HOME_FILTERS_RESET_EVENT, resetHomeFilters);
+  }, []);
 
   /* ---------- RTDB listeners ---------- */
   useEffect(() => {
@@ -283,7 +307,7 @@ export default function Home() {
     return Array.from(set).sort();
   }, [patientData]);
 
-  const faixasEtariasAvailable = ["Crian\u00E7a", "Adulto", "Idoso"];
+  const faixasEtariasAvailable = AGE_BUCKETS;
 
   const motivacoesAvailable = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1290,8 +1314,8 @@ export default function Home() {
           faixaUnidades[bucket][u].value += app._value;
         });
 
-        const ranges = { "Crian\u00E7a": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
-        const order = ["Crian\u00E7a", "Adulto", "Idoso"];
+        const ranges = AGE_BUCKET_RANGES;
+        const order = AGE_BUCKETS;
 
         return order
           .filter(f => faixaCounts[f] && faixaCounts[f].count > 0)
@@ -1336,8 +1360,8 @@ export default function Home() {
           faixaConvenios[bucket][c].value += app._value;
         });
 
-        const ranges = { "Crian\u00E7a": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
-        const order = ["Crian\u00E7a", "Adulto", "Idoso"];
+        const ranges = AGE_BUCKET_RANGES;
+        const order = AGE_BUCKETS;
 
         return order
           .filter(f => faixaCounts[f] && faixaCounts[f].count > 0)
@@ -1381,8 +1405,8 @@ export default function Home() {
           }
         });
 
-        const ranges = { "Crian\u00E7a": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
-        const order = ["Crian\u00E7a", "Adulto", "Idoso"];
+        const ranges = AGE_BUCKET_RANGES;
+        const order = AGE_BUCKETS;
 
         return order
           .filter(f => faixaCounts[f] && faixaCounts[f].count > 0)
@@ -1407,10 +1431,11 @@ export default function Home() {
       // Default Logic
       const buckets: Record<string, { count: number, value: number }> = { 
         "Crian\u00E7a": { count: 0, value: 0 }, 
+        "Jovem": { count: 0, value: 0 },
         "Adulto": { count: 0, value: 0 }, 
         "Idoso": { count: 0, value: 0 } 
       };
-      const ranges = { "Crian\u00E7a": "0-13 anos", "Adulto": "14-59 anos", "Idoso": "60+ anos" };
+      const ranges = AGE_BUCKET_RANGES;
       appointments.forEach(app => {
         const bucket = getAgeBucket(app.nascimento);
         if (buckets[bucket] !== undefined) {
@@ -1418,7 +1443,7 @@ export default function Home() {
           buckets[bucket].value += app._value;
         }
       });
-      const order = ["Crian\u00E7a", "Adulto", "Idoso"];
+      const order = AGE_BUCKETS;
       return order
         .map(name => ({
           id: name,

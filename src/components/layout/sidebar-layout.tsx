@@ -1,3 +1,5 @@
+"use client";
+
 import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -12,6 +14,8 @@ interface SidebarLayoutProps {
   contentClassName?: string;
 }
 
+export const HOME_FILTERS_RESET_EVENT = "dr-melo:reset-home-filters";
+
 const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor, contentClassName }) => {
   return (
     <div className="min-h-screen md:pl-64">
@@ -24,7 +28,11 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor, 
           )}
         </div>
         <nav className="flex flex-col space-y-2 p-4">
-          <Link href="/" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
+          <Link
+            href="/"
+            onClick={() => window.dispatchEvent(new Event(HOME_FILTERS_RESET_EVENT))}
+            className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800"
+          >
             <Home className="mr-3 h-5 w-5" />
             Início
           </Link>

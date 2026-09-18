@@ -379,8 +379,23 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         vals.dataAgendamento = undefined;
       }
     } else {
-      // copiar defaults
-      vals = { ...defaultValues };
+      // Manter os valores padrão reais do formulário mesmo quando o chamador
+      // informa apenas data e unidade para um novo agendamento.
+      vals = {
+        nomePaciente: "",
+        cpf: "",
+        dataNascimento: undefined,
+        dataAgendamento: undefined,
+        horario: "",
+        convenio: "Particular",
+        exames: [],
+        motivacao: "",
+        local: "",
+        telefone: "",
+        origem: "Desconhecido",
+        observacoes: "",
+        ...defaultValues,
+      };
 
       // yyyy-MM-dd → Date
       if (

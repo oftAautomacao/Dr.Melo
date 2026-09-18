@@ -565,18 +565,36 @@ export function useBuscaHorarios() {
   // Generate copyable response text
   const gerarResposta = useCallback((resultados: UnitResult[]): string => {
     if (!resultados || resultados.length === 0) return '';
-    return resultados.map(unit => {
+
+    const getUnitDisplayName = (unit: UnitResult) => {
       const companyName =
         unit.empresa.trim().toLowerCase() === "oftalmo" && unit.bairro.trim().toLowerCase() === "recreio"
           ? "Oftalmorecreio"
           : unit.empresa;
-      const header = unit.bairro ? `*${companyName} - ${unit.bairro}*` : `*${companyName}*`;
+
+      return unit.bairro ? `${companyName} - ${unit.bairro}` : companyName;
+    };
+
+    const unitList = resultados
+      .map((unit, index) => `${index + 1}. ${getUnitDisplayName(unit)}`)
+      .join('\n');
+
+    const schedules = resultados.map(unit => {
+      const header = `*${getUnitDisplayName(unit)}*`;
       const lines = [header];
       unit.horariosDisponiveis.forEach(day => {
         lines.push(`- ${day.dateLabel}: ${day.slots.join(', ')}`);
       });
       return lines.join('\n');
     }).join('\n\n');
+
+    return [
+      '*As unidades disponíveis são:*',
+      unitList,
+      '',
+      '*Os horários disponíveis são:*',
+      schedules,
+    ].join('\n');
   }, []);
 
   // Helper to calculate the SOONEST date where a NEW unit offers specific procedures

@@ -78,15 +78,10 @@ interface PatientSearchSheetProps {
 }
 
 const CANCEL_REASONS = [
-  "Convenio nao aceito na unidade",
   "Consulta reagendada",
-  "Consulta de Retorno",
   "Nao compareceu a consulta",
   "Cancelado pelo paciente",
   "Cancelado pela secretaria",
-  "Exame nao aceito pela unidade",
-  "Paciente Reagendado",
-  "Preco da consulta",
   "Erro do sistema",
   "Teste do sistema",
 ];

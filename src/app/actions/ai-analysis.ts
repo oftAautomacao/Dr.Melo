@@ -40,6 +40,7 @@ export async function identifyPatientSourceAction(
     - Instagram (Anúncio ou perfil)
     - Facebook (Anúncio ou perfil)
     - Google (Pesquisa, Site, Maps)
+    - Busca Ativa (Contato iniciado pela clínica com o paciente)
     - Indicação (Amigos, familiares, outro médico)
     - TikTok
     - Passante (Passou na frente)

@@ -170,27 +170,34 @@ export function PatientDetailsSheet({
                                                             (() => {
                                                                 const normalizedOrigin = normalizePatientOrigin(patient.origem);
                                                                 return (
-                                                            <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded flex items-center gap-1 ${
-                                                                normalizedOrigin === 'Instagram'
-                                                                    ? 'bg-pink-50 text-pink-700 border border-pink-100'
-                                                                    : normalizedOrigin === 'Google'
-                                                                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                                                        : 'bg-slate-100 text-slate-500 border border-slate-200'
-                                                            }`}>
-                                                                {normalizedOrigin === 'Instagram' ? (
-                                                                    <>
-                                                                        <Instagram className="h-2.5 w-2.5" />
-                                                                        Instagram
-                                                                    </>
-                                                                ) : normalizedOrigin === 'Google' ? (
-                                                                    <>
-                                                                        <Globe className="h-2.5 w-2.5" />
-                                                                        Google
-                                                                    </>
-                                                                ) : (
-                                                                    "Desconhecida"
-                                                                )}
-                                                            </span>
+                                                                    <span className={`text-[9px] font-extrabold px-1.5 py-0.5 rounded flex items-center gap-1 ${
+                                                                        normalizedOrigin === 'Instagram'
+                                                                            ? 'bg-pink-50 text-pink-700 border border-pink-100'
+                                                                            : normalizedOrigin === 'Google'
+                                                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                                                                : normalizedOrigin === 'Busca Ativa'
+                                                                                    ? 'bg-blue-50 text-blue-700 border border-blue-100'
+                                                                                    : 'bg-slate-100 text-slate-500 border border-slate-200'
+                                                                    }`}>
+                                                                        {normalizedOrigin === 'Instagram' ? (
+                                                                            <>
+                                                                                <Instagram className="h-2.5 w-2.5" />
+                                                                                Instagram
+                                                                            </>
+                                                                        ) : normalizedOrigin === 'Google' ? (
+                                                                            <>
+                                                                                <Globe className="h-2.5 w-2.5" />
+                                                                                Google
+                                                                            </>
+                                                                        ) : normalizedOrigin === 'Busca Ativa' ? (
+                                                                            <>
+                                                                                <Search className="h-2.5 w-2.5" />
+                                                                                Busca Ativa
+                                                                            </>
+                                                                        ) : (
+                                                                            "Desconhecida"
+                                                                        )}
+                                                                    </span>
                                                                 );
                                                             })()
                                                         )}

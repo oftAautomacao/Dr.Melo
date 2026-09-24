@@ -45,6 +45,7 @@ const MESES = [
 const ORIGIN_LABELS: Record<string, string> = {
   Google: "Google",
   Instagram: "Instagram",
+  "Busca Ativa": "Busca Ativa",
   Desconhecido: "Desconhecida",
 };
 
@@ -369,6 +370,7 @@ export default function Home() {
       return [
         { value: "Google", label: "Google" },
         { value: "Instagram", label: "Instagram" },
+        { value: "Busca Ativa", label: "Busca Ativa" },
         { value: "Desconhecido", label: "Desconhecida" },
       ];
     }
@@ -1627,8 +1629,7 @@ export default function Home() {
           origemUnidades[orig][u].value += app._value;
         });
 
-        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
-        const order = ["Google", "Instagram", "Desconhecido"];
+        const order = ["Google", "Instagram", "Busca Ativa", "Desconhecido"];
 
         return order
           .filter(o => origemCounts[o] && origemCounts[o].count > 0)
@@ -1644,7 +1645,7 @@ export default function Home() {
 
             return {
               id: origem,
-              title: labels[origem] || origem,
+              title: getOriginLabel(origem),
               subtitle: "Origem do Paciente",
               count: origemCounts[origem].count,
               value: origemCounts[origem].value,
@@ -1672,12 +1673,11 @@ export default function Home() {
           origemConvenios[origem][convenio].value += app._value;
         });
 
-        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
         return Object.entries(origemCounts)
           .sort((a, b) => b[1].count - a[1].count)
           .map(([origem, data]) => ({
             id: origem,
-            title: labels[origem] || origem,
+            title: getOriginLabel(origem),
             subtitle: "Origem do Paciente",
             count: data.count,
             value: data.value,
@@ -1710,12 +1710,11 @@ export default function Home() {
           origemFaixas[origem][faixa].value += app._value;
         });
 
-        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
         return Object.entries(origemCounts)
           .sort((a, b) => b[1].count - a[1].count)
           .map(([origem, data]) => ({
             id: origem,
-            title: labels[origem] || origem,
+            title: getOriginLabel(origem),
             subtitle: "Origem do Paciente",
             count: data.count,
             value: data.value,
@@ -1751,12 +1750,11 @@ export default function Home() {
           }
         });
 
-        const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
         return Object.entries(origemCounts)
           .sort((a, b) => b[1].count - a[1].count)
           .map(([origem, data]) => ({
             id: origem,
-            title: labels[origem] || origem,
+            title: getOriginLabel(origem),
             subtitle: "Origem do Paciente",
             count: data.count,
             value: data.value,
@@ -1854,12 +1852,11 @@ export default function Home() {
         counts[orig].value += app._value;
       });
 
-      const labels: Record<string, string> = { Google: "Google", Instagram: "Instagram", Desconhecido: "Desconhecida" };
       return Object.entries(counts)
         .sort((a, b) => b[1].count - a[1].count)
         .map(([name, data]) => ({
           id: name,
-          title: labels[name] || name,
+          title: getOriginLabel(name),
           subtitle: "Origem do Paciente",
           count: data.count,
           value: data.value,

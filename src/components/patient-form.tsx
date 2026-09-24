@@ -1468,6 +1468,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                         <SelectContent>
                           <SelectItem value="Google">Google</SelectItem>
                           <SelectItem value="Instagram">Instagram</SelectItem>
+                          <SelectItem value="Busca Ativa">Busca Ativa</SelectItem>
                           <SelectItem value="Desconhecido">Desconhecido</SelectItem>
                         </SelectContent>
                       </Select>

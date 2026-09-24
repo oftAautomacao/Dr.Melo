@@ -4,7 +4,7 @@ import { whatsappService } from "@/lib/whatsapp-service";
 import { revalidatePath } from "next/cache";
 import { ref, update, get, query, orderByKey, startAt, limitToFirst } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
-import { getPhoneVariants, normalizePatientOrigin } from "@/lib/patient-origin";
+import { normalizePatientOrigin } from "@/lib/patient-origin";
 import type {
   PatientFormData,
   AICategorization,
@@ -242,16 +242,6 @@ export async function saveAppointmentAction(
     if (isDRMBase(firebaseBase)) {
       const cleanPhone = phone.replace(/\D/g, "");
       updates[`${convBase}/${cleanPhone}/consultasAgendadas/${datePath}/${timePath}`] = appointmentDataToSave;
-      updates[`${convBase}/${cleanPhone}/origem`] = normalizedOrigin;
-
-      for (const variant of getPhoneVariants(cleanPhone)) {
-        if (variant === cleanPhone) continue;
-
-        const variantSnap = await get(ref(dbInstance, `${convBase}/${variant}`));
-        if (variantSnap.exists()) {
-          updates[`${convBase}/${variant}/origem`] = normalizedOrigin;
-        }
-      }
     }
 
     await update(ref(dbInstance), updates);

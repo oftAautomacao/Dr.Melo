@@ -1,9 +1,15 @@
-export const PATIENT_ORIGIN_VALUES = ["Google", "Instagram", "Desconhecido"] as const;
+export const PATIENT_ORIGIN_VALUES = ["Google", "Instagram", "Busca Ativa", "Desconhecido"] as const;
 
 export type PatientOrigin = (typeof PATIENT_ORIGIN_VALUES)[number];
 
 export function normalizePatientOrigin(origin: string | null | undefined): PatientOrigin {
-  const raw = String(origin ?? "").trim().toLowerCase();
+  const raw = String(origin ?? "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ");
 
   if (raw === "google" || raw === "site") {
     return "Google";
@@ -17,6 +23,10 @@ export function normalizePatientOrigin(origin: string | null | undefined): Patie
     raw === "facebook / instagram"
   ) {
     return "Instagram";
+  }
+
+  if (raw === "busca ativa" || raw === "buscaativa") {
+    return "Busca Ativa";
   }
 
   if (

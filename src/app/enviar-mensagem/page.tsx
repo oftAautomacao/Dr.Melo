@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { getFirestoreInstance, getDatabaseInstance } from "@/lib/firebase";
 import { ref, get } from "firebase/database";
-import { ENVIRONMENT } from "../../../ambiente";
 import { Toaster, toast } from 'sonner';
 
 import {
@@ -284,6 +283,7 @@ function EnviarMensagemComponent() {
   /* ---------- state ---------- */
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
   const [environment, setEnvironment] = useState<"teste" | "producao">("teste");
+  const [isConfigurationReady, setIsConfigurationReady] = useState(false);
   const searchParams = useSearchParams();
 
   interface UnitConfig {
@@ -302,10 +302,11 @@ function EnviarMensagemComponent() {
   /* ---------- get config from localStorage ---------- */
   useEffect(() => {
     const storedPathBase = localStorage.getItem("FIREBASE_PATH_BASE") as "DRM" | "OFT/45" | null;
-    if (storedPathBase) setSelectedUnit(storedPathBase);
+    setSelectedUnit(storedPathBase === "DRM" || storedPathBase === "OFT/45" ? storedPathBase : "DRM");
 
     const storedEnv = localStorage.getItem("APP_ENVIRONMENT") as "teste" | "producao" | null;
-    if (storedEnv) setEnvironment(storedEnv);
+    setEnvironment(storedEnv === "producao" ? "producao" : "teste");
+    setIsConfigurationReady(true);
   }, []);
 
   /* --------------------- carrega lista de unidades ------------------ */
@@ -482,6 +483,8 @@ function EnviarMensagemComponent() {
   /* ------------------------------ estado ----------------------------- */
   const [searchTerm, setSearchTerm] = useState("");
   const [patientList, setPatientList] = useState<string[]>([]);
+  const [isLoadingPatients, setIsLoadingPatients] = useState(false);
+  const [patientListError, setPatientListError] = useState<string | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<
     { content: any; role: "user" | "assistant" }[]
@@ -506,20 +509,45 @@ function EnviarMensagemComponent() {
 
   /* --------------------- carrega lista de pacientes ------------------ */
   useEffect(() => {
-    if (!selectedUnit) return;
+    if (!isConfigurationReady || !selectedUnit) return;
+
+    let isCurrentRequest = true;
+
     (async () => {
+      setIsLoadingPatients(true);
+      setPatientListError(null);
+      setPatientList([]);
+      setSelectedPatient(null);
+      setConversationHistory([]);
+
       try {
         const historyKey =
           selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
         const col = collection(getFirestoreInstance(environment), historyKey);
         const snaps = await getDocs(col);
-        setPatientList(snaps.docs.map((d) => d.id));
+
+        if (isCurrentRequest) {
+          setPatientList(snaps.docs.map((d) => d.id).sort((a, b) => a.localeCompare(b)));
+        }
       } catch (err) {
         console.error("Erro ao carregar lista de pacientes:", err);
-        toast.error("Falha ao carregar a lista de pacientes.");
+        if (isCurrentRequest) {
+          setPatientListError(
+            environment === "teste"
+              ? "Não foi possível acessar as conversas do ambiente de teste. Verifique o ambiente nas Configurações."
+              : "Não foi possível carregar as conversas. Tente novamente."
+          );
+          toast.error("Falha ao carregar a lista de pacientes.");
+        }
+      } finally {
+        if (isCurrentRequest) setIsLoadingPatients(false);
       }
     })();
-  }, [selectedUnit]);
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [selectedUnit, environment, isConfigurationReady]);
 
   /* --------------------- busca conversa do paciente ------------------ */
   const handlePatientSelect = useCallback(async (patientId: string) => {
@@ -555,7 +583,7 @@ function EnviarMensagemComponent() {
       toast.error("Falha ao carregar o histórico da conversa.");
       setConversationHistory([]);
     }
-  }, [selectedUnit]);
+  }, [selectedUnit, environment]);
 
   /* -------- seleção automática enquanto digita ou via URL -------- */
   useEffect(() => {
@@ -695,7 +723,20 @@ function EnviarMensagemComponent() {
 
           {/* lista de telefones (clica ainda funciona) */}
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            {patientList
+            {!isConfigurationReady || isLoadingPatients ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
+                <RefreshCcw className="h-4 w-4 animate-spin" />
+                Carregando conversas...
+              </div>
+            ) : patientListError ? (
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+                {patientListError}
+              </div>
+            ) : patientList.length === 0 ? (
+              <div className="py-8 text-center text-sm text-gray-500">
+                Nenhuma conversa encontrada.
+              </div>
+            ) : patientList
               .filter((p) => p.includes(searchTerm.trim()))
               .map((phone, idx) => (
                 <div

@@ -23,6 +23,14 @@ const nextConfig: NextConfig = {
   experimental: {
     // allowedDevOrigins removed as it is unrecognized in this Next.js version and not needed for local Windows dev
   },
+  webpack(config, { dev }) {
+    // O cache de producao pode ultrapassar 1 GB e o Firebase cria outra copia
+    // temporaria durante o deploy. Desativa-lo evita ENOSPC sem afetar o runtime.
+    if (!dev) {
+      config.cache = false;
+    }
+    return config;
+  },
   async headers() {
     return [
       {

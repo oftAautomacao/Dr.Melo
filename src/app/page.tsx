@@ -35,6 +35,7 @@ import { Input } from "@/components/ui/input";
 import { differenceInYears, parse } from "date-fns";
 import { PatientDetailsSheet, AppointmentDetail } from "@/components/PatientDetailsSheet";
 import { normalizePatientOrigin } from "@/lib/patient-origin";
+import { getBillingProcedureNames, getDrMeloProcedureValue } from "@/lib/billing-values";
 
 /* ---------- helpers ---------- */
 const MESES = [
@@ -544,45 +545,18 @@ export default function Home() {
           }
 
           if (include) {
-            let appValue = 0;
-            const isParticular = hours[time].convenio?.trim().toLowerCase() === "particular";
             const examPrices: Record<string, number> = {};
-            const examesArray = Array.isArray(hours[time].exames) ? hours[time].exames : [];
-            
-            if (date < "2026-03-01" || selectedUnit !== "DRM" || !isParticular) {
-               appValue = 30; // Regra antiga / Plano de Saúde
-               const count = examesArray.length;
-               if (count > 0) {
-                 examesArray.forEach((ex: string) => {
-                   examPrices[ex] = 30 / count;
-                 });
-               }
-            } else {
-               // Particular: soma valor configurado
-               let sum = 0;
-               examesArray.forEach((exName: string) => {
-                   const conf = examConfig[exName];
-                   let priceDrMelo = conf?.drMelo;
+            const configuredExams = getBillingProcedureNames(
+              Array.isArray(hours[time].exames) ? hours[time].exames : undefined,
+              examConfig,
+            );
+            let appValue = 0;
 
-                   // Preparação para futura alteração onde drMelo será separado por unidade
-                   if (priceDrMelo && typeof priceDrMelo === 'object') {
-                       priceDrMelo = priceDrMelo[unit] || 0;
-                   }
-
-                   let examVal = 0;
-                   if (typeof priceDrMelo === 'number') {
-                       examVal = priceDrMelo;
-                   } else if (typeof priceDrMelo === 'string') {
-                       if (!priceDrMelo.toLowerCase().includes("incluso")) {
-                           const parsed = Number(priceDrMelo.replace(/[^\d.,]/g, '').replace(',', '.'));
-                           if (!isNaN(parsed)) examVal = parsed;
-                       }
-                   }
-                   examPrices[exName] = examVal;
-                   sum += examVal;
-               });
-               appValue = sum;
-            }
+            configuredExams.forEach((examName: string) => {
+              const examValue = getDrMeloProcedureValue(examName, examConfig) ?? 0;
+              examPrices[examName] = examValue;
+              appValue += examValue;
+            });
 
             const app = { ...hours[time], _unit: unit, _date: date, _time: time, _value: appValue, _examPrices: examPrices };
 
@@ -615,7 +589,7 @@ export default function Home() {
       }
     }
     return appointments;
-  }, [patientData, filter, statType, filterCategory, filterValue, examConfig, selectedUnit, unitConfig]);
+  }, [patientData, filter, statType, filterCategory, filterValue, examConfig, unitConfig]);
 
   const filteredCancellations = useMemo(() => {
     if (!filter) return [];

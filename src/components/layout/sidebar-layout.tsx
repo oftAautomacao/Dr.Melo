@@ -4,7 +4,7 @@ import React, { ReactNode } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
-import { Home, CalendarDays, CalendarX, Search, DollarSign, RotateCcw } from "lucide-react";
+import { Home, CalendarDays, CalendarX, Search, DollarSign } from "lucide-react";
 import { MessageSquareText, Settings } from "lucide-react";
 
 interface SidebarLayoutProps {
@@ -65,12 +65,6 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor, 
             Configurações
           </Link>
 
-          {unit === 'DRM' && (
-            <Link href="/migrar-origens" className="flex items-center rounded px-4 py-3 font-semibold text-yellow-300 transition-colors hover:bg-yellow-900/30">
-              <RotateCcw className="mr-3 h-5 w-5" />
-              Base de Dados
-            </Link>
-          )}
         </nav>
       </aside>
 

@@ -173,6 +173,8 @@ interface AppointmentCalendarProps {
   initialUnit?: string | null;
   initialFilter?: string;
   initialDay?: string;
+  initialConversationPhone?: string;
+  openNewAppointmentOnLoad?: boolean;
 }
 
 /* ---------- helper para converter o texto do filtro em Date ---------- */
@@ -212,6 +214,8 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
   initialUnit,
   initialFilter,
   initialDay,
+  initialConversationPhone,
+  openNewAppointmentOnLoad = false,
 }) => {
   const { toast } = useToast();
   const router = useRouter();
@@ -250,7 +254,9 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
   const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
   const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
-  const [isNewAppointmentDialogOpen, setIsNewAppointmentDialogOpen] = useState(false);
+  const [isNewAppointmentDialogOpen, setIsNewAppointmentDialogOpen] = useState(
+    openNewAppointmentOnLoad
+  );
   const [isSearchDialogOpen, setIsSearchDialogOpen] = useState(false);
 
   const [appointmentToCancel, setAppointmentToCancel] =
@@ -281,7 +287,16 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
 
   /* -- estados para autopreencher/limpar -- */
   const [autoFillKey, setAutoFillKey] = useState(0);
-  const [defaults, setDefaults] = useState<Record<string, any>>();
+  const normalizedConversationPhone = String(initialConversationPhone || "").replace(/\D/g, "");
+  const [defaults, setDefaults] = useState<Record<string, any> | undefined>(() =>
+    normalizedConversationPhone
+      ? {
+          telefone: normalizedConversationPhone,
+          dataAgendamento: selectedDate,
+          ...(selectedUnit && { local: selectedUnit }),
+        }
+      : undefined
+  );
   const [newAppointmentPreview, setNewAppointmentPreview] = useState<NewAppointmentPreview>({});
 
   // Compute default form values at the top level (not conditionally in JSX)
@@ -1281,6 +1296,9 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
             <PatientForm
               key={autoFillKey}
               defaultValues={formDefaults}
+              conversationAutoFillPhone={
+                openNewAppointmentOnLoad ? normalizedConversationPhone : undefined
+              }
               onPreviewChange={setNewAppointmentPreview}
               onAppointmentSaved={() => {
                 setIsNewAppointmentDialogOpen(false);

@@ -1,7 +1,7 @@
 "use client";
 
 import type * as React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { ref, onValue, get, type DataSnapshot } from "firebase/database";
@@ -68,6 +68,7 @@ interface PatientFormProps {
   defaultValues?: Record<string, any>;
   initialData?: CalendarAppointment | null | undefined; // Added initialData prop
   firebaseBase?: string;
+  conversationAutoFillPhone?: string;
   onRescheduleComplete?: () => void;
   onPreviewChange?: (preview: {
     dataAgendamento?: string;
@@ -234,7 +235,7 @@ function extractConversationHistoryFromDocument(data: any): { role: string; cont
 
 import { ENVIRONMENT } from "../../ambiente";
 
-export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, defaultValues, initialData, firebaseBase, onRescheduleComplete, onPreviewChange }) => {
+export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, defaultValues, initialData, firebaseBase, conversationAutoFillPhone, onRescheduleComplete, onPreviewChange }) => {
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const [isCategorizing, setIsCategorizing] = useState(false);
@@ -253,6 +254,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
   const [sendPatientMessage, setSendPatientMessage] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [isConversationAutofilling, setIsConversationAutofilling] = useState(false);
+  const autoFilledConversationPhoneRef = useRef<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const [isClient, setIsClient] = useState(false);
@@ -707,6 +709,23 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
       setIsConversationAutofilling(false);
     }
   };
+
+  useEffect(() => {
+    const cleanPhone = String(conversationAutoFillPhone || "").replace(/\D/g, "");
+
+    if (!cleanPhone || cleanPhone.length < 10) return;
+    if (isLoadingUnidades || isLoadingConvenios || isLoadingExames) return;
+    if (autoFilledConversationPhoneRef.current === cleanPhone) return;
+
+    autoFilledConversationPhoneRef.current = cleanPhone;
+    form.setValue("telefone", cleanPhone, { shouldDirty: false, shouldValidate: true });
+    void handleConversationAutoFill(cleanPhone);
+  }, [
+    conversationAutoFillPhone,
+    isLoadingConvenios,
+    isLoadingExames,
+    isLoadingUnidades,
+  ]);
 
 
   useEffect(() => {

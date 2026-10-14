@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -56,6 +56,12 @@ import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import { Separator } from "./ui/separator";
 import { Label } from "@radix-ui/react-label";
 import { getBillingAppointmentsForUnitMonth } from "@/lib/attendance-report";
+import {
+  getBillingProcedureNames,
+  getDrMeloProcedureValue,
+  isProcedureIncludedInConsultation,
+  parseBillingValue,
+} from "@/lib/billing-values";
 
 const MESES = [
   "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
@@ -93,7 +99,6 @@ export interface CalendarAppointment {
 
 export function FinancialSheetContent({ unit, patientData, initialMonth, unitConfig }: FinancialSheetContentProps) {
   const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth);
-  const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
   const [isConfirmCancelDialogOpen, setIsConfirmCancelDialogOpen] = useState(false);
   const [isRescheduleFormOpen, setIsRescheduleFormOpen] = useState(false);
   const [isNewAppointmentFormOpen, setIsNewAppointmentFormOpen] = useState(false);
@@ -105,11 +110,6 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
   const normalizeFileName = (str: string) => {
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '_').replace(/\//g, '_');
   };
-
-  useEffect(() => {
-    const storedPathBase = localStorage.getItem("FIREBASE_PATH_BASE") as "DRM" | "OFT/45" | null;
-    if (storedPathBase) setSelectedUnit(storedPathBase);
-  }, []);
 
   const appointmentsForMonth = useMemo(() => {
     if (!selectedMonth) return [];
@@ -141,15 +141,15 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
   };
 
   const handleGenerateReport = async (reportType: 'secretaria' | 'administrativo') => {
-    if (!selectedUnit) {
-      toast.error("Unidade não identificada. Não é possível enviar a mensagem.");
-      return;
-    }
+    const selectedUnit = getFirebasePathBase();
 
     setIsReportTypeDialogOpen(false);
 
-    const unitName = unit.charAt(0).toUpperCase() + unit.slice(1);
-    const bairro = unitConfig?.[unit]?.bairro;
+    const configuredUnit = unitConfig?.[unit];
+    const unitKeyName = unit.charAt(0).toUpperCase() + unit.slice(1);
+    const unitName = configuredUnit?.empresa?.trim()
+      || unitKeyName;
+    const bairro = configuredUnit?.bairro?.trim();
     const locationString = bairro ? `${unitName} - ${bairro}` : unitName;
 
     // 1. Criar o documento PDF
@@ -177,23 +177,30 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
     // 2. Buscar preços no Firebase globalmente (necessário para descobrir itens inclusos)
     toast.loading("Processando exames...");
     const DB_URL = "https://oftautomacao-9b427-default-rtdb.firebaseio.com";
-    const firebasePath = getFirebasePathBase(); // "DRM" ou "OFT/45"
     let examesConfig: Record<string, { preco?: number | string; drMelo?: number | string; clinica?: number | string }> = {};
     try {
-      const resp = await fetch(`${DB_URL}/${firebasePath}/agendamentoWhatsApp/configuracoes/exames.json`);
+      const resp = await fetch(`${DB_URL}/DRM/agendamentoWhatsApp/configuracoes/exames.json`);
       examesConfig = (await resp.json()) ?? {};
     } catch (e) {
       console.warn("Não foi possível buscar preços dos exames:", e);
     }
     toast.dismiss();
 
-    const isItemIncluso = (itemName: string) => {
-      // Checa se o texto (incluso na consulta) está no próprio nome
-      if (itemName.toLowerCase().includes("(incluso na consulta)")) return true;
-      // Checa se o Firebase retornou a string indicando "incluso" no preço
-      const cfg = examesConfig[itemName];
-      return (typeof cfg?.preco === 'string' && cfg.preco.toLowerCase().includes('incluso'));
-    };
+    if (reportType === 'administrativo') {
+      const proceduresWithoutDrMelo = Array.from(new Set(
+        appointmentsForMonth.flatMap((appointment) =>
+          getBillingProcedureNames(appointment.exames, examesConfig)
+            .filter((procedure) => getDrMeloProcedureValue(procedure, examesConfig) == null),
+        ),
+      ));
+
+      if (proceduresWithoutDrMelo.length > 0) {
+        toast.error(
+          `Valor drMelo não configurado para: ${proceduresWithoutDrMelo.join(", ")}. Relatório não gerado.`,
+        );
+        return;
+      }
+    }
 
     // 3. Preparar os dados da tabela
     const body: any[] = [];
@@ -209,15 +216,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
         const nameRaw = app.nomePaciente || "Não informado";
         const name = app.cpf ? `${nameRaw}\nCPF: ${app.cpf}` : nameRaw;
         const convenio = app.convenio || "Não informado";
-        let itens = (app.exames && app.exames.length > 0) ? [...app.exames] : ["Consulta"];
-        
-        // Se o paciente possui um item incluso na consulta, mas a consulta em si não foi registrada, adicionamos ela automaticamente
-        const hasIncluso = itens.some(item => isItemIncluso(item));
-        const hasConsulta = itens.some(item => item.toLowerCase().trim() === "consulta");
-        
-        if (hasIncluso && !hasConsulta) {
-          itens = ["Consulta", ...itens];
-        }
+        const itens = getBillingProcedureNames(app.exames, examesConfig);
         const bgColor: [number, number, number] = isAlternatePatient ? [240, 248, 255] : [255, 255, 255];
 
         itens.forEach((item, index) => {
@@ -257,15 +256,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
         const nameRaw = app.nomePaciente || "Não informado";
         const name = app.cpf ? `${nameRaw}\nCPF: ${app.cpf}` : nameRaw;
         const convenio = app.convenio || "Não informado";
-        let itens = (app.exames && app.exames.length > 0) ? [...app.exames] : ["Consulta"];
-        
-        // Verifica se há item incluso usando a nova subfunção baseada no config do Firebase
-        const hasIncluso = itens.some(item => isItemIncluso(item));
-        const hasConsulta = itens.some(item => item.toLowerCase().trim() === "consulta");
-        
-        if (hasIncluso && !hasConsulta) {
-          itens = ["Consulta", ...itens];
-        }
+        const itens = getBillingProcedureNames(app.exames, examesConfig);
         const bgColor: [number, number, number] = isAlternatePatient ? [240, 248, 255] : [255, 255, 255];
 
         const formatBRL = (v: number | undefined) =>
@@ -277,35 +268,14 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
           // Particular: busca preços individuais no Firebase
           itens.forEach((item, index) => {
             const cfg = examesConfig[item];
-            const isIncluso = item.toLowerCase().includes("(incluso na consulta)");
-
-            // Sub-função para limpar os valores recebidos do Firebase
-            // Se vier o texto "incluso na consulta" dentro do botão de preço, transforma em 0.
-            const parseVal = (v: any): number | undefined => {
-              if (v == null || v === "") return undefined;
-              if (typeof v === 'string') {
-                const s = v.trim().toLowerCase();
-                if (s.includes('incluso')) return 0;
-                const num = parseFloat(s.replace(',', '.'));
-                return isNaN(num) ? undefined : num;
-              }
-              const n = Number(v);
-              return isNaN(n) ? undefined : n;
-            };
+            const isIncluso = isProcedureIncludedInConsultation(item, examesConfig);
 
             const valPreco = cfg?.preco;
             const valClinica = cfg?.clinica;
-            
-            // Lógica do Dr. Melo específica por Unidade
-            const unitKey = app.unidade; // ex: "oftalmoRecreio"
-            const unitSpecificDrMelo = (cfg as Record<string, any>)?.[unitKey];
-            const valDrMelo = (unitSpecificDrMelo != null && String(unitSpecificDrMelo).trim() !== "") 
-              ? unitSpecificDrMelo 
-              : cfg?.drMelo;
 
-            const precoPaciente = isIncluso ? 0 : parseVal(valPreco);
-            const precoDrMelo = isIncluso ? 0 : parseVal(valDrMelo);
-            const precoClinica = isIncluso ? 0 : parseVal(valClinica);
+            const precoPaciente = isIncluso ? 0 : parseBillingValue(valPreco);
+            const precoDrMelo = getDrMeloProcedureValue(item, examesConfig);
+            const precoClinica = isIncluso ? 0 : parseBillingValue(valClinica);
 
             // Se for número válido, soma nos totais globais
             if (precoPaciente != null) totalPaciente += precoPaciente;
@@ -326,12 +296,12 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
             ]);
           });
         } else {
-          // Plano de saúde: cobrança fixa de R$ 30 para Dr. Melo no 1º exame; demais ficam em branco
-          const PLANO_DRM_FIXO = 30;
-          totalDrMelo += PLANO_DRM_FIXO;
-
+          // Plano de saúde: o repasse também é o valor drMelo de cada procedimento.
           itens.forEach((item, index) => {
             const isFirst = index === 0;
+            const precoDrMelo = getDrMeloProcedureValue(item, examesConfig);
+            if (precoDrMelo != null) totalDrMelo += precoDrMelo;
+
             const displayItem = item.replace(/\s*\(incluso na consulta\)/gi, "").trim();
             body.push([
               { content: isFirst ? dateFull : "", styles: { fillColor: bgColor } },
@@ -340,8 +310,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
               { content: displayItem, styles: { fillColor: bgColor } },
               // Paciente paga 0 (plano cobre)
               { content: "0,00", styles: { fillColor: bgColor, halign: 'right' } },
-              // Dr. Melo recebe R$30 fixo apenas no primeiro exame; demais zerado
-              { content: isFirst ? formatBRL(PLANO_DRM_FIXO) : "0,00", styles: { fillColor: bgColor, halign: 'right' } },
+              { content: formatBRL(precoDrMelo), styles: { fillColor: bgColor, halign: 'right' } },
               // Clínica recebe 0 (plano)
               { content: "0,00", styles: { fillColor: bgColor, halign: 'right' } },
             ]);
@@ -412,7 +381,7 @@ export function FinancialSheetContent({ unit, patientData, initialMonth, unitCon
       anoMesFormatado = normalizeFileName(selectedMonth);
     }
 
-    const unitNameNorm = normalizeFileName(unitName);
+    const unitNameNorm = normalizeFileName(unitKeyName);
 
     const fileName = reportType === 'secretaria'
       ? `Dr.Melo_Age_${unitNameNorm}_${anoMesFormatado}`

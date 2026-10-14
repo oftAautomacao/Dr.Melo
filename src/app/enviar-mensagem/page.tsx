@@ -7,7 +7,11 @@ import { useState, useEffect, useRef, Suspense, useCallback } from "react";
 import { MessagesSquare, RefreshCcw, Send, ArrowLeft, Sparkles, Info, BrainCircuit, Download, Zap, MessageSquare, X, Building } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { identifyPatientSourceAction, type SourceAnalysisResult } from "@/app/actions/ai-analysis";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
 import { getFirestoreInstance, getDatabaseInstance } from "@/lib/firebase";
+import { getPhoneVariants } from "@/lib/patient-origin";
 import { ref, get } from "firebase/database";
 import { Toaster, toast } from 'sonner';
 
@@ -32,10 +36,27 @@ const AVATARS = [
   "/avatars/avatar8.png",
 ];
 
-import { identifyPatientSourceAction, type SourceAnalysisResult } from "@/app/actions/ai-analysis";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
+function extractConversationMessages(data: unknown) {
+  if (!data || typeof data !== "object") return [];
 
+  const documentData = data as Record<string, unknown>;
+  let history: unknown[] = [];
+
+  if (Array.isArray(documentData.glbHistoricoDaConversa)) {
+    history = documentData.glbHistoricoDaConversa;
+  } else {
+    const firstHistory = Object.values(documentData).find(Array.isArray);
+    if (Array.isArray(firstHistory)) history = firstHistory;
+  }
+
+  return history.filter(
+    (message): message is { content: any; role: "user" | "assistant" } =>
+      Boolean(message) &&
+      typeof message === "object" &&
+      ((message as { role?: unknown }).role === "user" ||
+        (message as { role?: unknown }).role === "assistant")
+  );
+}
 
 /* 
   Componente de Botão para Análise de Origem (Header)
@@ -507,6 +528,43 @@ function EnviarMensagemComponent() {
     }
   }, [searchParams]);
 
+  /* ---- Abre diretamente a conversa recebida pela URL ---- */
+  useEffect(() => {
+    if (!isConfigurationReady || !selectedUnit) return;
+
+    const phoneFromUrl = String(searchParams.get("telefone") || "").replace(/\D/g, "");
+    if (phoneFromUrl.length < 10) return;
+
+    let isCurrentRequest = true;
+
+    (async () => {
+      try {
+        const historyKey =
+          selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
+
+        for (const phoneVariant of getPhoneVariants(phoneFromUrl)) {
+          const snapshot = await getDoc(
+            doc(getFirestoreInstance(environment), historyKey, phoneVariant)
+          );
+
+          if (!isCurrentRequest) return;
+          if (!snapshot.exists()) continue;
+
+          setSelectedPatient(phoneVariant);
+          setConversationHistory(extractConversationMessages(snapshot.data()));
+          return;
+        }
+      } catch (error) {
+        console.error("Erro ao abrir diretamente a conversa recebida pela URL:", error);
+        // A listagem completa continua carregando e funciona como fallback.
+      }
+    })();
+
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [environment, isConfigurationReady, searchParams, selectedUnit]);
+
   /* --------------------- carrega lista de pacientes ------------------ */
   useEffect(() => {
     if (!isConfigurationReady || !selectedUnit) return;
@@ -560,24 +618,7 @@ function EnviarMensagemComponent() {
       const ref = doc(getFirestoreInstance(environment), historyKey, patientId);
       const snap: DocumentSnapshot = await getDoc(ref);
       const data = snap.exists() ? snap.data() : null;
-
-      let history: any[] = [];
-      if (data) {
-        if (Array.isArray((data as any).glbHistoricoDaConversa)) {
-          history = (data as any).glbHistoricoDaConversa;
-        } else {
-          for (const key in data) {
-            if (Array.isArray((data as any)[key])) {
-              history = (data as any)[key];
-              break;
-            }
-          }
-        }
-      }
-      const filtered = history.filter(
-        (m) => m.role === "user" || m.role === "assistant"
-      );
-      setConversationHistory(filtered);
+      setConversationHistory(extractConversationMessages(data));
     } catch (err) {
       console.error("Erro ao carregar histórico:", err);
       toast.error("Falha ao carregar o histórico da conversa.");

@@ -105,6 +105,17 @@ export type ConversationAppointmentExtractionResult = z.infer<
     typeof conversationAppointmentExtractionSchema
 >;
 
+const conversationScheduleSearchSchema = z.object({
+    exames: z.array(z.string()).default([]),
+    unidades: z.array(z.string()).default([]),
+    confidence: confidenceSchema,
+    warnings: z.array(z.string()).default([]),
+});
+
+export type ConversationScheduleSearchResult = z.infer<
+    typeof conversationScheduleSearchSchema
+>;
+
 function hasGeminiApiKey() {
     return Boolean(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
 }
@@ -187,6 +198,75 @@ REGRAS IMPORTANTES:
             prompt,
             conversationAppointmentExtractionSchema,
             "conversation_appointment_extraction",
+            "gpt-4o"
+        );
+    }
+
+    throw new Error(
+        "Nenhuma chave de IA foi configurada. Defina GEMINI_API_KEY, GOOGLE_API_KEY ou OPENAI_API_KEY."
+    );
+}
+
+export async function extractScheduleSearchFromConversationAction(params: {
+    history: { role: string; content: string }[];
+    availableProcedures: string[];
+    availableUnits: string[];
+}): Promise<ConversationScheduleSearchResult | null> {
+    const patientMessages = params.history.filter(
+        (message) => message.role === "user" && String(message.content || "").trim() !== ""
+    );
+    if (!patientMessages.length) return null;
+
+    const conversationText = serializeConversationHistory(patientMessages);
+    const availableProcedures = params.availableProcedures
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+    const availableUnits = params.availableUnits
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+
+    const prompt = `
+Voce analisa exclusivamente as mensagens escritas pelo paciente em uma conversa de WhatsApp de uma clinica oftalmologica para preparar uma busca de horarios.
+
+OBJETIVO:
+- Identificar os exames e procedimentos que o paciente realmente pediu, confirmou ou demonstrou querer agendar.
+- Identificar somente as unidades pelas quais o paciente demonstrou interesse, pediu ou aceitou.
+
+REGRAS IMPORTANTES:
+- Nao invente informacoes.
+- O historico fornecido contem somente mensagens com role "user". Baseie a resposta exclusivamente nas palavras do paciente.
+- Nao utilize nem infira sugestoes feitas pela assistente.
+- Se o paciente recusou ou corrigiu uma opcao, considere a informacao mais recente.
+- Se o paciente nao demonstrou interesse por nenhuma unidade ou nao falou sobre unidade, retorne unidades como [].
+- Se nao houver exame ou procedimento identificavel, retorne exames como [].
+- Sempre que houver uma correspondencia razoavel, use exatamente o texto de uma opcao disponivel abaixo.
+- confidence deve ser "alta", "média" ou "baixa".
+- warnings deve conter apenas ambiguidades curtas que merecam revisao humana.
+
+EXAMES E PROCEDIMENTOS DISPONIVEIS:
+${availableProcedures.map((item) => `- ${item}`).join("\n") || "- Nenhum"}
+
+UNIDADES DISPONIVEIS:
+${availableUnits.map((item) => `- ${item}`).join("\n") || "- Nenhuma"}
+
+Responda somente com o objeto estruturado.
+`;
+
+    if (hasGeminiApiKey()) {
+        const { output } = await ai.generate({
+            prompt: `${prompt}\n\nCONVERSA:\n${conversationText}`,
+            output: { schema: conversationScheduleSearchSchema },
+        });
+
+        return (output as ConversationScheduleSearchResult | null) ?? null;
+    }
+
+    if (hasOpenAiApiKey()) {
+        return openaiService.analyzeTextParsed<ConversationScheduleSearchResult>(
+            conversationText,
+            prompt,
+            conversationScheduleSearchSchema,
+            "conversation_schedule_search",
             "gpt-4o"
         );
     }

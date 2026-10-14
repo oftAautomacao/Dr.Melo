@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   explainExamAction,
   ExamExplanationResult,
 } from "@/app/actions/exam-assistant";
+import { extractScheduleSearchFromConversationAction } from "@/app/actions/ai-analysis";
 import { useBuscaHorarios } from "@/hooks/useBuscaHorarios";
 import {
   cloneInternalExamAliasEntries,
@@ -19,12 +20,17 @@ import { UnidadeResultCard } from "./UnidadeResultCard";
 import { Calendar as CalendarUI } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast as showToast } from "@/hooks/use-toast";
+import { getFirestoreInstance } from "@/lib/firebase";
+import { getFirebasePathBase } from "@/lib/firebaseConfig";
+import { getPhoneVariants } from "@/lib/patient-origin";
+import { doc, getDoc } from "firebase/firestore";
 import { ptBR } from "date-fns/locale";
 import { format, getDay, parseISO, isValid, startOfDay } from "date-fns";
 import { 
   Search, Plus, X, Loader2, Clock,
   AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy, Eraser, MapPin, CircleHelp, Pencil, List, Trash2
 } from "lucide-react";
+import { ENVIRONMENT } from "../../../ambiente";
 
 const INCLUDED_IN_CONSULTA_OPTION = "__included_in_consulta__";
 const INTERNAL_LIST_STORAGE_KEY = "busca-horarios-internal-aliases-v1";
@@ -36,6 +42,70 @@ function buildDefaultSearchWeek() {
     date.setDate(today.getDate() + index);
     return date;
   });
+}
+
+function normalizeSearchOption(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function findBestStringOption(rawValue: string, options: string[]) {
+  const query = normalizeSearchOption(rawValue);
+  if (!query) return null;
+
+  const exact = options.find((option) => normalizeSearchOption(option) === query);
+  if (exact) return exact;
+
+  let bestOption: string | null = null;
+  let bestScore = 0;
+  const queryTokens = query.split(" ").filter((token) => token.length > 1);
+
+  options.forEach((option) => {
+    const normalizedOption = normalizeSearchOption(option);
+    let score = 0;
+
+    if (normalizedOption.includes(query) || query.includes(normalizedOption)) score += 8;
+    queryTokens.forEach((token) => {
+      if (normalizedOption.includes(token)) score += 2;
+    });
+
+    if (score > bestScore) {
+      bestOption = option;
+      bestScore = score;
+    }
+  });
+
+  return bestScore >= 2 ? bestOption : null;
+}
+
+function extractConversationHistory(data: unknown): { role: string; content: string }[] {
+  if (!data || typeof data !== "object") return [];
+
+  const documentData = data as Record<string, unknown>;
+  let history: unknown[] = [];
+
+  if (Array.isArray(documentData.glbHistoricoDaConversa)) {
+    history = documentData.glbHistoricoDaConversa;
+  } else {
+    const firstHistory = Object.values(documentData).find(Array.isArray);
+    if (Array.isArray(firstHistory)) history = firstHistory;
+  }
+
+  return history
+    .filter((message): message is Record<string, unknown> => Boolean(message) && typeof message === "object")
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .map((message) => ({
+      role: String(message.role),
+      content:
+        typeof message.content === "string"
+          ? message.content
+          : JSON.stringify(message.content ?? ""),
+    }));
 }
 
 export default function BuscaHorarios() {
@@ -84,6 +154,8 @@ export default function BuscaHorarios() {
   const [openExamInfoFor, setOpenExamInfoFor] = useState<string | null>(null);
   const [examInfoLoadingFor, setExamInfoLoadingFor] = useState<string | null>(null);
   const [examExplanationMap, setExamExplanationMap] = useState<Record<string, ExamExplanationResult>>({});
+  const [isConversationAutofilling, setIsConversationAutofilling] = useState(false);
+  const autoFilledConversationPhoneRef = useRef<string | null>(null);
 
   const selectedDatesStrings = useMemo(() => {
     return selectedDateObjects.map(d => format(d, "yyyy-MM-dd"));
@@ -205,6 +277,128 @@ export default function BuscaHorarios() {
   const removeUnidade = (unit: string) => {
     setSelectedUnidades(prev => prev.filter(u => u !== unit));
   };
+
+  useEffect(() => {
+    if (loading || typeof window === "undefined") return;
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("autopreencher") !== "conversa") return;
+
+    const phone = String(params.get("telefone") || "").replace(/\D/g, "");
+    if (phone.length < 10 || autoFilledConversationPhoneRef.current === phone) return;
+
+    autoFilledConversationPhoneRef.current = phone;
+    let cancelled = false;
+
+    const autofillFromConversation = async () => {
+      setIsConversationAutofilling(true);
+
+      try {
+        const firebaseBase = getFirebasePathBase();
+        const historyKey =
+          firebaseBase === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
+        let conversationHistory: { role: string; content: string }[] = [];
+
+        for (const variant of getPhoneVariants(phone)) {
+          const snapshot = await getDoc(
+            doc(getFirestoreInstance(ENVIRONMENT), historyKey, variant)
+          );
+
+          if (cancelled) return;
+          if (!snapshot.exists()) continue;
+
+          conversationHistory = extractConversationHistory(snapshot.data());
+          if (conversationHistory.length > 0) break;
+        }
+
+        if (conversationHistory.length === 0) {
+          showToast({
+            title: "Conversa nao encontrada",
+            description: "Nao foi encontrada conversa para preencher a busca de horarios.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const result = await extractScheduleSearchFromConversationAction({
+          history: conversationHistory,
+          availableProcedures: procedimentosList,
+          availableUnits: unidadesList,
+        });
+
+        if (cancelled) return;
+        if (!result) {
+          showToast({
+            title: "Falha na analise",
+            description: "A conversa foi encontrada, mas nao foi possivel interpretar os pedidos do paciente.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        const matchedProcedures = Array.from(
+          new Set(
+            result.exames
+              .map((exam) => {
+                const directMatch = findBestStringOption(exam, procedimentosList);
+                if (directMatch) return directMatch;
+
+                const internalMatch = findInternalExamMatches(
+                  exam,
+                  procedimentosList,
+                  internalAliasEntries
+                )[0];
+                return internalMatch?.resolvedProcedures[0]?.raw ?? null;
+              })
+              .filter((item): item is string => Boolean(item))
+          )
+        );
+        const matchedUnits = Array.from(
+          new Set(
+            result.unidades
+              .map((unit) => findBestStringOption(unit, unidadesList))
+              .filter((item): item is string => Boolean(item))
+          )
+        );
+
+        setProcedimentos(matchedProcedures);
+        setSelectedUnidades(matchedUnits);
+        setSelectedByIncludedOption(false);
+
+        const filledLabels = [
+          matchedProcedures.length > 0
+            ? `${matchedProcedures.length} exame(s)/procedimento(s)`
+            : null,
+          matchedUnits.length > 0 ? `${matchedUnits.length} unidade(s)` : null,
+        ].filter(Boolean);
+        const warnings = result.warnings.filter(Boolean).slice(0, 2).join(" ");
+
+        showToast({
+          title: "Busca preenchida pela conversa",
+          description:
+            warnings ||
+            (filledLabels.length > 0
+              ? `${filledLabels.join(" e ")}. A busca foi executada automaticamente.`
+              : "Nenhum exame ou unidade confirmado foi encontrado; revise os filtros da busca."),
+        });
+      } catch (error) {
+        console.error("BUSCA_HORARIOS: Falha ao preencher pela conversa:", error);
+        showToast({
+          title: "Erro ao analisar conversa",
+          description: "Nao foi possivel preencher a busca de horarios a partir da conversa.",
+          variant: "destructive",
+        });
+      } finally {
+        if (!cancelled) setIsConversationAutofilling(false);
+      }
+    };
+
+    void autofillFromConversation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, procedimentosList, unidadesList, internalAliasEntries]);
 
   useEffect(() => {
     const hasSearchCriteria = Boolean(
@@ -508,7 +702,9 @@ export default function BuscaHorarios() {
               <Search className="h-4 w-4 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-sm font-black text-foreground uppercase tracking-tight">Busca de Horarios</h1>
+              <h1 className="text-sm font-black text-foreground uppercase tracking-tight">
+                {isConversationAutofilling ? "Analisando conversa..." : "Busca de Horarios"}
+              </h1>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 md:justify-end">

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 
 import { Home, CalendarDays, CalendarX, Search, DollarSign } from "lucide-react";
-import { MessageSquareText, Settings } from "lucide-react";
+import { MessageSquareOff, MessageSquareText, Settings } from "lucide-react";
 
 interface SidebarLayoutProps {
   children: ReactNode;
@@ -58,6 +58,11 @@ const SidebarLayout: React.FC<SidebarLayoutProps> = ({ children, unit, bgColor, 
           <Link href="/faturamento" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
             <DollarSign className="mr-3 h-5 w-5" />
             Faturamento
+          </Link>
+
+          <Link href="/envio-mensagens" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">
+            <MessageSquareOff className="mr-3 h-5 w-5" />
+            Envio Mensagens
           </Link>
 
           <Link href="/configuracoes" className="flex items-center rounded px-4 py-3 transition-colors hover:bg-blue-800">

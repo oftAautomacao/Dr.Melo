@@ -21,8 +21,15 @@ import {
   updateDoc,
   collection,
   getDocs,
-  DocumentSnapshot,
 } from "firebase/firestore";
+
+type ConversationMessage = {
+  content: any;
+  role: "user" | "assistant";
+  timelineMarker?:
+    | { source: "realtime"; timestamp: string }
+    | { source: "firestore" };
+};
 
 /* ---------- avatares aleatórios ---------- */
 const AVATARS = [
@@ -36,7 +43,16 @@ const AVATARS = [
   "/avatars/avatar8.png",
 ];
 
-function extractConversationMessages(data: unknown) {
+function isConversationMessage(message: unknown): message is ConversationMessage {
+  return (
+    Boolean(message) &&
+    typeof message === "object" &&
+    ((message as { role?: unknown }).role === "user" ||
+      (message as { role?: unknown }).role === "assistant")
+  );
+}
+
+function extractConversationMessages(data: unknown): ConversationMessage[] {
   if (!data || typeof data !== "object") return [];
 
   const documentData = data as Record<string, unknown>;
@@ -49,13 +65,89 @@ function extractConversationMessages(data: unknown) {
     if (Array.isArray(firstHistory)) history = firstHistory;
   }
 
-  return history.filter(
-    (message): message is { content: any; role: "user" | "assistant" } =>
-      Boolean(message) &&
-      typeof message === "object" &&
-      ((message as { role?: unknown }).role === "user" ||
-        (message as { role?: unknown }).role === "assistant")
+  return history.filter(isConversationMessage);
+}
+
+function extractArchivedConversationMessages(data: unknown): ConversationMessage[] {
+  if (!data || typeof data !== "object") return [];
+
+  return Object.entries(data as Record<string, unknown>)
+    .sort(([timestampA], [timestampB]) => timestampA.localeCompare(timestampB))
+    .flatMap(([timestamp, archivedConversation]) => {
+      let messages: ConversationMessage[] = [];
+
+      if (Array.isArray(archivedConversation)) {
+        messages = archivedConversation.filter(isConversationMessage);
+      } else if (archivedConversation && typeof archivedConversation === "object") {
+        messages = Object.entries(archivedConversation as Record<string, unknown>)
+          .sort(([indexA], [indexB]) => {
+            const numericIndexA = Number(indexA);
+            const numericIndexB = Number(indexB);
+
+            if (Number.isFinite(numericIndexA) && Number.isFinite(numericIndexB)) {
+              return numericIndexA - numericIndexB;
+            }
+
+            return indexA.localeCompare(indexB);
+          })
+          .map(([, message]) => message)
+          .filter(isConversationMessage);
+      }
+
+      return messages.map((message, index) =>
+        index === 0
+          ? { ...message, timelineMarker: { source: "realtime", timestamp } as const }
+          : message
+      );
+    });
+}
+
+function formatArchivedConversationTimestamp(timestamp: string): string {
+  const normalizedTimestamp = timestamp.replace(/:(\d{3})Z$/, ".$1Z");
+  const date = new Date(normalizedTimestamp);
+
+  if (Number.isNaN(date.getTime())) return timestamp;
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "medium",
+    timeZone: "America/Sao_Paulo",
+  }).format(date);
+}
+
+async function loadConversationHistory({
+  patientId,
+  environment,
+  unit,
+}: {
+  patientId: string;
+  environment: "teste" | "producao";
+  unit: "DRM" | "OFT/45";
+}): Promise<{ exists: boolean; messages: ConversationMessage[] }> {
+  const historyKey = unit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
+  const archivedHistoryPath = `/${unit}/agendamentoWhatsApp/operacional/conversas/${patientId}/conversasAntigas`;
+
+  const [currentConversationSnapshot, archivedConversationSnapshot] = await Promise.all([
+    getDoc(doc(getFirestoreInstance(environment), historyKey, patientId)),
+    get(ref(getDatabaseInstance(environment), archivedHistoryPath)),
+  ]);
+
+  const archivedMessages = extractArchivedConversationMessages(
+    archivedConversationSnapshot.exists() ? archivedConversationSnapshot.val() : null
   );
+  const currentMessages = extractConversationMessages(
+    currentConversationSnapshot.exists() ? currentConversationSnapshot.data() : null
+  );
+  const currentMessagesWithMarker = currentMessages.map((message, index) =>
+    archivedMessages.length > 0 && index === 0
+      ? { ...message, timelineMarker: { source: "firestore" } as const }
+      : message
+  );
+
+  return {
+    exists: currentConversationSnapshot.exists() || archivedConversationSnapshot.exists(),
+    messages: [...archivedMessages, ...currentMessagesWithMarker],
+  };
 }
 
 /* 
@@ -170,10 +262,12 @@ function DownloadHeaderControl({
   patientId,
   environment,
   unit,
+  history,
 }: {
   patientId: string | null;
   environment: "teste" | "producao";
   unit: "DRM" | "OFT/45" | null;
+  history: ConversationMessage[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>(["conversa"]);
@@ -210,22 +304,8 @@ function DownloadHeaderControl({
     try {
       for (const item of selectedItems) {
         if (item === "conversa") {
-          const historyKey = unit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
-          const docRef = doc(getFirestoreInstance(environment), historyKey, patientId);
-          const snap = await getDoc(docRef);
-          if (snap.exists()) {
-            const data = snap.data();
-            let history: any[] = [];
-            if (data) {
-              if (Array.isArray((data as any).glbHistoricoDaConversa)) {
-                history = (data as any).glbHistoricoDaConversa;
-              } else {
-                for (const key in data) { if (Array.isArray((data as any)[key])) { history = (data as any)[key]; break; } }
-              }
-            }
-            const filtered = history.filter(m => m.role === "user" || m.role === "assistant");
-            downloadBlob(JSON.stringify(filtered, null, 2), "conversa", "json");
-          }
+          const historyWithoutTimelineMarkers = history.map(({ timelineMarker, ...message }) => message);
+          downloadBlob(JSON.stringify(historyWithoutTimelineMarkers, null, 2), "conversa", "json");
         } else {
           const pathSuffix = item === "agenteAtendimento" 
             ? "/agendamentoWhatsApp/configuracoes/definicoesIA/agenteAtendimento"
@@ -508,7 +588,7 @@ function EnviarMensagemComponent() {
   const [patientListError, setPatientListError] = useState<string | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<
-    { content: any; role: "user" | "assistant" }[]
+    ConversationMessage[]
   >([]);
   const [messageContent, setMessageContent] = useState("");
   const [manualSelection, setManualSelection] = useState(false);
@@ -539,19 +619,18 @@ function EnviarMensagemComponent() {
 
     (async () => {
       try {
-        const historyKey =
-          selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
-
         for (const phoneVariant of getPhoneVariants(phoneFromUrl)) {
-          const snapshot = await getDoc(
-            doc(getFirestoreInstance(environment), historyKey, phoneVariant)
-          );
+          const conversation = await loadConversationHistory({
+            patientId: phoneVariant,
+            environment,
+            unit: selectedUnit,
+          });
 
           if (!isCurrentRequest) return;
-          if (!snapshot.exists()) continue;
+          if (!conversation.exists) continue;
 
           setSelectedPatient(phoneVariant);
-          setConversationHistory(extractConversationMessages(snapshot.data()));
+          setConversationHistory(conversation.messages);
           return;
         }
       } catch (error) {
@@ -612,13 +691,12 @@ function EnviarMensagemComponent() {
     setSelectedPatient(patientId);
     if (!selectedUnit) return;
     try {
-      const historyKey =
-        selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
-
-      const ref = doc(getFirestoreInstance(environment), historyKey, patientId);
-      const snap: DocumentSnapshot = await getDoc(ref);
-      const data = snap.exists() ? snap.data() : null;
-      setConversationHistory(extractConversationMessages(data));
+      const conversation = await loadConversationHistory({
+        patientId,
+        environment,
+        unit: selectedUnit,
+      });
+      setConversationHistory(conversation.messages);
     } catch (err) {
       console.error("Erro ao carregar histórico:", err);
       toast.error("Falha ao carregar o histórico da conversa.");
@@ -834,6 +912,7 @@ function EnviarMensagemComponent() {
                   patientId={selectedPatient}
                   environment={environment}
                   unit={selectedUnit}
+                  history={conversationHistory}
                 />
                 <PatientSourceHeaderControl
                   patientId={selectedPatient}
@@ -850,32 +929,44 @@ function EnviarMensagemComponent() {
                 {conversationHistory.map((m, i) => (
                   <div
                     key={i}
-                    className={`flex ${m.role === "user" ? "justify-start" : "justify-end"
-                      }`}
+                    className="space-y-3"
                   >
-                    <div
-                      className={`max-w-[85%] sm:max-w-[60%] px-3 py-1.5 rounded-2xl text-sm leading-relaxed break-words break-all whitespace-pre-wrap ${m.role === "user"
-                        ? "bg-white text-gray-800"
-                        : "bg-blue-600 text-white"
-                        }`}
-                    >
-                      {(() => {
-                        const content = m.content;
-                        if (typeof content === 'string') return content;
-                        if (Array.isArray(content)) {
-                          return content.map((part: any) => {
-                            if (typeof part === 'string') return part;
-                            if (part.type === 'text') return part.text;
-                            return '';
-                          }).join(' ');
-                        }
-                        if (typeof content === 'object' && content !== null) {
-                          // @ts-ignore
-                          if (content.text) return content.text;
-                          return JSON.stringify(content);
-                        }
-                        return String(content);
-                      })()}
+                    {m.timelineMarker && (
+                      <div className="flex items-center gap-3 py-1" title={m.timelineMarker.source === "realtime" ? m.timelineMarker.timestamp : undefined}>
+                        <div className="h-px flex-1 bg-blue-200" />
+                        <span className="rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-[11px] font-medium text-blue-700 shadow-sm">
+                          {m.timelineMarker.source === "realtime"
+                            ? `Conversa antiga · ${formatArchivedConversationTimestamp(m.timelineMarker.timestamp)}`
+                            : "Conversa atual · Firestore"}
+                        </span>
+                        <div className="h-px flex-1 bg-blue-200" />
+                      </div>
+                    )}
+                    <div className={`flex ${m.role === "user" ? "justify-start" : "justify-end"}`}>
+                      <div
+                        className={`max-w-[85%] sm:max-w-[60%] px-3 py-1.5 rounded-2xl text-sm leading-relaxed break-words break-all whitespace-pre-wrap ${m.role === "user"
+                          ? "bg-white text-gray-800"
+                          : "bg-blue-600 text-white"
+                          }`}
+                      >
+                        {(() => {
+                          const content = m.content;
+                          if (typeof content === 'string') return content;
+                          if (Array.isArray(content)) {
+                            return content.map((part: any) => {
+                              if (typeof part === 'string') return part;
+                              if (part.type === 'text') return part.text;
+                              return '';
+                            }).join(' ');
+                          }
+                          if (typeof content === 'object' && content !== null) {
+                            // @ts-ignore
+                            if (content.text) return content.text;
+                            return JSON.stringify(content);
+                          }
+                          return String(content);
+                        })()}
+                      </div>
                     </div>
                   </div>
                 ))}

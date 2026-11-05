@@ -18,10 +18,20 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Search, Phone, Calendar, Clock, MapPin, User, Users, Activity, Instagram, Globe } from "lucide-react";
+import { Search, Phone, Calendar, Clock, MapPin, Users, Activity, Instagram, Globe, Pencil } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { normalizePatientOrigin } from "@/lib/patient-origin";
 import { useToast } from "@/hooks/use-toast";
+import { PatientForm } from "@/components/patient-form";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import { getFirebasePathBase } from "@/lib/firebaseConfig";
+import type { CalendarAppointment } from "@/components/appointment-calendar";
 
 export interface AppointmentDetail {
     nome: string;
@@ -38,6 +48,7 @@ export interface AppointmentDetail {
     motivoCancelamento?: string;
     avaliacaoEstrelas?: number;
     avaliacaoTexto?: string;
+    rescheduleData?: CalendarAppointment;
 }
 
 interface PatientDetailsSheetProps {
@@ -54,6 +65,7 @@ export function PatientDetailsSheet({
     patients,
 }: PatientDetailsSheetProps) {
     const [searchTerm, setSearchTerm] = useState("");
+    const [appointmentToReschedule, setAppointmentToReschedule] = useState<CalendarAppointment>();
     const { toast } = useToast();
 
     const copyPhoneNumber = async (phone: string) => {
@@ -107,6 +119,7 @@ export function PatientDetailsSheet({
     };
 
     return (
+        <>
         <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
             <SheetContent side="right" className="sm:max-w-[700px] w-full p-0 flex flex-col bg-white border-l border-slate-200">
                 <SheetHeader className="p-5 border-b border-slate-100 bg-slate-50/50">
@@ -140,9 +153,10 @@ export function PatientDetailsSheet({
                         <Table className="text-xs table-fixed w-full border-collapse">
                             <TableHeader className="bg-slate-50 sticky top-0 z-10 shadow-sm border-b border-slate-200">
                                 <TableRow className="hover:bg-transparent">
-                                    <TableHead className="w-[42%] font-extrabold text-slate-900 h-10 px-4">PACIENTE / INFO</TableHead>
-                                    <TableHead className="w-[33%] font-extrabold text-slate-900 h-10 px-4">UNIDADE / CONTATO</TableHead>
-                                    <TableHead className="w-[25%] text-right font-extrabold text-slate-900 h-10 px-4">CONSULTA</TableHead>
+                                    <TableHead className="w-[36%] font-extrabold text-slate-900 h-10 px-4">PACIENTE / INFO</TableHead>
+                                    <TableHead className="w-[10%] text-center font-extrabold text-slate-900 h-10 px-2">EDITAR</TableHead>
+                                    <TableHead className="w-[30%] font-extrabold text-slate-900 h-10 px-4">UNIDADE / CONTATO</TableHead>
+                                    <TableHead className="w-[24%] text-right font-extrabold text-slate-900 h-10 px-4">CONSULTA</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -224,6 +238,19 @@ export function PatientDetailsSheet({
                                                 </div>
                                             </div>
                                         </TableCell>
+                                        <TableCell className="py-3 px-2 align-top text-center">
+                                            {patient.rescheduleData && (
+                                                <button
+                                                    type="button"
+                                                    title="Editar agendamento"
+                                                    aria-label={`Editar agendamento de ${patient.nome}`}
+                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-yellow-200 bg-yellow-50 text-yellow-700 transition-colors hover:bg-yellow-100 hover:text-yellow-800"
+                                                    onClick={() => setAppointmentToReschedule(patient.rescheduleData)}
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" />
+                                                </button>
+                                            )}
+                                        </TableCell>
                                         <TableCell className="py-3 px-4 align-top">
                                             <div className="space-y-2">
                                                 <div className="flex items-center gap-1.5 text-slate-700 font-semibold">
@@ -266,7 +293,7 @@ export function PatientDetailsSheet({
                                 ))}
                                 {filteredPatients.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-center py-16 text-slate-400">
+                                        <TableCell colSpan={4} className="text-center py-16 text-slate-400">
                                             <div className="flex flex-col items-center gap-3">
                                                 <Search className="h-10 w-10 opacity-10" />
                                                 <p className="font-medium italic">Nenhum registro encontrado.</p>
@@ -280,5 +307,35 @@ export function PatientDetailsSheet({
                 </ScrollArea>
             </SheetContent>
         </Sheet>
+
+        <Dialog
+            open={!!appointmentToReschedule}
+            onOpenChange={(open) => !open && setAppointmentToReschedule(undefined)}
+        >
+            <DialogContent className="sm:max-w-[425px] md:max-w-2xl lg:max-w-3xl">
+                <DialogHeader>
+                    <DialogTitle>Reagendar Agendamento</DialogTitle>
+                    <DialogDescription>
+                        Edite os dados e salve para criar um novo agendamento. O antigo será
+                        cancelado com o motivo “Consulta reagendada”.
+                    </DialogDescription>
+                </DialogHeader>
+
+                <ScrollArea className="h-[calc(100vh-200px)]">
+                    {appointmentToReschedule && (
+                        <PatientForm
+                            key={`${appointmentToReschedule.id}-${appointmentToReschedule.dataAgendamento}-${appointmentToReschedule.horario}`}
+                            initialData={appointmentToReschedule}
+                            onRescheduleComplete={() => {
+                                setAppointmentToReschedule(undefined);
+                                onClose();
+                            }}
+                            firebaseBase={getFirebasePathBase()}
+                        />
+                    )}
+                </ScrollArea>
+            </DialogContent>
+        </Dialog>
+        </>
     );
 }

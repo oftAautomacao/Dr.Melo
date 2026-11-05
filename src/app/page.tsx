@@ -2166,7 +2166,7 @@ export default function Home() {
 
 
 
-  const buildAppointmentDetail = (app: any): AppointmentDetail => ({
+  const buildAppointmentDetail = (app: any, canReschedule = true): AppointmentDetail => ({
     nome: app.nomePaciente || app.nome || "N\u00E3o informado",
     nascimento: app.nascimento || "-",
     idade: calculateAge(app.nascimento),
@@ -2181,6 +2181,26 @@ export default function Home() {
     motivoCancelamento: String(app.motivoCancelamento || "").trim() || undefined,
     avaliacaoEstrelas: Number(app.pesquisaSatisfacao?.estrelas) || undefined,
     avaliacaoTexto: String(app.pesquisaSatisfacao?.texto || "").trim() || undefined,
+    ...(canReschedule && {
+      rescheduleData: {
+        id: `${app._unit}-${app._date}-${app._time}`,
+        nomePaciente: app.nomePaciente || app.nome || "",
+        cpf: app.cpf,
+        nascimento: app.nascimento || "",
+        dataAgendamento: app._date,
+        horario: app._time,
+        convenio: app.convenio || "",
+        exames: Array.isArray(app.exames) ? app.exames : [],
+        motivacao: app.motivacao || "",
+        unidade: app._unit,
+        unidadeLabel: unitConfig?.[app._unit]?.empresa ?? app._unit,
+        telefone: app.telefone || "",
+        origem: app.origem,
+        Observacoes: app.Observacoes || app.obs || "",
+        aiCategorization: app.aiCategorization,
+        confirmado: app.confirmado,
+      },
+    }),
   });
 
   const getBreakdownMeta = (item: CardData) => {
@@ -2209,7 +2229,7 @@ export default function Home() {
 
     setActiveDrillDown({
       title: `${item.title} \u203A Motivo do Cancelamento`,
-      patients: matches.map(buildAppointmentDetail),
+      patients: matches.map((app: any) => buildAppointmentDetail(app, false)),
     });
     setDrillDownOpen(true);
   };
@@ -2238,7 +2258,7 @@ export default function Home() {
 
     setActiveDrillDown({
       title: `${item.title} \u203A Estrelas e Coment\u00E1rios`,
-      patients: matches.map(buildAppointmentDetail),
+      patients: matches.map((app: any) => buildAppointmentDetail(app)),
     });
     setDrillDownOpen(true);
   };
@@ -2288,7 +2308,7 @@ export default function Home() {
       }
     }
 
-    const details: AppointmentDetail[] = matches.map(buildAppointmentDetail);
+    const details: AppointmentDetail[] = matches.map((app: any) => buildAppointmentDetail(app));
 
     const finalTitle = subItemName ? `${item.title} \u203A ${subItemName}` : item.title;
     setActiveDrillDown({ title: finalTitle, patients: details });

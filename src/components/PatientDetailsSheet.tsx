@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import type { CalendarAppointment } from "@/components/appointment-calendar";
+import { useRouter } from "next/navigation";
 
 export interface AppointmentDetail {
     nome: string;
@@ -64,6 +65,7 @@ export function PatientDetailsSheet({
     title,
     patients,
 }: PatientDetailsSheetProps) {
+    const router = useRouter();
     const [searchTerm, setSearchTerm] = useState("");
     const [appointmentToReschedule, setAppointmentToReschedule] = useState<CalendarAppointment>();
     const { toast } = useToast();
@@ -116,6 +118,21 @@ export function PatientDetailsSheet({
             .join("")
             .toUpperCase()
             .substring(0, 2);
+    };
+
+    const openAppointmentConsultation = (appointmentPath: string) => {
+        const pathParts = appointmentPath.split("/").filter(Boolean);
+        const scheduledIndex = pathParts.indexOf("consultasAgendadas");
+        const unit = scheduledIndex >= 0 ? pathParts[scheduledIndex + 2] : undefined;
+        const date = scheduledIndex >= 0 ? pathParts[scheduledIndex + 3] : undefined;
+
+        if (!unit || !date) return;
+
+        setAppointmentToReschedule(undefined);
+        onClose();
+        router.push(
+            `/visualizar-agendamentos?unidade=${encodeURIComponent(unit)}&dia=${encodeURIComponent(date)}`
+        );
     };
 
     return (
@@ -326,9 +343,9 @@ export function PatientDetailsSheet({
                         <PatientForm
                             key={`${appointmentToReschedule.id}-${appointmentToReschedule.dataAgendamento}-${appointmentToReschedule.horario}`}
                             initialData={appointmentToReschedule}
+                            onAppointmentSaved={openAppointmentConsultation}
                             onRescheduleComplete={() => {
                                 setAppointmentToReschedule(undefined);
-                                onClose();
                             }}
                             firebaseBase={getFirebasePathBase()}
                         />

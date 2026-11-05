@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Activity, MapPin, Users, FileText, BarChart3, List, LayoutGrid, Plus, DollarSign, Landmark, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, UserX, MessageSquare } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, get } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
 import { ENVIRONMENT } from "../../ambiente";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
@@ -34,7 +34,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { differenceInYears, parse } from "date-fns";
 import { PatientDetailsSheet, AppointmentDetail } from "@/components/PatientDetailsSheet";
-import { normalizePatientOrigin } from "@/lib/patient-origin";
+import { getPhoneVariants, normalizePatientOrigin } from "@/lib/patient-origin";
 import { getBillingProcedureNames, getDrMeloProcedureValue } from "@/lib/billing-values";
 
 /* ---------- helpers ---------- */
@@ -79,6 +79,78 @@ const matchesSearchText = (value: string, query: string) => {
   return queryTokens.every((token) => normalizedValue.includes(token));
 };
 
+const NO_CREATION_DATA = "__sem_data_criacao__";
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const SAO_PAULO_DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+const parseCreationTimestamp = (value: unknown): Date | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const milliseconds = value < 1_000_000_000_000 ? value * 1000 : value;
+    const parsed = new Date(milliseconds);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  if (typeof value !== "string" || !value.trim()) return null;
+
+  const raw = value.trim();
+  if (/^\d+$/.test(raw)) {
+    return parseCreationTimestamp(Number(raw));
+  }
+
+  const normalized = raw.replace(/:(\d{3})Z$/, ".$1Z");
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getSaoPauloDateKey = (value: unknown): string | null => {
+  const parsed = parseCreationTimestamp(value);
+  if (!parsed) return null;
+
+  const parts = SAO_PAULO_DATE_FORMATTER.formatToParts(parsed);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return year && month && day ? `${year}-${month}-${day}` : null;
+};
+
+const formatDateKey = (dateKey: string | null | undefined) => {
+  if (!dateKey) return "Sem informa\u00E7\u00E3o";
+  const [year, month, day] = dateKey.split("-");
+  return year && month && day ? `${day}/${month}/${year}` : dateKey;
+};
+
+const getCreationToAppointmentDays = (
+  creationDateKey: string | null | undefined,
+  appointmentDateKey: string,
+): number | null => {
+  if (!creationDateKey) return null;
+
+  const creationParts = creationDateKey.split("-").map(Number);
+  const appointmentParts = appointmentDateKey.split("-").map(Number);
+  if (creationParts.length !== 3 || appointmentParts.length !== 3) return null;
+
+  const creationUtc = Date.UTC(creationParts[0], creationParts[1] - 1, creationParts[2]);
+  const appointmentUtc = Date.UTC(appointmentParts[0], appointmentParts[1] - 1, appointmentParts[2]);
+  if (!Number.isFinite(creationUtc) || !Number.isFinite(appointmentUtc)) return null;
+
+  return Math.round((appointmentUtc - creationUtc) / DAY_IN_MS);
+};
+
+const formatCreationToAppointmentDays = (days: number | null | undefined) => {
+  if (days === null || days === undefined) return "Sem informa\u00E7\u00E3o";
+  if (days === 0) return "Mesmo dia";
+  return `${days} ${Math.abs(days) === 1 ? "dia" : "dias"}`;
+};
+
+const getAppointmentLookupKey = (unit: string, date: string, time: string, phone: unknown) =>
+  `${unit}|${date}|${time}|${String(phone || "").replace(/\D/g, "")}`;
+
 const calculateAge = (nascimento: string) => {
   if (!nascimento) return 0;
   try {
@@ -106,8 +178,8 @@ const getAgeBucket = (nascimento: string) => {
 };
 
 /* ---------- Types ---------- */
-type StatType = "unidades" | "convenios" | "faixaEtaria" | "exames" | "historico" | "origem" | "motivacao" | "cirurgia";
-type FilterCategory = "unidade" | "convenio" | "faixaEtaria" | "exame" | "origem" | "motivacao" | "cirurgia";
+type StatType = "unidades" | "convenios" | "faixaEtaria" | "exames" | "historico" | "origem" | "motivacao" | "cirurgia" | "dataCriacao" | "criacaoAgendamento";
+type FilterCategory = "unidade" | "convenio" | "faixaEtaria" | "exame" | "origem" | "motivacao" | "cirurgia" | "dataCriacao" | "criacaoAgendamento";
 
 interface FilterOptionItem {
   value: string;
@@ -128,6 +200,8 @@ interface CardData {
   topOrigens?: { name: string; count: number; value: number }[];
   topMotivacoes?: { name: string; count: number; value: number }[];
   topCirurgias?: { name: string; count: number; value: number }[];
+  topDatasCriacao?: { name: string; count: number; value: number }[];
+  topCriacaoAgendamento?: { name: string; count: number; value: number }[];
   ratingSum?: number;
   ratingCount?: number;
   cancellationCount?: number;
@@ -143,6 +217,7 @@ export default function Home() {
   const [cancellationData, setCancellationData] = useState<Record<string, Record<string, any>>>({});
   const [unitConfig, setUnitConfig] = useState<Record<string, { bairro?: string; empresa?: string }>>({});
   const [examConfig, setExamConfig] = useState<Record<string, any>>({});
+  const [creationTimestamps, setCreationTimestamps] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
 
   const [periodMode, setPeriodMode] = useState<'month' | 'year'>('month');
@@ -245,6 +320,99 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    const needsCreationData =
+      statType === "dataCriacao" ||
+      statType === "criacaoAgendamento" ||
+      filterCategory === "dataCriacao" ||
+      filterCategory === "criacaoAgendamento";
+    if (!filter || !needsCreationData) return;
+
+    const pathBase = getFirebasePathBase();
+    const db = getDatabaseInstance(ENVIRONMENT);
+    const filterYear = filter === "all" ? null : (filter.includes(" de ") ? filter.split(" de ")[1] : filter);
+    const filterMonth = filter.includes(" de ") ? filter : null;
+    const candidates = new Map<string, { date: string; time: string; phoneVariants: string[] }>();
+
+    for (const unit in patientData) {
+      for (const date in patientData[unit]) {
+        const appointmentMonth = obterNomeMes(date);
+        const appointmentYear = obterAno(date);
+        const belongsToPeriod = statType === "historico"
+          ? filterYear === null || appointmentYear === filterYear
+          : filterMonth
+            ? appointmentMonth === filterMonth
+            : filterYear === null || appointmentYear === filterYear;
+
+        if (!belongsToPeriod) continue;
+
+        const hours = patientData[unit][date];
+        for (const time in hours) {
+          const phone = String(hours[time]?.telefone || "");
+          const phoneVariants = getPhoneVariants(phone).filter(Boolean);
+          if (phoneVariants.length === 0) continue;
+
+          const lookupKey = getAppointmentLookupKey(unit, date, time, phone);
+          if (Object.prototype.hasOwnProperty.call(creationTimestamps, lookupKey)) continue;
+
+          candidates.set(lookupKey, {
+            date,
+            time,
+            phoneVariants,
+          });
+        }
+      }
+    }
+
+    if (candidates.size === 0) return;
+
+    let cancelled = false;
+    const entries = Array.from(candidates.entries());
+
+    const loadTimestamps = async () => {
+      const results: Record<string, unknown> = {};
+      let nextIndex = 0;
+
+      const worker = async () => {
+        while (nextIndex < entries.length) {
+          const currentIndex = nextIndex++;
+          const [lookupKey, candidate] = entries[currentIndex];
+          let timestamp: unknown = null;
+
+          for (const phone of candidate.phoneVariants) {
+            try {
+              const timestampRef = ref(
+                db,
+                `/${pathBase}/agendamentoWhatsApp/operacional/conversas/${phone}/consultasAgendadas/${candidate.date}/${candidate.time}/timestamp`,
+              );
+              const snapshot = await get(timestampRef);
+              if (snapshot.exists()) {
+                timestamp = snapshot.val();
+                break;
+              }
+            } catch (error) {
+              console.warn("N\u00E3o foi poss\u00EDvel carregar a data de cria\u00E7\u00E3o do agendamento.", error);
+              break;
+            }
+          }
+
+          results[lookupKey] = timestamp;
+        }
+      };
+
+      await Promise.all(Array.from({ length: Math.min(12, entries.length) }, () => worker()));
+      if (!cancelled) {
+        setCreationTimestamps((current) => ({ ...current, ...results }));
+      }
+    };
+
+    void loadTimestamps();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [creationTimestamps, filter, filterCategory, patientData, statType]);
+
   /* ---------- Sync Filter Category with Stat Type ---------- */
   useEffect(() => {
     // Map statType to corresponding filterCategory
@@ -256,6 +424,8 @@ export default function Home() {
       "origem": "origem",
       "motivacao": "motivacao",
       "cirurgia": "cirurgia",
+      "dataCriacao": "dataCriacao",
+      "criacaoAgendamento": "criacaoAgendamento",
       "historico": "unidade" // Default to unidade for historico
     };
 
@@ -267,7 +437,7 @@ export default function Home() {
   }, [statType]);
 
   useEffect(() => {
-    if (filterCategory === 'unidade' || filterCategory === 'convenio' || filterCategory === 'faixaEtaria' || filterCategory === 'exame' || filterCategory === 'origem' || filterCategory === 'motivacao' || filterCategory === 'cirurgia') {
+    if (filterCategory === 'unidade' || filterCategory === 'convenio' || filterCategory === 'faixaEtaria' || filterCategory === 'exame' || filterCategory === 'origem' || filterCategory === 'motivacao' || filterCategory === 'cirurgia' || filterCategory === 'dataCriacao' || filterCategory === 'criacaoAgendamento') {
       setFilterValue("all");
     } else {
       setFilterValue("");
@@ -347,6 +517,65 @@ export default function Home() {
       .map(([cirurgia]) => cirurgia);
   }, [patientData]);
 
+  const creationDateOptions = useMemo<FilterOptionItem[]>(() => {
+    const dates = new Set<string>();
+    let hasMissingTimestamp = false;
+
+    for (const unit in patientData) {
+      for (const date in patientData[unit]) {
+        const hours = patientData[unit][date];
+        for (const time in hours) {
+          const lookupKey = getAppointmentLookupKey(unit, date, time, hours[time]?.telefone);
+          if (!Object.prototype.hasOwnProperty.call(creationTimestamps, lookupKey)) continue;
+
+          const creationDate = getSaoPauloDateKey(creationTimestamps[lookupKey]);
+          if (creationDate) dates.add(creationDate);
+          else hasMissingTimestamp = true;
+        }
+      }
+    }
+
+    const options = Array.from(dates)
+      .sort((a, b) => b.localeCompare(a))
+      .map((date) => ({ value: date, label: formatDateKey(date) }));
+
+    if (hasMissingTimestamp) {
+      options.push({ value: NO_CREATION_DATA, label: "Sem informa\u00E7\u00E3o" });
+    }
+
+    return options;
+  }, [creationTimestamps, patientData]);
+
+  const creationToAppointmentOptions = useMemo<FilterOptionItem[]>(() => {
+    const differences = new Set<number>();
+    let hasMissingTimestamp = false;
+
+    for (const unit in patientData) {
+      for (const date in patientData[unit]) {
+        const hours = patientData[unit][date];
+        for (const time in hours) {
+          const lookupKey = getAppointmentLookupKey(unit, date, time, hours[time]?.telefone);
+          if (!Object.prototype.hasOwnProperty.call(creationTimestamps, lookupKey)) continue;
+
+          const creationDate = getSaoPauloDateKey(creationTimestamps[lookupKey]);
+          const difference = getCreationToAppointmentDays(creationDate, date);
+          if (difference === null) hasMissingTimestamp = true;
+          else differences.add(difference);
+        }
+      }
+    }
+
+    const options = Array.from(differences)
+      .sort((a, b) => a - b)
+      .map((days) => ({ value: String(days), label: formatCreationToAppointmentDays(days) }));
+
+    if (hasMissingTimestamp) {
+      options.push({ value: NO_CREATION_DATA, label: "Sem informa\u00E7\u00E3o" });
+    }
+
+    return options;
+  }, [creationTimestamps, patientData]);
+
   const filterOptions = useMemo<FilterOptionItem[]>(() => {
     if (filterCategory === "unidade") {
       return unitsAvailable.map((u) => ({
@@ -384,8 +613,16 @@ export default function Home() {
       return cirurgiasAvailable.map((c) => ({ value: c, label: c }));
     }
 
+    if (filterCategory === "dataCriacao") {
+      return creationDateOptions;
+    }
+
+    if (filterCategory === "criacaoAgendamento") {
+      return creationToAppointmentOptions;
+    }
+
     return [];
-  }, [cirurgiasAvailable, conveniosAvailable, examesAvailable, faixasEtariasAvailable, filterCategory, motivacoesAvailable, unitConfig, unitsAvailable]);
+  }, [cirurgiasAvailable, conveniosAvailable, creationDateOptions, creationToAppointmentOptions, examesAvailable, faixasEtariasAvailable, filterCategory, motivacoesAvailable, unitConfig, unitsAvailable]);
 
   const filteredOptionSuggestions = useMemo(() => {
     if (!optionQuery.trim()) {
@@ -558,7 +795,20 @@ export default function Home() {
               appValue += examValue;
             });
 
-            const app = { ...hours[time], _unit: unit, _date: date, _time: time, _value: appValue, _examPrices: examPrices };
+            const creationTimestamp = creationTimestamps[getAppointmentLookupKey(unit, date, time, hours[time]?.telefone)];
+            const creationDate = getSaoPauloDateKey(creationTimestamp);
+            const creationToAppointmentDays = getCreationToAppointmentDays(creationDate, date);
+            const app = {
+              ...hours[time],
+              _unit: unit,
+              _date: date,
+              _time: time,
+              _value: appValue,
+              _examPrices: examPrices,
+              _creationTimestamp: creationTimestamp,
+              _creationDate: creationDate,
+              _creationToAppointmentDays: creationToAppointmentDays,
+            };
 
             if (filterCategory === 'convenio' && filterValue && filterValue !== 'all' && !matchesSearchText(app.convenio || "", filterValue)) continue;
             if (filterCategory === 'exame' && filterValue && filterValue !== 'all') {
@@ -582,6 +832,26 @@ export default function Home() {
             if (filterCategory === 'cirurgia' && filterValue && filterValue !== 'all') {
               if (!matchesSearchText(app.cirurgia || "", filterValue)) continue;
             }
+            if (filterCategory === 'dataCriacao' && filterValue && filterValue !== 'all') {
+              if (filterValue === NO_CREATION_DATA) {
+                if (app._creationDate) continue;
+              } else if (
+                app._creationDate !== filterValue &&
+                !matchesSearchText(formatDateKey(app._creationDate), filterValue)
+              ) {
+                continue;
+              }
+            }
+            if (filterCategory === 'criacaoAgendamento' && filterValue && filterValue !== 'all') {
+              if (filterValue === NO_CREATION_DATA) {
+                if (app._creationToAppointmentDays !== null) continue;
+              } else if (
+                String(app._creationToAppointmentDays) !== filterValue &&
+                !matchesSearchText(formatCreationToAppointmentDays(app._creationToAppointmentDays), filterValue)
+              ) {
+                continue;
+              }
+            }
 
             appointments.push(app);
           }
@@ -589,7 +859,7 @@ export default function Home() {
       }
     }
     return appointments;
-  }, [patientData, filter, statType, filterCategory, filterValue, examConfig, unitConfig]);
+  }, [patientData, filter, statType, filterCategory, filterValue, examConfig, unitConfig, creationTimestamps]);
 
   const filteredCancellations = useMemo(() => {
     if (!filter) return [];
@@ -652,7 +922,7 @@ export default function Home() {
     return cancellations;
   }, [cancellationData, filter, statType, filterCategory, filterValue, unitConfig]);
 
-  const displayData = useMemo<CardData[]>(() => {
+  const rawDisplayData = useMemo<CardData[]>(() => {
     const appointments = filteredAppointments;
     if (appointments.length === 0) return [];
 
@@ -967,7 +1237,7 @@ export default function Home() {
 
       const buildUnitTextBreakdown = (
         getBreakdownName: (app: any) => string,
-        breakdownField: "topOrigens" | "topMotivacoes" | "topCirurgias",
+        breakdownField: "topOrigens" | "topMotivacoes" | "topCirurgias" | "topDatasCriacao" | "topCriacaoAgendamento",
       ): CardData[] => {
         const breakdownByUnit: Record<string, Record<string, { count: number; value: number }>> = {};
         const unitCounts: Record<string, { count: number; value: number; ratingSum: number; ratingCount: number }> = {};
@@ -1159,6 +1429,20 @@ export default function Home() {
         return buildUnitTextBreakdown(
           (app) => String(app.cirurgia || "Não informado").trim() || "Não informado",
           "topCirurgias",
+        );
+      }
+
+      if (filterCategory === "dataCriacao" && filterValue === "all") {
+        return buildUnitTextBreakdown(
+          (app) => formatDateKey(app._creationDate),
+          "topDatasCriacao",
+        );
+      }
+
+      if (filterCategory === "criacaoAgendamento" && filterValue === "all") {
+        return buildUnitTextBreakdown(
+          (app) => formatCreationToAppointmentDays(app._creationToAppointmentDays),
+          "topCriacaoAgendamento",
         );
       }
 
@@ -2167,8 +2451,316 @@ export default function Home() {
         }));
     }
 
+    type CreationCrossBreakdownField =
+      | "topUnidades"
+      | "topConvenios"
+      | "topFaixas"
+      | "topExames"
+      | "topOrigens"
+      | "topMotivacoes"
+      | "topCirurgias"
+      | "topDatasCriacao"
+      | "topCriacaoAgendamento";
+
+    const getCreationCrossBreakdown = (excludedCategory: FilterCategory) => {
+      if (filterValue !== "all" || filterCategory === excludedCategory) return null;
+
+      const configurations: Partial<Record<FilterCategory, {
+        field: CreationCrossBreakdownField;
+        getNames: (app: any) => string[];
+      }>> = {
+        unidade: {
+          field: "topUnidades",
+          getNames: (app) => [unitConfig?.[app._unit]?.empresa ?? app._unit],
+        },
+        convenio: {
+          field: "topConvenios",
+          getNames: (app) => [app.convenio || "N\u00E3o informado"],
+        },
+        faixaEtaria: {
+          field: "topFaixas",
+          getNames: (app) => [getAgeBucket(app.nascimento) || "Desconhecido"],
+        },
+        exame: {
+          field: "topExames",
+          getNames: (app) => Array.isArray(app.exames) ? app.exames : [],
+        },
+        origem: {
+          field: "topOrigens",
+          getNames: (app) => [getOriginLabel(normalizePatientOrigin(app.origem))],
+        },
+        motivacao: {
+          field: "topMotivacoes",
+          getNames: (app) => [String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado"],
+        },
+        cirurgia: {
+          field: "topCirurgias",
+          getNames: (app) => [String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado"],
+        },
+        dataCriacao: {
+          field: "topDatasCriacao",
+          getNames: (app) => [formatDateKey(app._creationDate)],
+        },
+        criacaoAgendamento: {
+          field: "topCriacaoAgendamento",
+          getNames: (app) => [formatCreationToAppointmentDays(app._creationToAppointmentDays)],
+        },
+      };
+
+      return configurations[filterCategory] || null;
+    };
+
+    const buildCreationMetricCards = ({
+      excludedCategory,
+      getGroupKey,
+      getTitle,
+      subtitle,
+      icon,
+      sortGroups,
+    }: {
+      excludedCategory: FilterCategory;
+      getGroupKey: (app: any) => string;
+      getTitle: (groupKey: string) => string;
+      subtitle: string;
+      icon: React.ReactNode;
+      sortGroups: (a: [string, { count: number; value: number }], b: [string, { count: number; value: number }]) => number;
+    }): CardData[] => {
+      const counts: Record<string, { count: number; value: number }> = {};
+      const breakdownByGroup: Record<string, Record<string, { count: number; value: number }>> = {};
+      const breakdownConfiguration = getCreationCrossBreakdown(excludedCategory);
+
+      appointments.forEach((app) => {
+        const groupKey = getGroupKey(app);
+        if (!counts[groupKey]) counts[groupKey] = { count: 0, value: 0 };
+        counts[groupKey].count += 1;
+        counts[groupKey].value += app._value;
+
+        if (!breakdownConfiguration) return;
+        if (!breakdownByGroup[groupKey]) breakdownByGroup[groupKey] = {};
+
+        breakdownConfiguration.getNames(app).forEach((name) => {
+          if (!name) return;
+          if (!breakdownByGroup[groupKey][name]) {
+            breakdownByGroup[groupKey][name] = { count: 0, value: 0 };
+          }
+          breakdownByGroup[groupKey][name].count += 1;
+          breakdownByGroup[groupKey][name].value += filterCategory === "exame"
+            ? getExamValue(name, app)
+            : app._value;
+        });
+      });
+
+      return Object.entries(counts)
+        .sort(sortGroups)
+        .map(([groupKey, data]) => {
+          const card: CardData = {
+            id: groupKey,
+            title: getTitle(groupKey),
+            subtitle,
+            count: data.count,
+            value: data.value,
+            icon,
+          };
+
+          if (breakdownConfiguration) {
+            (card as any)[breakdownConfiguration.field] = Object.entries(breakdownByGroup[groupKey] || {})
+              .sort((a, b) => b[1].count - a[1].count)
+              .map(([name, breakdown]) => ({
+                name,
+                count: breakdown.count,
+                value: breakdown.value,
+              }));
+          }
+
+          return card;
+        });
+    };
+
+    if (statType === "dataCriacao") {
+      return buildCreationMetricCards({
+        excludedCategory: "dataCriacao",
+        getGroupKey: (app) => app._creationDate || NO_CREATION_DATA,
+        getTitle: (groupKey) => groupKey === NO_CREATION_DATA ? "Sem informa\u00E7\u00E3o" : formatDateKey(groupKey),
+        subtitle: "Data de cria\u00E7\u00E3o",
+        icon: <FileText className="h-5 w-5 text-blue-600" />,
+        sortGroups: ([dateA], [dateB]) => {
+          if (dateA === NO_CREATION_DATA) return 1;
+          if (dateB === NO_CREATION_DATA) return -1;
+          return dateB.localeCompare(dateA);
+        },
+      });
+    }
+
+    if (statType === "criacaoAgendamento") {
+      return buildCreationMetricCards({
+        excludedCategory: "criacaoAgendamento",
+        getGroupKey: (app) => app._creationToAppointmentDays === null
+          ? NO_CREATION_DATA
+          : String(app._creationToAppointmentDays),
+        getTitle: (groupKey) => groupKey === NO_CREATION_DATA
+          ? "Sem informa\u00E7\u00E3o"
+          : formatCreationToAppointmentDays(Number(groupKey)),
+        subtitle: "Cria\u00E7\u00E3o x Agendamento",
+        icon: <Activity className="h-5 w-5 text-violet-600" />,
+        sortGroups: ([daysA], [daysB]) => {
+          if (daysA === NO_CREATION_DATA) return 1;
+          if (daysB === NO_CREATION_DATA) return -1;
+          return Number(daysA) - Number(daysB);
+        },
+      });
+    }
+
     return [];
   }, [filteredAppointments, filteredCancellations, statType, unitConfig, filterCategory, filterValue]);
+
+  const displayData = useMemo<CardData[]>(() => {
+    if (filterValue !== "all") return rawDisplayData;
+
+    const cardsWithoutBreakdowns = rawDisplayData.map((item) => {
+      const {
+        topConvenios: _topConvenios,
+        topFaixas: _topFaixas,
+        topExames: _topExames,
+        topUnidades: _topUnidades,
+        topOrigens: _topOrigens,
+        topMotivacoes: _topMotivacoes,
+        topCirurgias: _topCirurgias,
+        topDatasCriacao: _topDatasCriacao,
+        topCriacaoAgendamento: _topCriacaoAgendamento,
+        ...card
+      } = item;
+      return card;
+    });
+
+    const categoryForGrouping: Partial<Record<StatType, FilterCategory>> = {
+      unidades: "unidade",
+      convenios: "convenio",
+      faixaEtaria: "faixaEtaria",
+      exames: "exame",
+      origem: "origem",
+      motivacao: "motivacao",
+      cirurgia: "cirurgia",
+      dataCriacao: "dataCriacao",
+      criacaoAgendamento: "criacaoAgendamento",
+    };
+
+    if (categoryForGrouping[statType] === filterCategory) {
+      return cardsWithoutBreakdowns;
+    }
+
+    type BreakdownField =
+      | "topUnidades"
+      | "topConvenios"
+      | "topFaixas"
+      | "topExames"
+      | "topOrigens"
+      | "topMotivacoes"
+      | "topCirurgias"
+      | "topDatasCriacao"
+      | "topCriacaoAgendamento";
+
+    const breakdownConfigurations: Record<FilterCategory, {
+      field: BreakdownField;
+      getNames: (app: any) => string[];
+      getValue: (app: any, name: string) => number;
+    }> = {
+      unidade: {
+        field: "topUnidades",
+        getNames: (app) => [unitConfig?.[app._unit]?.empresa ?? app._unit],
+        getValue: (app) => app._value || 0,
+      },
+      convenio: {
+        field: "topConvenios",
+        getNames: (app) => [app.convenio || "N\u00E3o informado"],
+        getValue: (app) => app._value || 0,
+      },
+      faixaEtaria: {
+        field: "topFaixas",
+        getNames: (app) => [getAgeBucket(app.nascimento) || "Desconhecido"],
+        getValue: (app) => app._value || 0,
+      },
+      exame: {
+        field: "topExames",
+        getNames: (app) => Array.isArray(app.exames) ? app.exames : [],
+        getValue: (app, name) => app._examPrices?.[name] || 0,
+      },
+      origem: {
+        field: "topOrigens",
+        getNames: (app) => [getOriginLabel(normalizePatientOrigin(app.origem))],
+        getValue: (app) => app._value || 0,
+      },
+      motivacao: {
+        field: "topMotivacoes",
+        getNames: (app) => [String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado"],
+        getValue: (app) => app._value || 0,
+      },
+      cirurgia: {
+        field: "topCirurgias",
+        getNames: (app) => [String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado"],
+        getValue: (app) => app._value || 0,
+      },
+      dataCriacao: {
+        field: "topDatasCriacao",
+        getNames: (app) => [formatDateKey(app._creationDate)],
+        getValue: (app) => app._value || 0,
+      },
+      criacaoAgendamento: {
+        field: "topCriacaoAgendamento",
+        getNames: (app) => [formatCreationToAppointmentDays(app._creationToAppointmentDays)],
+        getValue: (app) => app._value || 0,
+      },
+    };
+
+    const belongsToCard = (app: any, card: CardData) => {
+      if (statType === "unidades") return app._unit === card.id;
+      if (statType === "convenios") return (app.convenio || "N\u00E3o informado") === card.id;
+      if (statType === "faixaEtaria") return getAgeBucket(app.nascimento) === card.id;
+      if (statType === "exames") return Array.isArray(app.exames) && app.exames.includes(card.id);
+      if (statType === "historico") return obterNomeMes(app._date) === card.id;
+      if (statType === "origem") return normalizePatientOrigin(app.origem) === card.id;
+      if (statType === "motivacao") {
+        return (String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado") === card.id;
+      }
+      if (statType === "cirurgia") {
+        return (String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado") === card.id;
+      }
+      if (statType === "dataCriacao") return (app._creationDate || NO_CREATION_DATA) === card.id;
+      if (statType === "criacaoAgendamento") {
+        return (app._creationToAppointmentDays === null
+          ? NO_CREATION_DATA
+          : String(app._creationToAppointmentDays)) === card.id;
+      }
+      return false;
+    };
+
+    const configuration = breakdownConfigurations[filterCategory];
+
+    return cardsWithoutBreakdowns.map((card) => {
+      const breakdownCounts: Record<string, { count: number; value: number }> = {};
+
+      filteredAppointments.forEach((app) => {
+        if (!belongsToCard(app, card)) return;
+
+        configuration.getNames(app).forEach((name) => {
+          if (!name) return;
+          if (!breakdownCounts[name]) breakdownCounts[name] = { count: 0, value: 0 };
+          breakdownCounts[name].count += 1;
+          breakdownCounts[name].value += configuration.getValue(app, name);
+        });
+      });
+
+      const breakdownItems = Object.entries(breakdownCounts)
+        .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0], "pt-BR"))
+        .map(([name, data]) => ({ name, count: data.count, value: data.value }));
+
+      if (breakdownItems.length === 0) return card;
+
+      return {
+        ...card,
+        [configuration.field]: breakdownItems,
+      } as CardData;
+    });
+  }, [filterCategory, filteredAppointments, filterValue, rawDisplayData, statType, unitConfig]);
 
   const totalPacientes = useMemo(() => filteredAppointments.length, [filteredAppointments]);
   const totalEstimado = useMemo(() => filteredAppointments.reduce((acc, app) => acc + (app._value || 0), 0), [filteredAppointments]);
@@ -2211,7 +2803,7 @@ export default function Home() {
     // Default sorting logic for cards (and table if no column selected)
     // Matches the Simple Mode sorting: highest count first
     // Except for 'historico' (months), which relies on its own chronology sorted earlier
-    if (statType !== "historico" && statType !== "faixaEtaria") {
+    if (statType !== "historico" && statType !== "faixaEtaria" && statType !== "dataCriacao" && statType !== "criacaoAgendamento") {
       return [...displayData].sort((a, b) => b.count - a.count);
     }
 
@@ -2276,6 +2868,8 @@ export default function Home() {
     if (item.topOrigens) return { kind: "origem" as const, items: item.topOrigens };
     if (item.topMotivacoes) return { kind: "motivacao" as const, items: item.topMotivacoes };
     if (item.topCirurgias) return { kind: "cirurgia" as const, items: item.topCirurgias };
+    if (item.topDatasCriacao) return { kind: "dataCriacao" as const, items: item.topDatasCriacao };
+    if (item.topCriacaoAgendamento) return { kind: "criacaoAgendamento" as const, items: item.topCriacaoAgendamento };
     return null;
   };
 
@@ -2352,6 +2946,14 @@ export default function Home() {
       matches = filteredAppointments.filter((app: any) => (String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado") === item.id);
     } else if (statType === "cirurgia") {
       matches = filteredAppointments.filter((app: any) => (String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado") === item.id);
+    } else if (statType === "dataCriacao") {
+      matches = filteredAppointments.filter((app: any) => (app._creationDate || NO_CREATION_DATA) === item.id);
+    } else if (statType === "criacaoAgendamento") {
+      matches = filteredAppointments.filter((app: any) => (
+        app._creationToAppointmentDays === null
+          ? NO_CREATION_DATA
+          : String(app._creationToAppointmentDays)
+      ) === item.id);
     }
 
     // Secondary filter if subItemName is provided
@@ -2370,6 +2972,10 @@ export default function Home() {
         matches = matches.filter((app: any) => (String(app.motivacao || "N\u00E3o informado").trim() || "N\u00E3o informado") === subItemName);
       } else if (breakdown.kind === "cirurgia") {
         matches = matches.filter((app: any) => (String(app.cirurgia || "N\u00E3o informado").trim() || "N\u00E3o informado") === subItemName);
+      } else if (breakdown.kind === "dataCriacao") {
+        matches = matches.filter((app: any) => formatDateKey(app._creationDate) === subItemName);
+      } else if (breakdown.kind === "criacaoAgendamento") {
+        matches = matches.filter((app: any) => formatCreationToAppointmentDays(app._creationToAppointmentDays) === subItemName);
       }
     }
 
@@ -2411,6 +3017,8 @@ export default function Home() {
                     <SelectItem className={analyticSelectItemClassName} value="motivacao">{"Motiva\u00E7\u00E3o"}</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="cirurgia">Cirurgia</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="convenios">{"Conv\u00EAnios"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="dataCriacao">{"Data de cria\u00E7\u00E3o"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="criacaoAgendamento">{"Cria\u00E7\u00E3o x Agendamento"}</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="historico">{"Evolu\u00E7\u00E3o Mensal"}</SelectItem>
                   </SelectContent>
                 </Select>
@@ -2422,12 +3030,14 @@ export default function Home() {
                   <SelectTrigger className="w-full sm:w-[170px] bg-white text-[13px]"><SelectValue placeholder="Categoria" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem className={analyticSelectItemClassName} value="unidade">{selectedUnit === 'OFT/45' ? 'M\u00E9dico' : 'Unidade'}</SelectItem>
-                    <SelectItem className={analyticSelectItemClassName} value="convenio">{"Conv\u00EAnio"}</SelectItem>
-                    <SelectItem className={analyticSelectItemClassName} value="faixaEtaria">{"Faixa Et\u00E1ria"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="origem">Origem</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="exame">Exame</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="faixaEtaria">{"Faixa Et\u00E1ria"}</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="motivacao">{"Motiva\u00E7\u00E3o"}</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="cirurgia">Cirurgia</SelectItem>
-                    <SelectItem className={analyticSelectItemClassName} value="origem">Origem</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="convenio">{"Conv\u00EAnio"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="dataCriacao">{"Data de cria\u00E7\u00E3o"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="criacaoAgendamento">{"Cria\u00E7\u00E3o x Agendamento"}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

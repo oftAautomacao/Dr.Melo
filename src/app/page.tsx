@@ -965,6 +965,50 @@ export default function Home() {
         return acc;
       }, {});
 
+      const buildUnitTextBreakdown = (
+        getBreakdownName: (app: any) => string,
+        breakdownField: "topOrigens" | "topMotivacoes" | "topCirurgias",
+      ): CardData[] => {
+        const breakdownByUnit: Record<string, Record<string, { count: number; value: number }>> = {};
+        const unitCounts: Record<string, { count: number; value: number; ratingSum: number; ratingCount: number }> = {};
+
+        appointments.forEach((app) => {
+          const unit = app._unit;
+          const breakdownName = getBreakdownName(app);
+
+          if (!unitCounts[unit]) unitCounts[unit] = { count: 0, value: 0, ratingSum: 0, ratingCount: 0 };
+          unitCounts[unit].count += 1;
+          unitCounts[unit].value += app._value;
+
+          const satisfaction = app.pesquisaSatisfacao;
+          if (satisfaction?.estrelas) {
+            unitCounts[unit].ratingSum += Number(satisfaction.estrelas) || 0;
+            unitCounts[unit].ratingCount += 1;
+          }
+
+          if (!breakdownByUnit[unit]) breakdownByUnit[unit] = {};
+          if (!breakdownByUnit[unit][breakdownName]) {
+            breakdownByUnit[unit][breakdownName] = { count: 0, value: 0 };
+          }
+          breakdownByUnit[unit][breakdownName].count += 1;
+          breakdownByUnit[unit][breakdownName].value += app._value;
+        });
+
+        return Object.keys(unitCounts).sort().map((unit) => ({
+          id: unit,
+          title: unit.charAt(0).toUpperCase() + unit.slice(1),
+          subtitle: unitConfig?.[unit]?.bairro ?? (selectedUnit === "OFT/45" ? "Médico" : "Unidade"),
+          count: unitCounts[unit].count,
+          value: unitCounts[unit].value,
+          ratingSum: unitCounts[unit].ratingSum,
+          ratingCount: unitCounts[unit].ratingCount,
+          cancellationCount: cancellationCountsByUnit[unit] || 0,
+          [breakdownField]: Object.entries(breakdownByUnit[unit] || {})
+            .sort((a, b) => b[1].count - a[1].count)
+            .map(([name, data]) => ({ name, count: data.count, value: data.value })),
+        }));
+      };
+
       // Logic for "Unidades" + "Convenio" + "All" => Show Top 3 Convenios per Unit
       if (filterCategory === 'convenio' && filterValue === 'all') {
         const unitConvenios: Record<string, Record<string, { count: number, value: number }>> = {};
@@ -1095,6 +1139,27 @@ export default function Home() {
             topExames: top3
           };
         });
+      }
+
+      if (filterCategory === "origem" && filterValue === "all") {
+        return buildUnitTextBreakdown(
+          (app) => getOriginLabel(normalizePatientOrigin(app.origem)),
+          "topOrigens",
+        );
+      }
+
+      if (filterCategory === "motivacao" && filterValue === "all") {
+        return buildUnitTextBreakdown(
+          (app) => String(app.motivacao || "Não informado").trim() || "Não informado",
+          "topMotivacoes",
+        );
+      }
+
+      if (filterCategory === "cirurgia" && filterValue === "all") {
+        return buildUnitTextBreakdown(
+          (app) => String(app.cirurgia || "Não informado").trim() || "Não informado",
+          "topCirurgias",
+        );
       }
 
       // Default Logic (Count only)
@@ -2340,12 +2405,12 @@ export default function Home() {
                   <SelectTrigger className="w-full sm:w-[170px] bg-white text-[13px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem className={analyticSelectItemClassName} value="unidades">{selectedUnit === 'OFT/45' ? 'M\u00E9dicos' : 'Unidades'}</SelectItem>
-                    <SelectItem className={analyticSelectItemClassName} value="convenios">{"Conv\u00EAnios"}</SelectItem>
-                    <SelectItem className={analyticSelectItemClassName} value="faixaEtaria">{"Faixa Et\u00E1ria"}</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="origem">Origem do Paciente</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="exames">Exames</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="faixaEtaria">{"Faixa Et\u00E1ria"}</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="motivacao">{"Motiva\u00E7\u00E3o"}</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="cirurgia">Cirurgia</SelectItem>
-                    <SelectItem className={analyticSelectItemClassName} value="origem">Origem do Paciente</SelectItem>
+                    <SelectItem className={analyticSelectItemClassName} value="convenios">{"Conv\u00EAnios"}</SelectItem>
                     <SelectItem className={analyticSelectItemClassName} value="historico">{"Evolu\u00E7\u00E3o Mensal"}</SelectItem>
                   </SelectContent>
                 </Select>
@@ -2544,6 +2609,7 @@ export default function Home() {
                     const breakdown = getBreakdownMeta(item);
                     const hasBreakdown = !!breakdown;
                     const isClickable = statType === "unidades" || !hasBreakdown;
+                    const showUnitActions = statType === "unidades" && filterCategory === "unidade";
 
                     return (
                       <div key={item.id} className="w-full max-w-sm">
@@ -2554,7 +2620,7 @@ export default function Home() {
                         >
                           <div className="relative z-10 flex flex-col h-full">
                           <CardHeader className="relative p-0 pb-1 flex flex-row items-start justify-between space-y-0 w-full">
-                            <div className={`flex flex-col truncate ${statType === "unidades" ? "pr-12" : "pr-2"}`}>
+                            <div className={`flex flex-col truncate ${showUnitActions ? "pr-12" : "pr-2"}`}>
                               <span className="text-sm font-semibold text-blue-700 truncate" title={item.title}>{item.title}</span>
                               <span className="text-[11px] text-gray-500 truncate">{item.subtitle}</span>
                               {statType === "unidades" && (
@@ -2588,7 +2654,7 @@ export default function Home() {
                               )}
                             </div>
 
-                            {statType === "unidades" ? (
+                            {showUnitActions ? (
                               <div className="absolute right-0 top-0 flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
                                 <Link
                                   href={`/novo-agendamento?unidade=${encodeURIComponent(item.id)}`}

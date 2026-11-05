@@ -498,6 +498,18 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     const cleanPhone = String(selectedPatientPhoneNumber || "").replace(/\D/g, "");
     if (cleanPhone.length < 10) return;
 
+    const autoFillPhone = String(conversationAutoFillPhone || "").replace(/\D/g, "");
+    const isConversationAutoFill =
+      autoFillPhone.length >= 10 &&
+      getPhoneVariants(autoFillPhone).some((variant) =>
+        getPhoneVariants(cleanPhone).includes(variant)
+      );
+
+    // No fluxo aberto pela extensao, a origem e extraida junto com os demais
+    // dados da mesma conversa. Evita que o no geral da conversa sobrescreva
+    // a origem especifica identificada para este agendamento.
+    if (isConversationAutoFill) return;
+
     let cancelled = false;
 
     const loadOriginFromConversas = async () => {
@@ -534,7 +546,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
     return () => {
       cancelled = true;
     };
-  }, [selectedPatientPhoneNumber, form, firebaseBase]);
+  }, [selectedPatientPhoneNumber, conversationAutoFillPhone, form, firebaseBase]);
 
   // Function to handle auto-filling data based on the selected patient's phone number
   const handleAutoFill = () => {
@@ -583,6 +595,14 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
 
     if (result.horario) {
       form.setValue("horario", result.horario, { shouldDirty: true, shouldValidate: true });
+      appliedFields += 1;
+    }
+
+    if (result.origem) {
+      form.setValue("origem", normalizePatientOrigin(result.origem), {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
       appliedFields += 1;
     }
 

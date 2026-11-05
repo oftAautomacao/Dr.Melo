@@ -94,6 +94,7 @@ const conversationAppointmentExtractionSchema = z.object({
     dataAgendamento: z.string().nullable(),
     horario: z.string().nullable(),
     convenio: z.string().nullable(),
+    origem: z.enum(["Google", "Instagram", "Busca Ativa", "Desconhecido"]),
     motivacao: z.string().nullable(),
     exames: z.array(z.string()).default([]),
     observacoes: z.string().nullable(),
@@ -167,6 +168,7 @@ CAMPOS A EXTRAIR:
 - dataAgendamento: formato AAAA-MM-DD da data escolhida/confirmada.
 - horario: formato HH:MM do horario escolhido/confirmado.
 - convenio: nome do convenio. Se o paciente disser que e particular, sem plano, ou consulta particular, retornar "Particular".
+- origem: como o paciente conheceu ou chegou a clinica. Retornar somente "Google", "Instagram", "Busca Ativa" ou "Desconhecido".
 - motivacao: motivo da consulta ou principal queixa/objetivo do agendamento.
 - exames: lista de exames confirmados. Se a conversa indicar que sera apenas consulta, retornar ["Consulta"].
 - observacoes: observacoes clinicas/logisticas relevantes para a unidade, como cadeirante, bebe, autismo, laudo especifico, gestante, dificuldade de locomocao, urgencia, acompanhante, necessidades especiais ou outros pontos importantes citados.
@@ -176,7 +178,8 @@ CAMPOS A EXTRAIR:
 REGRAS IMPORTANTES:
 - Nao invente dados.
 - Nao use sugestoes do assistente que nao foram aceitas pelo paciente.
-- Se um campo nao estiver claro, retorne null nesse campo.
+- Para origem, use "Google" quando houver pesquisa, site ou Google Maps; "Instagram" para Instagram ou Facebook; e "Busca Ativa" somente quando a conversa mostrar que a clinica iniciou o contato. Se nao houver evidencia suficiente, use "Desconhecido".
+- Se um campo nao estiver claro, retorne null nesse campo, exceto origem, que deve ser "Desconhecido".
 - Preserve nomes de unidades e exames do jeito mais proximo possivel ao que foi dito.
 - "observacoes" deve conter apenas informacoes realmente relevantes para a unidade.
 - Se nao houver exame confirmado e tambem nao houver indicacao clara de "apenas consulta", retorne exames como lista vazia.

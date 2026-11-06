@@ -114,6 +114,7 @@ export interface CalendarAppointment {
   unidade: string;
   telefone: string;
   origem?: string;
+  timestamp?: string;
   Observacoes?: string;
   aiCategorization?: AICategorization;
   motivoCancelamento?: string;
@@ -320,6 +321,7 @@ export const CancellationCalendar: React.FC<AppointmentCalendarProps> = ({
                   motivacao: record.motivacao,
                   unidade: base === "OFT/45" ? unit : record.unidade,
                   telefone: record.telefone,
+                  timestamp: record.timestamp,
                   Observacoes: record.Observacoes,
                   aiCategorization: record.aiCategorization,
                   motivoCancelamento: (record as any).motivoCancelamento,

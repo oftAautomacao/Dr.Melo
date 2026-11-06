@@ -53,6 +53,7 @@ import { useToast } from "@/hooks/use-toast";
 import { PatientFormSchema, type PatientFormData, type AICategorization } from "@/types/patient";
 import { saveAppointmentAction, cancelAppointment, checkAppointmentAvailabilityAction } from "@/app/actions";
 import { getPhoneVariants, normalizePatientOrigin } from "@/lib/patient-origin";
+import { createAppointmentTimestamp } from "@/lib/appointment-timestamp";
 import { categorizePatientObservations } from "@/ai/flows/categorize-patient-observations";
 import { fetchHolidays, isHoliday as checkIsHoliday, type Holiday as HolidayType } from '@/lib/holidays';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -256,6 +257,11 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
   const [isConversationAutofilling, setIsConversationAutofilling] = useState(false);
   const autoFilledConversationPhoneRef = useRef<string | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [appointmentTimestamp, setAppointmentTimestamp] = useState(() =>
+    typeof initialData?.timestamp === "string" && initialData.timestamp.trim() !== ""
+      ? initialData.timestamp
+      : createAppointmentTimestamp()
+  );
 
   const [isClient, setIsClient] = useState(false);
   const form = useForm<PatientFormData>({
@@ -1038,6 +1044,7 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                   unidade: initialData.unidade,
                   telefone: initialData.telefone,
                   origem: initialData.origem,
+                  timestamp: initialData.timestamp,
                   Observacoes: initialData.Observacoes,
                   aiCategorization: initialData.aiCategorization,
                 },
@@ -1105,7 +1112,8 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
         aiResult || undefined,
         sendSecretaryMessageOnCreate,
         sendPatientMessage,
-        shouldCheckConflictInSave
+        shouldCheckConflictInSave,
+        appointmentTimestamp
       );
 
       if (result.success) {
@@ -1489,6 +1497,17 @@ export const PatientForm: React.FC<PatientFormProps> = ({ onAppointmentSaved, de
                     </FormItem>
                   )}
                 />
+
+                <FormItem>
+                  <FormLabel className="flex items-center"><Clock className="mr-2 h-4 w-4" />timestamp</FormLabel>
+                  <FormControl>
+                    <Input
+                      value={appointmentTimestamp}
+                      onChange={(event) => setAppointmentTimestamp(event.target.value)}
+                      className="font-mono"
+                    />
+                  </FormControl>
+                </FormItem>
               </div>
 
               <div className="space-y-6">

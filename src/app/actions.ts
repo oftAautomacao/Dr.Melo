@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { ref, update, get, query, orderByKey, startAt, limitToFirst } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
 import { normalizePatientOrigin } from "@/lib/patient-origin";
+import { createAppointmentTimestamp } from "@/lib/appointment-timestamp";
 import type {
   PatientFormData,
   AICategorization,
@@ -130,7 +131,8 @@ export async function saveAppointmentAction(
   aiCategorizationResult?: AICategorization,
   enviarMsgSecretaria?: boolean,
   enviarMsgPaciente?: boolean,
-  checkConflict: boolean = true
+  checkConflict: boolean = true,
+  existingTimestamp?: string
 ): Promise<SaveAppointmentResult> {
   console.log("SAVE_ACTION - firebaseBase:", firebaseBase);
   console.log("SAVE_ACTION - formData:", formData);
@@ -229,11 +231,16 @@ export async function saveAppointmentAction(
     const dbInstance = getDatabaseInstance(environment);
     const updates: Record<string, any> = {};
 
+    const timestamp = typeof existingTimestamp === "string" && existingTimestamp.trim() !== ""
+      ? existingTimestamp
+      : createAppointmentTimestamp();
+
     const appointmentDataToSave = {
       ...appointmentRecord,
       obs: [v.observacoes || ""],
       ...(Object.keys(precos).length > 0 ? { precos } : {}),
       metodo: "Gerenciador",
+      ...(isDRMBase(firebaseBase) ? { timestamp } : {}),
     };
 
     updates[`${agBase}/${idxNode}/${setor}/${datePath}/${timePath}`] = appointmentDataToSave;
@@ -438,6 +445,9 @@ export async function cancelAppointment(
       Observacoes: record.Observacoes ?? null,
       obs: record.obs ?? null,
       aiCategorization: record.aiCategorization ?? null,
+      ...(typeof record.timestamp === "string" && record.timestamp.trim() !== ""
+        ? { timestamp: record.timestamp }
+        : {}),
 
       ...medicoInfo, // Adiciona o campo 'medico' se for OFT
 
@@ -459,6 +469,15 @@ export async function cancelAppointment(
     if (!snapshot.exists()) {
       console.warn(`CANCEL_FAIL: Appointment not found at ${checkPath}`);
       throw new Error(`Agendamento não encontrado no banco de dados. Caminho: ${checkPath}`);
+    }
+    const storedTimestamp = snapshot.val()?.timestamp;
+    if (
+      isDRMBase(firebaseBase) &&
+      !("timestamp" in dataToSave) &&
+      typeof storedTimestamp === "string" &&
+      storedTimestamp.trim() !== ""
+    ) {
+      Object.assign(dataToSave, { timestamp: storedTimestamp });
     }
     // -------------------------------------
 
@@ -548,6 +567,13 @@ export async function restoreAppointment(
       ...appointmentData,
       telefone: phone,
       enviarMsgSecretaria: enviarMsgSecretaria,
+      ...(isDRMBase(firebaseBase)
+        ? {
+          timestamp: typeof appointmentData.timestamp === "string" && appointmentData.timestamp.trim() !== ""
+            ? appointmentData.timestamp
+            : createAppointmentTimestamp(),
+        }
+        : {}),
     };
 
     const updates: Record<string, any> = {};

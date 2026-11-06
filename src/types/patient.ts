@@ -88,6 +88,7 @@ export interface AppointmentFirebaseRecord {
   realizouConsulta?: "S" | "N";
   dataAtendimento?: string;
   origem?: string;
+  timestamp?: string;
   conferenciaFaturamento?: {
     origem?: "manual" | "ia";
     atualizadoEm?: string;

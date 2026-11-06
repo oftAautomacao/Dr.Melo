@@ -2823,6 +2823,18 @@ export default function Home() {
 
 
 
+  const getAppointmentObservations = (app: any): string => {
+    const observations = app.Observacoes || app.obs || "";
+
+    if (Array.isArray(observations)) {
+      return observations
+        .filter((observation): observation is string => typeof observation === "string")
+        .join("\n");
+    }
+
+    return typeof observations === "string" ? observations : "";
+  };
+
   const buildAppointmentDetail = (app: any, canReschedule = true): AppointmentDetail => ({
     nome: app.nomePaciente || app.nome || "N\u00E3o informado",
     nascimento: app.nascimento || "-",
@@ -2853,7 +2865,8 @@ export default function Home() {
         unidadeLabel: unitConfig?.[app._unit]?.empresa ?? app._unit,
         telefone: app.telefone || "",
         origem: app.origem,
-        Observacoes: app.Observacoes || app.obs || "",
+        timestamp: app.timestamp,
+        Observacoes: getAppointmentObservations(app),
         aiCategorization: app.aiCategorization,
         confirmado: app.confirmado,
       },
@@ -2925,8 +2938,6 @@ export default function Home() {
   // Function to handle card click for detailed records
   const handleDrillDown = (item: CardData, subItemName?: string) => {
     const breakdown = getBreakdownMeta(item);
-    const hasBreakdown = !!breakdown;
-    if (hasBreakdown && !subItemName && statType !== "unidades") return;
 
     // Filter appointments for this item from filteredAppointments
     let matches: any[] = [];
@@ -3217,15 +3228,12 @@ export default function Home() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 justify-items-center animate-in fade-in zoom-in-95 duration-300">
                   {sortedDisplayData.map((item) => {
                     const breakdown = getBreakdownMeta(item);
-                    const hasBreakdown = !!breakdown;
-                    const isClickable = statType === "unidades" || !hasBreakdown;
                     const showUnitActions = statType === "unidades" && filterCategory === "unidade";
 
                     return (
                       <div key={item.id} className="w-full max-w-sm">
                         <Card
-                          className={`w-full rounded-xl shadow-lg bg-white p-2 transition-transform duration-200 relative 
-                              ${isClickable ? "cursor-pointer hover:scale-105" : ""}`}
+                          className="w-full rounded-xl shadow-lg bg-white p-2 transition-transform duration-200 relative cursor-pointer hover:scale-105"
                           onClick={() => handleDrillDown(item)}
                         >
                           <div className="relative z-10 flex flex-col h-full">
@@ -3314,7 +3322,10 @@ export default function Home() {
                                     <div 
                                       key={i} 
                                       className="flex justify-between items-center text-[10px] bg-gray-50 p-0.5 rounded border border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group"
-                                      onClick={() => handleDrillDown(item, entry.name)}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        handleDrillDown(item, entry.name);
+                                      }}
                                       title={`Ver pacientes de ${entry.name}`}
                                     >
                                       <span className="truncate font-medium text-gray-700 max-w-[80px] group-hover:text-blue-700" title={entry.name}>{entry.name}</span>

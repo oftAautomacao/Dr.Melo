@@ -123,6 +123,7 @@ export interface CalendarAppointment {
   unidadeLabel?: string;
   telefone: string;
   origem?: string;
+  timestamp?: string;
   Observacoes?: string;
   aiCategorization?: AICategorization;
   confirmado?: boolean;
@@ -470,6 +471,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   unidadeLabel: record.unidade,
                   telefone: record.telefone,
                   origem: record.origem,
+                  timestamp: record.timestamp,
                   Observacoes: record.Observacoes || (record.obs && record.obs.length > 0 ? record.obs[0] : ""),
                   aiCategorization: record.aiCategorization,
                   confirmado: !!record.confirmado,

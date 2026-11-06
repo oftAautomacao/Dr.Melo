@@ -108,6 +108,11 @@ const parseCreationTimestamp = (value: unknown): Date | null => {
 };
 
 const getSaoPauloDateKey = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    const localTimestampDate = value.trim().match(/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:\d{2}:\d{3}Z$/)?.[1];
+    if (localTimestampDate) return localTimestampDate;
+  }
+
   const parsed = parseCreationTimestamp(value);
   if (!parsed) return null;
 
@@ -338,11 +343,13 @@ export default function Home() {
       for (const date in patientData[unit]) {
         const appointmentMonth = obterNomeMes(date);
         const appointmentYear = obterAno(date);
-        const belongsToPeriod = statType === "historico"
-          ? filterYear === null || appointmentYear === filterYear
-          : filterMonth
-            ? appointmentMonth === filterMonth
-            : filterYear === null || appointmentYear === filterYear;
+        const belongsToPeriod = statType === "dataCriacao"
+          ? true
+          : statType === "historico"
+            ? filterYear === null || appointmentYear === filterYear
+            : filterMonth
+              ? appointmentMonth === filterMonth
+              : filterYear === null || appointmentYear === filterYear;
 
         if (!belongsToPeriod) continue;
 
@@ -646,8 +653,16 @@ export default function Home() {
     const set = new Set<string>();
     for (const unit in patientData) {
       for (const d in patientData[unit]) {
-        const nome = obterNomeMes(d);
-        if (nome) set.add(nome);
+        const hours = patientData[unit][d];
+        for (const time in hours) {
+          const periodDate = statType === "dataCriacao"
+            ? getSaoPauloDateKey(
+              creationTimestamps[getAppointmentLookupKey(unit, d, time, hours[time]?.telefone)]
+            )
+            : d;
+          const nome = periodDate ? obterNomeMes(periodDate) : null;
+          if (nome) set.add(nome);
+        }
       }
     }
     return Array.from(set).sort((a, b) => {
@@ -657,15 +672,25 @@ export default function Home() {
       const idxB = MESES.indexOf(mB);
       return Number(yA) === Number(yB) ? idxA - idxB : Number(yA) - Number(yB);
     });
-  }, [patientData]);
+  }, [creationTimestamps, patientData, statType]);
 
   const anosDisponiveis = useMemo(() => {
     const set = new Set<string>();
     for (const unit in patientData) {
-      for (const d in patientData[unit]) set.add(obterAno(d));
+      for (const d in patientData[unit]) {
+        const hours = patientData[unit][d];
+        for (const time in hours) {
+          const periodDate = statType === "dataCriacao"
+            ? getSaoPauloDateKey(
+              creationTimestamps[getAppointmentLookupKey(unit, d, time, hours[time]?.telefone)]
+            )
+            : d;
+          if (periodDate) set.add(obterAno(periodDate));
+        }
+      }
     }
     return Array.from(set).sort((a, b) => Number(b) - Number(a));
-  }, [patientData]);
+  }, [creationTimestamps, patientData, statType]);
 
   /* ---------- Default Filter ---------- */
   useEffect(() => {
@@ -769,10 +794,23 @@ export default function Home() {
 
         const hours = patientData[unit][date];
         for (const time in hours) {
+          const creationTimestamp = creationTimestamps[getAppointmentLookupKey(unit, date, time, hours[time]?.telefone)];
+          const creationDate = getSaoPauloDateKey(creationTimestamp);
           let include = false;
 
           if (statType === 'historico') {
             if (filterYear === null || apptYear === filterYear) include = true;
+          } else if (statType === 'dataCriacao') {
+            const creationMonthStr = creationDate ? obterNomeMes(creationDate) : null;
+            const creationYear = creationDate ? obterAno(creationDate) : null;
+
+            if (filterMonthStr) {
+              if (creationMonthStr === filterMonthStr) include = true;
+            } else if (filterYear) {
+              if (creationYear === filterYear) include = true;
+            } else {
+              include = true;
+            }
           } else {
             if (filterMonthStr) {
               if (apptMonthStr === filterMonthStr) include = true;
@@ -795,8 +833,6 @@ export default function Home() {
               appValue += examValue;
             });
 
-            const creationTimestamp = creationTimestamps[getAppointmentLookupKey(unit, date, time, hours[time]?.telefone)];
-            const creationDate = getSaoPauloDateKey(creationTimestamp);
             const creationToAppointmentDays = getCreationToAppointmentDays(creationDate, date);
             const app = {
               ...hours[time],

@@ -1,0 +1,21 @@
+[debug] [2026-11-06T19:09:07.552Z] ----------------------------------------------------------------------
+[debug] [2026-11-06T19:09:07.556Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only hosting
+[debug] [2026-11-06T19:09:07.557Z] CLI Version:   14.12.0
+[debug] [2026-11-06T19:09:07.557Z] Platform:      win32
+[debug] [2026-11-06T19:09:07.557Z] Node Version:  v21.7.1
+[debug] [2026-11-06T19:09:07.558Z] Time:          Fri Nov 06 2026 16:09:07 GMT-0300 (Horário Padrão de Brasília)
+[debug] [2026-11-06T19:09:07.558Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-11-06T19:09:07.907Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-11-06T19:09:07.907Z] > authorizing via signed-in user (oftautomacao@gmail.com)
+[debug] [2026-11-06T19:09:07.907Z] [iam] checking project oftautomacao-9b427 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-11-06T19:09:07.908Z] Checked if tokens are valid: false, expires at: 1793992013344
+[debug] [2026-11-06T19:09:07.909Z] Checked if tokens are valid: false, expires at: 1793992013344
+[debug] [2026-11-06T19:09:07.909Z] > refreshing access token with scopes: []
+[debug] [2026-11-06T19:09:07.911Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-11-06T19:09:07.911Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-11-06T19:09:08.204Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-11-06T19:09:08.205Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-11-06T19:09:08.234Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/oftautomacao-9b427:testIamPermissions [none]
+[debug] [2026-11-06T19:09:08.234Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/oftautomacao-9b427:testIamPermissions x-goog-quota-user=projects/oftautomacao-9b427
+[debug] [2026-11-06T19:09:08.234Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/oftautomacao-9b427:testIamPermissions {"permissions":["firebase.projects.get","firebasehosting.sites.update"]}

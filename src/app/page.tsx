@@ -186,6 +186,56 @@ const getAgeBucket = (nascimento: string) => {
 type StatType = "unidades" | "convenios" | "faixaEtaria" | "exames" | "historico" | "origem" | "motivacao" | "cirurgia" | "dataCriacao" | "criacaoAgendamento";
 type FilterCategory = "unidade" | "convenio" | "faixaEtaria" | "exame" | "origem" | "motivacao" | "cirurgia" | "dataCriacao" | "criacaoAgendamento";
 
+type CreationTimestampCandidate = {
+  date: string;
+  time: string;
+  phoneVariants: string[];
+};
+
+const collectCreationTimestampCandidates = (
+  patientData: Record<string, Record<string, any>>,
+  creationTimestamps: Record<string, unknown>,
+  filter: string,
+  statType: StatType,
+) => {
+  const candidates = new Map<string, CreationTimestampCandidate>();
+  if (!filter) return candidates;
+
+  const filterYear = filter === "all" ? null : (filter.includes(" de ") ? filter.split(" de ")[1] : filter);
+  const filterMonth = filter.includes(" de ") ? filter : null;
+
+  for (const unit in patientData) {
+    for (const date in patientData[unit]) {
+      const appointmentMonth = obterNomeMes(date);
+      const appointmentYear = obterAno(date);
+      const belongsToPeriod = statType === "dataCriacao"
+        ? true
+        : statType === "historico"
+          ? filterYear === null || appointmentYear === filterYear
+          : filterMonth
+            ? appointmentMonth === filterMonth
+            : filterYear === null || appointmentYear === filterYear;
+
+      if (!belongsToPeriod) continue;
+
+      const hours = patientData[unit][date];
+      for (const time in hours) {
+        const phone = String(hours[time]?.telefone || "");
+        const phoneVariants = getPhoneVariants(phone).filter(Boolean);
+        if (phoneVariants.length === 0) continue;
+
+        const lookupKey = getAppointmentLookupKey(unit, date, time, phone);
+        if (Object.prototype.hasOwnProperty.call(creationTimestamps, lookupKey)) continue;
+        if (getSaoPauloDateKey(hours[time]?.timestamp)) continue;
+
+        candidates.set(lookupKey, { date, time, phoneVariants });
+      }
+    }
+  }
+
+  return candidates;
+};
+
 interface FilterOptionItem {
   value: string;
   label: string;
@@ -224,6 +274,7 @@ export default function Home() {
   const [examConfig, setExamConfig] = useState<Record<string, any>>({});
   const [creationTimestamps, setCreationTimestamps] = useState<Record<string, unknown>>({});
   const [loading, setLoading] = useState(true);
+  const [showPanelLoader, setShowPanelLoader] = useState(false);
 
   const [periodMode, setPeriodMode] = useState<'month' | 'year'>('month');
 
@@ -258,6 +309,19 @@ export default function Home() {
   };
 
   const [selectedUnit, setSelectedUnit] = useState<"DRM" | "OFT/45" | null>(null);
+
+  const needsCreationData =
+    statType === "dataCriacao" ||
+    statType === "criacaoAgendamento" ||
+    filterCategory === "dataCriacao" ||
+    filterCategory === "criacaoAgendamento";
+
+  const creationTimestampCandidates = useMemo(
+    () => needsCreationData
+      ? collectCreationTimestampCandidates(patientData, creationTimestamps, filter, statType)
+      : new Map<string, CreationTimestampCandidate>(),
+    [creationTimestamps, filter, needsCreationData, patientData, statType],
+  );
 
   /* ---------- get unit from localStorage ---------- */
   useEffect(() => {
@@ -326,55 +390,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const needsCreationData =
-      statType === "dataCriacao" ||
-      statType === "criacaoAgendamento" ||
-      filterCategory === "dataCriacao" ||
-      filterCategory === "criacaoAgendamento";
-    if (!filter || !needsCreationData) return;
+    if (!filter || !needsCreationData || creationTimestampCandidates.size === 0) return;
 
     const pathBase = getFirebasePathBase();
     const db = getDatabaseInstance(ENVIRONMENT);
-    const filterYear = filter === "all" ? null : (filter.includes(" de ") ? filter.split(" de ")[1] : filter);
-    const filterMonth = filter.includes(" de ") ? filter : null;
-    const candidates = new Map<string, { date: string; time: string; phoneVariants: string[] }>();
-
-    for (const unit in patientData) {
-      for (const date in patientData[unit]) {
-        const appointmentMonth = obterNomeMes(date);
-        const appointmentYear = obterAno(date);
-        const belongsToPeriod = statType === "dataCriacao"
-          ? true
-          : statType === "historico"
-            ? filterYear === null || appointmentYear === filterYear
-            : filterMonth
-              ? appointmentMonth === filterMonth
-              : filterYear === null || appointmentYear === filterYear;
-
-        if (!belongsToPeriod) continue;
-
-        const hours = patientData[unit][date];
-        for (const time in hours) {
-          const phone = String(hours[time]?.telefone || "");
-          const phoneVariants = getPhoneVariants(phone).filter(Boolean);
-          if (phoneVariants.length === 0) continue;
-
-          const lookupKey = getAppointmentLookupKey(unit, date, time, phone);
-          if (Object.prototype.hasOwnProperty.call(creationTimestamps, lookupKey)) continue;
-
-          candidates.set(lookupKey, {
-            date,
-            time,
-            phoneVariants,
-          });
-        }
-      }
-    }
-
-    if (candidates.size === 0) return;
 
     let cancelled = false;
-    const entries = Array.from(candidates.entries());
+    const entries = Array.from(creationTimestampCandidates.entries());
 
     const loadTimestamps = async () => {
       const results: Record<string, unknown> = {};
@@ -418,7 +440,7 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
-  }, [creationTimestamps, filter, filterCategory, patientData, statType]);
+  }, [creationTimestampCandidates, filter, needsCreationData]);
 
   /* ---------- Sync Filter Category with Stat Type ---------- */
   useEffect(() => {
@@ -533,9 +555,11 @@ export default function Home() {
         const hours = patientData[unit][date];
         for (const time in hours) {
           const lookupKey = getAppointmentLookupKey(unit, date, time, hours[time]?.telefone);
-          if (!Object.prototype.hasOwnProperty.call(creationTimestamps, lookupKey)) continue;
+          const hasCachedTimestamp = Object.prototype.hasOwnProperty.call(creationTimestamps, lookupKey);
+          const timestamp = hasCachedTimestamp ? creationTimestamps[lookupKey] : hours[time]?.timestamp;
+          if (!hasCachedTimestamp && !timestamp) continue;
 
-          const creationDate = getSaoPauloDateKey(creationTimestamps[lookupKey]);
+          const creationDate = getSaoPauloDateKey(timestamp);
           if (creationDate) dates.add(creationDate);
           else hasMissingTimestamp = true;
         }
@@ -562,9 +586,11 @@ export default function Home() {
         const hours = patientData[unit][date];
         for (const time in hours) {
           const lookupKey = getAppointmentLookupKey(unit, date, time, hours[time]?.telefone);
-          if (!Object.prototype.hasOwnProperty.call(creationTimestamps, lookupKey)) continue;
+          const hasCachedTimestamp = Object.prototype.hasOwnProperty.call(creationTimestamps, lookupKey);
+          const timestamp = hasCachedTimestamp ? creationTimestamps[lookupKey] : hours[time]?.timestamp;
+          if (!hasCachedTimestamp && !timestamp) continue;
 
-          const creationDate = getSaoPauloDateKey(creationTimestamps[lookupKey]);
+          const creationDate = getSaoPauloDateKey(timestamp);
           const difference = getCreationToAppointmentDays(creationDate, date);
           if (difference === null) hasMissingTimestamp = true;
           else differences.add(difference);
@@ -658,6 +684,7 @@ export default function Home() {
           const periodDate = statType === "dataCriacao"
             ? getSaoPauloDateKey(
               creationTimestamps[getAppointmentLookupKey(unit, d, time, hours[time]?.telefone)]
+                ?? hours[time]?.timestamp
             )
             : d;
           const nome = periodDate ? obterNomeMes(periodDate) : null;
@@ -683,6 +710,7 @@ export default function Home() {
           const periodDate = statType === "dataCriacao"
             ? getSaoPauloDateKey(
               creationTimestamps[getAppointmentLookupKey(unit, d, time, hours[time]?.telefone)]
+                ?? hours[time]?.timestamp
             )
             : d;
           if (periodDate) set.add(obterAno(periodDate));
@@ -794,7 +822,8 @@ export default function Home() {
 
         const hours = patientData[unit][date];
         for (const time in hours) {
-          const creationTimestamp = creationTimestamps[getAppointmentLookupKey(unit, date, time, hours[time]?.telefone)];
+          const creationTimestamp = creationTimestamps[getAppointmentLookupKey(unit, date, time, hours[time]?.telefone)]
+            ?? hours[time]?.timestamp;
           const creationDate = getSaoPauloDateKey(creationTimestamp);
           let include = false;
 
@@ -2798,6 +2827,22 @@ export default function Home() {
     });
   }, [filterCategory, filteredAppointments, filterValue, rawDisplayData, statType, unitConfig]);
 
+  const panelLoading = loading || (
+    needsCreationData &&
+    creationTimestampCandidates.size > 0 &&
+    displayData.length === 0
+  );
+
+  useEffect(() => {
+    if (!panelLoading) {
+      setShowPanelLoader(false);
+      return;
+    }
+
+    const loaderDelay = window.setTimeout(() => setShowPanelLoader(true), 350);
+    return () => window.clearTimeout(loaderDelay);
+  }, [panelLoading]);
+
   const totalPacientes = useMemo(() => filteredAppointments.length, [filteredAppointments]);
   const totalEstimado = useMemo(() => filteredAppointments.reduce((acc, app) => acc + (app._value || 0), 0), [filteredAppointments]);
 
@@ -3043,6 +3088,23 @@ export default function Home() {
           <PatientDetailsSheet
             isOpen={drillDownOpen}
             onClose={() => setDrillDownOpen(false)}
+            onAppointmentUpdated={(appointment) => {
+              const lookupKey = getAppointmentLookupKey(
+                appointment.unidade,
+                appointment.dataAgendamento,
+                appointment.horario,
+                appointment.telefone,
+              );
+
+              setCreationTimestamps((current) => {
+                if (!Object.prototype.hasOwnProperty.call(current, lookupKey)) return current;
+                const next = { ...current };
+                delete next[lookupKey];
+                return next;
+              });
+              setDrillDownOpen(false);
+              setActiveDrillDown(null);
+            }}
             title={activeDrillDown.title}
             patients={activeDrillDown.patients}
           />
@@ -3168,15 +3230,36 @@ export default function Home() {
 
         {/* Main Content */}
         <section className="w-full max-w-6xl transition-all duration-300">
-          {loading && <p className="text-center">Carregando...</p>}
+          {panelLoading && (
+            <div
+              className="flex min-h-[260px] flex-col items-center justify-center gap-4 rounded-2xl border border-blue-100/70 bg-white/65 p-8 text-center shadow-sm backdrop-blur-sm"
+              role="status"
+              aria-live="polite"
+            >
+              {showPanelLoader && (
+                <div className="flex animate-in fade-in duration-200 flex-col items-center gap-4">
+                  <Image
+                    src="/video/Animação de alvo atingido.gif"
+                    alt="Logo Dr. Melo carregando"
+                    width={112}
+                    height={112}
+                    unoptimized
+                    priority
+                    className="h-28 w-28 object-contain"
+                  />
+                  <p className="text-sm font-semibold text-blue-900">Carregando dados do painel...</p>
+                </div>
+              )}
+            </div>
+          )}
 
-          {!loading && displayData.length === 0 && (
+          {!panelLoading && displayData.length === 0 && (
             <div className="text-center p-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
               <p className="text-gray-500">Nenhum dado encontrado para esta combina\u00E7\u00E3o.</p>
             </div>
           )}
 
-          {!loading && displayData.length > 0 && (
+          {!panelLoading && displayData.length > 0 && (
             <>
               {viewMode === "table" && (
                 <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
@@ -3414,7 +3497,7 @@ export default function Home() {
           )}
 
           {/* Footer Summary */}
-          {!loading && displayData.length > 0 && (
+          {!panelLoading && displayData.length > 0 && (
             <div className="mt-8 flex flex-col sm:flex-row justify-center items-center gap-6 sm:gap-12 p-4 bg-gray-50/50 rounded-lg border border-gray-100">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-500 font-medium uppercase tracking-wider">{statType === 'exames' ? 'Total de Exames:' : 'Total de Pacientes:'}</span>

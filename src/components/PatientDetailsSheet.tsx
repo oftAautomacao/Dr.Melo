@@ -54,6 +54,7 @@ export interface AppointmentDetail {
 interface PatientDetailsSheetProps {
     isOpen: boolean;
     onClose: () => void;
+    onAppointmentUpdated?: (appointment: CalendarAppointment) => void;
     title: string;
     patients: AppointmentDetail[];
 }
@@ -61,6 +62,7 @@ interface PatientDetailsSheetProps {
 export function PatientDetailsSheet({
     isOpen,
     onClose,
+    onAppointmentUpdated,
     title,
     patients,
 }: PatientDetailsSheetProps) {
@@ -327,6 +329,7 @@ export function PatientDetailsSheet({
                             key={`${appointmentToReschedule.id}-${appointmentToReschedule.dataAgendamento}-${appointmentToReschedule.horario}`}
                             initialData={appointmentToReschedule}
                             onRescheduleComplete={() => {
+                                onAppointmentUpdated?.(appointmentToReschedule);
                                 setAppointmentToReschedule(undefined);
                             }}
                             firebaseBase={getFirebasePathBase()}

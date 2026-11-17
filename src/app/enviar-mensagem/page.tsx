@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { getFirestoreInstance, getDatabaseInstance } from "@/lib/firebase";
 import { getPhoneVariants } from "@/lib/patient-origin";
-import { ref, get, set } from "firebase/database";
+import { ref, get, update } from "firebase/database";
 import { Toaster, toast } from 'sonner';
 
 import {
@@ -40,6 +40,15 @@ type ConversationMessage = {
   timelineMarker?:
     | { source: "realtime"; timestamp: string }
     | { source: "firestore" };
+};
+
+type ConversationHistoryResult = {
+  exists: boolean;
+  messages: ConversationMessage[];
+  archivedMessages: ConversationMessage[];
+  currentMessages: ConversationMessage[];
+  hasArchivedConversation: boolean;
+  hasCurrentConversation: boolean;
 };
 
 /* ---------- avatares aleatórios ---------- */
@@ -146,6 +155,156 @@ function createSaoPauloArchiveTimestamp(date = new Date()): string {
   );
 }
 
+async function getRealtimeShallowKeys(
+  environment: "teste" | "producao",
+  path: string,
+  signal?: AbortSignal
+): Promise<string[]> {
+  const databaseUrl = getDatabaseInstance(environment).app.options.databaseURL;
+
+  if (!databaseUrl) {
+    throw new Error("URL do Realtime Database não configurada.");
+  }
+
+  const encodedPath = path
+    .split("/")
+    .filter(Boolean)
+    .map(encodeURIComponent)
+    .join("/");
+  const response = await fetch(
+    `${databaseUrl.replace(/\/$/, "")}/${encodedPath}.json?shallow=true`,
+    { signal }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Falha ao consultar o Realtime Database (${response.status}).`);
+  }
+
+  const data: unknown = await response.json();
+  return data && typeof data === "object" ? Object.keys(data) : [];
+}
+
+async function loadArchivedPatientIds(
+  environment: "teste" | "producao",
+  unit: "DRM" | "OFT/45"
+): Promise<string[]> {
+  const conversationsPath =
+    `/${unit}/agendamentoWhatsApp/operacional/conversas`;
+  const archiveIndexPath =
+    `/${unit}/agendamentoWhatsApp/operacional/conversasArquivadas`;
+  const [patientIds, indexedPatientIds] = await Promise.all([
+    getRealtimeShallowKeys(environment, conversationsPath),
+    getRealtimeShallowKeys(environment, archiveIndexPath),
+  ]);
+  const archivedPatientIds = new Set(indexedPatientIds);
+
+  // Ambientes pequenos também reconhecem arquivos antigos, anteriores ao índice.
+  // Em bases grandes, o índice evita milhares de consultas durante a abertura da tela.
+  if (patientIds.length > 200) return Array.from(archivedPatientIds);
+
+  let nextPatientIndex = 0;
+
+  const scanNextPatient = async () => {
+    while (nextPatientIndex < patientIds.length) {
+      const patientId = patientIds[nextPatientIndex++];
+      const archiveKeys = await getRealtimeShallowKeys(
+        environment,
+        `${conversationsPath}/${patientId}/conversasAntigas`
+      );
+
+      if (archiveKeys.length > 0) archivedPatientIds.add(patientId);
+    }
+  };
+  const workerCount = Math.min(8, patientIds.length);
+
+  await Promise.all(
+    Array.from({ length: workerCount }, () => scanNextPatient())
+  );
+
+  return Array.from(archivedPatientIds);
+}
+
+function getPatientCacheKey(
+  environment: "teste" | "producao",
+  unit: "DRM" | "OFT/45"
+): string {
+  return `conversation-patients:${environment}:${unit}`;
+}
+
+function getCachedPatientIds(
+  environment: "teste" | "producao",
+  unit: "DRM" | "OFT/45"
+): string[] {
+  try {
+    const cached = sessionStorage.getItem(getPatientCacheKey(environment, unit));
+    const parsed: unknown = cached ? JSON.parse(cached) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((patientId): patientId is string => typeof patientId === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function cachePatientIds(
+  environment: "teste" | "producao",
+  unit: "DRM" | "OFT/45",
+  patientIds: Iterable<string>
+): void {
+  try {
+    const cachedPatientIds = getCachedPatientIds(environment, unit);
+    const updatedPatientIds = Array.from(
+      new Set([...cachedPatientIds, ...patientIds])
+    );
+    sessionStorage.setItem(
+      getPatientCacheKey(environment, unit),
+      JSON.stringify(updatedPatientIds)
+    );
+  } catch {
+    // O cache é apenas uma otimização; a busca direta continua funcionando sem ele.
+  }
+}
+
+async function discoverArchivedPatientsInBackground({
+  environment,
+  unit,
+  knownPatientIds,
+  signal,
+  onPatientFound,
+}: {
+  environment: "teste" | "producao";
+  unit: "DRM" | "OFT/45";
+  knownPatientIds: Set<string>;
+  signal: AbortSignal;
+  onPatientFound: (patientId: string) => void;
+}): Promise<void> {
+  const conversationsPath =
+    `/${unit}/agendamentoWhatsApp/operacional/conversas`;
+  const patientIds = await getRealtimeShallowKeys(
+    environment,
+    conversationsPath,
+    signal
+  );
+
+  for (const patientId of patientIds) {
+    if (signal.aborted) return;
+    if (knownPatientIds.has(patientId) || !/^\d{10,15}$/.test(patientId)) continue;
+
+    const archiveKeys = await getRealtimeShallowKeys(
+      environment,
+      `${conversationsPath}/${patientId}/conversasAntigas`,
+      signal
+    );
+
+    if (archiveKeys.length > 0) {
+      knownPatientIds.add(patientId);
+      onPatientFound(patientId);
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+  }
+}
+
 async function loadConversationHistory({
   patientId,
   environment,
@@ -154,7 +313,7 @@ async function loadConversationHistory({
   patientId: string;
   environment: "teste" | "producao";
   unit: "DRM" | "OFT/45";
-}): Promise<{ exists: boolean; messages: ConversationMessage[] }> {
+}): Promise<ConversationHistoryResult> {
   const historyKey = unit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
   const archivedHistoryPath = `/${unit}/agendamentoWhatsApp/operacional/conversas/${patientId}/conversasAntigas`;
 
@@ -177,6 +336,58 @@ async function loadConversationHistory({
 
   return {
     exists: currentConversationSnapshot.exists() || archivedConversationSnapshot.exists(),
+    messages: [...archivedMessages, ...currentMessagesWithMarker],
+    archivedMessages,
+    currentMessages,
+    hasArchivedConversation: archivedConversationSnapshot.exists(),
+    hasCurrentConversation: currentConversationSnapshot.exists(),
+  };
+}
+
+async function loadCompletePhoneConversation({
+  phone,
+  environment,
+  unit,
+}: {
+  phone: string;
+  environment: "teste" | "producao";
+  unit: "DRM" | "OFT/45";
+}): Promise<{ exists: boolean; patientId: string; messages: ConversationMessage[] }> {
+  const phoneVariants = getPhoneVariants(phone);
+  const histories = await Promise.all(
+    phoneVariants.map(async (patientId) => ({
+      patientId,
+      history: await loadConversationHistory({ patientId, environment, unit }),
+    }))
+  );
+  const existingHistories = histories.filter(({ history }) => history.exists);
+  const primaryHistory =
+    existingHistories.find(({ history }) => history.hasCurrentConversation) ||
+    existingHistories.find(({ history }) => history.hasArchivedConversation);
+
+  if (!primaryHistory) {
+    return {
+      exists: false,
+      patientId: phone.replace(/\D/g, ""),
+      messages: [],
+    };
+  }
+
+  const archivedMessages = existingHistories.flatMap(
+    ({ history }) => history.archivedMessages
+  );
+  const currentMessages = existingHistories.flatMap(
+    ({ history }) => history.currentMessages
+  );
+  const currentMessagesWithMarker = currentMessages.map((message, index) =>
+    archivedMessages.length > 0 && index === 0
+      ? { ...message, timelineMarker: { source: "firestore" } as const }
+      : message
+  );
+
+  return {
+    exists: true,
+    patientId: primaryHistory.patientId,
     messages: [...archivedMessages, ...currentMessagesWithMarker],
   };
 }
@@ -508,6 +719,7 @@ function EnviarMensagemComponent() {
   const [searchTerm, setSearchTerm] = useState("");
   const [patientList, setPatientList] = useState<string[]>([]);
   const [isLoadingPatients, setIsLoadingPatients] = useState(false);
+  const [isPatientListReady, setIsPatientListReady] = useState(false);
   const [patientListError, setPatientListError] = useState<string | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const [conversationHistory, setConversationHistory] = useState<
@@ -518,6 +730,11 @@ function EnviarMensagemComponent() {
   const [isArchiving, setIsArchiving] = useState(false);
 
   const endRef = useRef<HTMLDivElement>(null);
+  const patientListRef = useRef<string[]>([]);
+
+  useEffect(() => {
+    patientListRef.current = patientList;
+  }, [patientList]);
 
   /* --------------------- autoscroll na conversa ---------------------- */
   useEffect(() => {
@@ -543,20 +760,16 @@ function EnviarMensagemComponent() {
 
     (async () => {
       try {
-        for (const phoneVariant of getPhoneVariants(phoneFromUrl)) {
-          const conversation = await loadConversationHistory({
-            patientId: phoneVariant,
-            environment,
-            unit: selectedUnit,
-          });
+        const conversation = await loadCompletePhoneConversation({
+          phone: phoneFromUrl,
+          environment,
+          unit: selectedUnit,
+        });
 
-          if (!isCurrentRequest) return;
-          if (!conversation.exists) continue;
+        if (!isCurrentRequest || !conversation.exists) return;
 
-          setSelectedPatient(phoneVariant);
-          setConversationHistory(conversation.messages);
-          return;
-        }
+        setSelectedPatient(conversation.patientId);
+        setConversationHistory(conversation.messages);
       } catch (error) {
         console.error("Erro ao abrir diretamente a conversa recebida pela URL:", error);
         // A listagem completa continua carregando e funciona como fallback.
@@ -576,6 +789,7 @@ function EnviarMensagemComponent() {
 
     (async () => {
       setIsLoadingPatients(true);
+      setIsPatientListReady(false);
       setPatientListError(null);
       setPatientList([]);
       setSelectedPatient(null);
@@ -585,42 +799,23 @@ function EnviarMensagemComponent() {
         const historyKey =
           selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
         const col = collection(getFirestoreInstance(environment), historyKey);
-        const conversationsPath =
-          `/${selectedUnit}/agendamentoWhatsApp/operacional/conversas`;
-        const [snaps, conversationsSnapshot] = await Promise.all([
+        const [snaps, archivedPatients] = await Promise.all([
           getDocs(col),
-          get(ref(getDatabaseInstance(environment), conversationsPath)),
+          loadArchivedPatientIds(environment, selectedUnit).catch((error) => {
+            console.warn("Não foi possível listar as conversas antigas:", error);
+            return [];
+          }),
         ]);
 
         const firestorePatients = snaps.docs.map((document) => document.id);
-        const realtimeConversations = conversationsSnapshot.exists()
-          ? conversationsSnapshot.val()
-          : null;
-        const archivedPatients =
-          realtimeConversations && typeof realtimeConversations === "object"
-            ? Object.entries(realtimeConversations as Record<string, unknown>)
-                .filter(([, conversation]) => {
-                  if (!conversation || typeof conversation !== "object") return false;
-
-                  const archivedHistory = (
-                    conversation as Record<string, unknown>
-                  ).conversasAntigas;
-
-                  return (
-                    archivedHistory !== null &&
-                    archivedHistory !== undefined &&
-                    typeof archivedHistory === "object" &&
-                    Object.keys(archivedHistory).length > 0
-                  );
-                })
-                .map(([patientId]) => patientId)
-            : [];
+        const cachedPatients = getCachedPatientIds(environment, selectedUnit);
         const allPatients = Array.from(
-          new Set([...firestorePatients, ...archivedPatients])
+          new Set([...firestorePatients, ...archivedPatients, ...cachedPatients])
         ).sort((a, b) => a.localeCompare(b));
 
         if (isCurrentRequest) {
           setPatientList(allPatients);
+          cachePatientIds(environment, selectedUnit, allPatients);
         }
       } catch (err) {
         console.error("Erro ao carregar lista de pacientes:", err);
@@ -633,7 +828,10 @@ function EnviarMensagemComponent() {
           toast.error("Falha ao carregar a lista de pacientes.");
         }
       } finally {
-        if (isCurrentRequest) setIsLoadingPatients(false);
+        if (isCurrentRequest) {
+          setIsLoadingPatients(false);
+          setIsPatientListReady(true);
+        }
       }
     })();
 
@@ -642,16 +840,58 @@ function EnviarMensagemComponent() {
     };
   }, [selectedUnit, environment, isConfigurationReady]);
 
+  /* -------- completa o catálogo de arquivos sem bloquear a tela -------- */
+  useEffect(() => {
+    if (
+      !isConfigurationReady ||
+      !isPatientListReady ||
+      patientListError ||
+      !selectedUnit
+    ) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const knownPatientIds = new Set(patientList);
+
+    void discoverArchivedPatientsInBackground({
+      environment,
+      unit: selectedUnit,
+      knownPatientIds,
+      signal: controller.signal,
+      onPatientFound: (patientId) => {
+        setPatientList((patients) =>
+          patients.includes(patientId)
+            ? patients
+            : [...patients, patientId].sort((a, b) => a.localeCompare(b))
+        );
+        cachePatientIds(environment, selectedUnit, [patientId]);
+      },
+    }).catch((error) => {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      console.warn("A descoberta de conversas antigas foi interrompida:", error);
+    });
+
+    return () => controller.abort();
+  }, [
+    environment,
+    isConfigurationReady,
+    isPatientListReady,
+    patientListError,
+    selectedUnit,
+  ]);
+
   /* --------------------- busca conversa do paciente ------------------ */
   const handlePatientSelect = useCallback(async (patientId: string) => {
     setSelectedPatient(patientId);
     if (!selectedUnit) return;
     try {
-      const conversation = await loadConversationHistory({
-        patientId,
+      const conversation = await loadCompletePhoneConversation({
+        phone: patientId,
         environment,
         unit: selectedUnit,
       });
+      if (conversation.exists) setSelectedPatient(conversation.patientId);
       setConversationHistory(conversation.messages);
     } catch (err) {
       console.error("Erro ao carregar histórico:", err);
@@ -663,18 +903,77 @@ function EnviarMensagemComponent() {
   /* -------- seleção automática enquanto digita ou via URL -------- */
   useEffect(() => {
     if (manualSelection) return;
-    if (searchTerm.trim() === "") {
+    const normalizedSearchTerm = searchTerm.replace(/\D/g, "");
+    if (normalizedSearchTerm === "") {
       setSelectedPatient(null);
       setConversationHistory([]);
       return;
     }
     if (patientList.length > 0) {
-      const match = patientList.find((p) => p.includes(searchTerm.trim()));
+      const match = patientList.find((p) => p.includes(normalizedSearchTerm));
       if (match && match !== selectedPatient) {
         handlePatientSelect(match);
       }
     }
   }, [searchTerm, patientList, selectedPatient, handlePatientSelect, manualSelection]);
+
+  /* -------- busca direta mesmo antes de o catálogo terminar -------- */
+  useEffect(() => {
+    if (
+      manualSelection ||
+      !isConfigurationReady ||
+      isLoadingPatients ||
+      !selectedUnit
+    ) {
+      return;
+    }
+
+    const phone = searchTerm.replace(/\D/g, "");
+    if (
+      phone.length < 10 ||
+      patientListRef.current.some((patientId) => patientId.includes(phone))
+    ) {
+      return;
+    }
+
+    let isCurrentRequest = true;
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const conversation = await loadCompletePhoneConversation({
+          phone,
+          environment,
+          unit: selectedUnit,
+        });
+
+        if (!isCurrentRequest || !conversation.exists) return;
+
+        setPatientList((patients) =>
+          patients.includes(conversation.patientId)
+            ? patients
+            : [...patients, conversation.patientId].sort((a, b) => a.localeCompare(b))
+        );
+        cachePatientIds(environment, selectedUnit, [conversation.patientId]);
+        setSelectedPatient(conversation.patientId);
+        setConversationHistory(conversation.messages);
+      } catch (error) {
+        if (isCurrentRequest) {
+          console.warn("Não foi possível realizar a busca direta da conversa:", error);
+        }
+      }
+    }, 450);
+
+    return () => {
+      isCurrentRequest = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    environment,
+    isConfigurationReady,
+    isLoadingPatients,
+    manualSelection,
+    searchTerm,
+    selectedUnit,
+  ]);
 
   /* -------------------- envia mensagem -------------------- */
   const handleSendMessage = async () => {
@@ -797,11 +1096,17 @@ function EnviarMensagemComponent() {
 
       const timestamp = createSaoPauloArchiveTimestamp();
       const archivePath =
-        `/${selectedUnit}/agendamentoWhatsApp/operacional/conversas/` +
+        `${selectedUnit}/agendamentoWhatsApp/operacional/conversas/` +
         `${selectedPatient}/conversasAntigas/${timestamp}`;
+      const archiveIndexPath =
+        `${selectedUnit}/agendamentoWhatsApp/operacional/conversasArquivadas/` +
+        selectedPatient;
 
-      // A exclusão só acontece depois que o histórico foi salvo com sucesso.
-      await set(ref(getDatabaseInstance(environment), archivePath), currentHistory);
+      // O histórico e seu índice são gravados juntos; só depois o Firestore é excluído.
+      await update(ref(getDatabaseInstance(environment)), {
+        [archivePath]: currentHistory,
+        [archiveIndexPath]: true,
+      });
       await deleteDoc(conversationRef);
 
       setPatientList((patients) =>
@@ -857,8 +1162,16 @@ function EnviarMensagemComponent() {
           <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {!isConfigurationReady || isLoadingPatients ? (
               <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500">
-                <RefreshCcw className="h-4 w-4 animate-spin" />
-                Carregando conversas...
+                <Image
+                  src="/video/Animação de alvo atingido.gif"
+                  alt=""
+                  width={32}
+                  height={32}
+                  className="h-8 w-8 rounded-sm object-contain"
+                  unoptimized
+                  priority
+                />
+                <span>Carregando conversas...</span>
               </div>
             ) : patientListError ? (
               <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
@@ -869,7 +1182,7 @@ function EnviarMensagemComponent() {
                 Nenhuma conversa encontrada.
               </div>
             ) : patientList
-              .filter((p) => p.includes(searchTerm.trim()))
+              .filter((p) => p.includes(searchTerm.replace(/\D/g, "")))
               .map((phone, idx) => (
                 <div
                   key={phone}

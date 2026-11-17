@@ -356,25 +356,30 @@ export async function saveAppointmentAction(
         }
 
         const listaFormatada = listaExamesPrecos.length > 0
-          ? `\n- *Exames:*\n${listaExamesPrecos.join("\n")}`
+          ? `- *Exames:*\n${listaExamesPrecos.join("\n")}`
           : "";
 
-        valorString = `${listaFormatada}\n- *Valor:* R$ ${total.toFixed(2).replace(".", ",")}`;
+        valorString = [
+          listaFormatada,
+          `- *Valor:* R$ ${total.toFixed(2).replace(".", ",")}`,
+        ].filter(Boolean).join("\n");
       }
 
+      const cpfLine = v.cpf ? `\n- *CPF:* ${v.cpf}` : "";
+      const financialDetails = valorString ? `\n\n${valorString}` : "";
       const message = `Seu agendamento foi realizado com sucesso! Aqui estão os detalhes:
 
-- *Nome:* ${v.nomePaciente}
-- *Data de Nascimento:* ${formatDateFn(v.dataNascimento, "dd/MM/yyyy")}
+- *Data/Hora: ${formatLongDate(v.dataAgendamento)}  ${v.horario}*
+- *Nome:* ${v.nomePaciente}${cpfLine}
+- Data de Nascimento: ${formatDateFn(v.dataNascimento, "dd/MM/yyyy")}
+
 - *Unidade:* ${nomeUnidadeAmigavel}
-- *Data:* ${formatLongDate(v.dataAgendamento)}
-- *Horário:* ${v.horario}
 - *Endereço:* ${endereco}
-- *Telefone:* ${telefoneUnidade}${valorString}
+- *Telefone:* ${telefoneUnidade}${financialDetails}
 
-*A UNIDADE ENTRARÁ EM CONTATO COM VOCÊ:* esse agendamento está sujeito a alterações não previstas e a erros da assistente virtual. A unidade entrará em contato para garantir que está tudo certo com o seu agendamento ou para realizar alguma alteração/cancelamento.
+A UNIDADE ENTRARÁ EM CONTATO COM VOCÊ: esse agendamento está sujeito a alterações não previstas e a erros da assistente virtual. A unidade entrará em contato para garantir que está tudo certo com o seu agendamento ou para realizar alguma alteração/cancelamento.
 
-Se gostou, *SALVE* nosso contato e *COMPARTILHE* com um amigo que precisa de um oftalmologista.`;
+Se gostou, SALVE nosso contato e COMPARTILHE com um amigo que precisa de um oftalmologista.`;
 
       await whatsappService.sendMessage(
         { phone: v.telefone, message },

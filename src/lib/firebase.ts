@@ -1,31 +1,38 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getDatabase, type Database } from "firebase/database";
 import { getFirestore, type Firestore } from "firebase/firestore";
-// import { ENVIRONMENT } from "@/app/configuracoes/page";
-import { ENVIRONMENT } from "../../ambiente";
-// let ambiente = "teste";
-let firebaseConfig = {};
-
-// IMPORTANT: Replace with your actual Firebase project configuration
 
 const testConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "https://teste-b720c-default-rtdb.firebaseio.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "teste-b720c",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "YOUR_MESSAGING_SENDER_ID",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "YOUR_APP_ID",
+  apiKey: process.env.NEXT_PUBLIC_TEST_FIREBASE_API_KEY || "AIzaSyBTSTqEZARRrIOPwtTcysbw5RjjvXFuFDw",
+  authDomain: process.env.NEXT_PUBLIC_TEST_FIREBASE_AUTH_DOMAIN || "teste-b720c.firebaseapp.com",
+  databaseURL:
+    process.env.NEXT_PUBLIC_TEST_FIREBASE_DATABASE_URL ||
+    "https://teste-b720c-default-rtdb.firebaseio.com",
+  projectId: process.env.NEXT_PUBLIC_TEST_FIREBASE_PROJECT_ID || "teste-b720c",
+  storageBucket:
+    process.env.NEXT_PUBLIC_TEST_FIREBASE_STORAGE_BUCKET || "teste-b720c.firebasestorage.app",
+  messagingSenderId:
+    process.env.NEXT_PUBLIC_TEST_FIREBASE_MESSAGING_SENDER_ID || "1016885444024",
+  appId:
+    process.env.NEXT_PUBLIC_TEST_FIREBASE_APP_ID ||
+    "1:1016885444024:web:0da60891ef4904235ba34d",
 };
 
 const prodConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_URL || "https://oftautomacao-9b427-default-rtdb.firebaseio.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "oftautomacao-9b427",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "YOUR_MESSAGING_SENDER_ID",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "YOUR_APP_ID",
+  apiKey: process.env.NEXT_PUBLIC_PROD_FIREBASE_API_KEY || "AIzaSyDseoXikJofokNkYoU-Sm6wf_N9EIZbmrs",
+  authDomain:
+    process.env.NEXT_PUBLIC_PROD_FIREBASE_AUTH_DOMAIN || "oftautomacao-9b427.firebaseapp.com",
+  databaseURL:
+    process.env.NEXT_PUBLIC_PROD_FIREBASE_DATABASE_URL ||
+    "https://oftautomacao-9b427-default-rtdb.firebaseio.com",
+  projectId: process.env.NEXT_PUBLIC_PROD_FIREBASE_PROJECT_ID || "oftautomacao-9b427",
+  storageBucket:
+    process.env.NEXT_PUBLIC_PROD_FIREBASE_STORAGE_BUCKET || "oftautomacao-9b427.appspot.com",
+  messagingSenderId:
+    process.env.NEXT_PUBLIC_PROD_FIREBASE_MESSAGING_SENDER_ID || "755832525715",
+  appId:
+    process.env.NEXT_PUBLIC_PROD_FIREBASE_APP_ID ||
+    "1:755832525715:web:bd1b2e946d003611b94e66",
 };
 
 function getAppInstance(name: string, config: any): FirebaseApp {

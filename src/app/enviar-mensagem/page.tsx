@@ -4,19 +4,30 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import SidebarLayout from '@/components/layout/sidebar-layout';
 import { useState, useEffect, useRef, Suspense, useCallback } from "react";
-import { MessagesSquare, RefreshCcw, Send, ArrowLeft, Sparkles, Info, BrainCircuit, Download, Zap, MessageSquare, X, Building } from "lucide-react";
+import { MessagesSquare, RefreshCcw, Send, ArrowLeft, BrainCircuit, Download, Zap, MessageSquare, X, Building, Archive } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { identifyPatientSourceAction, type SourceAnalysisResult } from "@/app/actions/ai-analysis";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { getFirestoreInstance, getDatabaseInstance } from "@/lib/firebase";
 import { getPhoneVariants } from "@/lib/patient-origin";
-import { ref, get } from "firebase/database";
+import { ref, get, set } from "firebase/database";
 import { Toaster, toast } from 'sonner';
 
 import {
   doc,
+  deleteDoc,
   getDoc,
   updateDoc,
   collection,
@@ -103,16 +114,36 @@ function extractArchivedConversationMessages(data: unknown): ConversationMessage
 }
 
 function formatArchivedConversationTimestamp(timestamp: string): string {
-  const normalizedTimestamp = timestamp.replace(/:(\d{3})Z$/, ".$1Z");
-  const date = new Date(normalizedTimestamp);
+  const match = timestamp.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/
+  );
 
-  if (Number.isNaN(date.getTime())) return timestamp;
+  if (!match) return timestamp;
 
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "medium",
+  const [, year, month, day, hour, minute] = match;
+  return `${day}/${month}/${year} ${hour}:${minute}`;
+}
+
+function createSaoPauloArchiveTimestamp(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
-  }).format(date);
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts.map(({ type, value }) => [type, value])
+  );
+  const milliseconds = String(date.getMilliseconds()).padStart(3, "0");
+
+  return (
+    `${values.year}-${values.month}-${values.day}` +
+    `T${values.hour}:${values.minute}:${values.second}-${milliseconds}`
+  );
 }
 
 async function loadConversationHistory({
@@ -148,114 +179,6 @@ async function loadConversationHistory({
     exists: currentConversationSnapshot.exists() || archivedConversationSnapshot.exists(),
     messages: [...archivedMessages, ...currentMessagesWithMarker],
   };
-}
-
-/* 
-  Componente de Botão para Análise de Origem (Header)
-  - Dispara manual
-  - Exibe em Popover
-*/
-function PatientSourceHeaderControl({
-  patientId,
-  history
-}: {
-  patientId: string | null;
-  history: { role: string; content: string }[]
-}) {
-  const [analysis, setAnalysis] = useState<SourceAnalysisResult | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  // Reseta análise se mudar de paciente
-  useEffect(() => {
-    setAnalysis(null);
-    setOpen(false);
-  }, [patientId]);
-
-  const handleAnalyze = async () => {
-    if (!patientId || history.length === 0) {
-      toast.warning("Não há histórico de conversa para analisar.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const result = await identifyPatientSourceAction(history);
-      setAnalysis(result);
-    } catch (error) {
-      console.error("Falha na análise de IA:", error);
-      toast.error("Erro ao analisar conversa.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!patientId) return null;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="secondary"
-          size="sm"
-          className="ml-auto bg-blue-500 hover:bg-blue-400 text-white border-none shadow-none gap-2 h-8"
-          onClick={() => {
-            if (!analysis && !loading) handleAnalyze();
-          }}
-        >
-          <BrainCircuit className="h-4 w-4" />
-          <span className="hidden sm:inline">Analisar Origem</span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-0 mr-4" align="end">
-        <div className="p-4 bg-gradient-to-br from-white to-blue-50/50">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="bg-blue-100 p-1.5 rounded-md">
-              <Sparkles className="h-4 w-4 text-blue-600" />
-            </div>
-            <h4 className="font-semibold text-sm text-gray-800">IA Insight</h4>
-          </div>
-
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-6 gap-2 text-blue-600">
-              <RefreshCcw className="h-5 w-5 animate-spin" />
-              <span className="text-xs">Lendo histórico...</span>
-            </div>
-          ) : analysis ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-blue-800 uppercase">
-                  {analysis.source === "Indefinido" ? "Não Identificado" : analysis.source}
-                </span>
-                {analysis.source !== "Indefinido" && (
-                  <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                    Confiança {analysis.confidence}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-gray-600 leading-relaxed bg-white/50 p-2 rounded border border-blue-100">
-                {analysis.reason}
-              </p>
-              <div className="pt-2 flex justify-end">
-                <Button variant="ghost" onClick={handleAnalyze} className="h-6 px-2 text-[10px] text-gray-400 hover:text-blue-600">
-                  <RefreshCcw className="h-3 w-3 mr-1" /> Reanalisar
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="text-center py-4">
-              <p className="text-xs text-gray-500 mb-3">
-                Clique para identificar como este paciente conheceu a clínica.
-              </p>
-              <Button size="sm" onClick={handleAnalyze} className="w-full bg-blue-600 hover:bg-blue-700 h-8">
-                Iniciar Análise
-              </Button>
-            </div>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 function DownloadHeaderControl({
@@ -592,6 +515,7 @@ function EnviarMensagemComponent() {
   >([]);
   const [messageContent, setMessageContent] = useState("");
   const [manualSelection, setManualSelection] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
 
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -661,10 +585,42 @@ function EnviarMensagemComponent() {
         const historyKey =
           selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
         const col = collection(getFirestoreInstance(environment), historyKey);
-        const snaps = await getDocs(col);
+        const conversationsPath =
+          `/${selectedUnit}/agendamentoWhatsApp/operacional/conversas`;
+        const [snaps, conversationsSnapshot] = await Promise.all([
+          getDocs(col),
+          get(ref(getDatabaseInstance(environment), conversationsPath)),
+        ]);
+
+        const firestorePatients = snaps.docs.map((document) => document.id);
+        const realtimeConversations = conversationsSnapshot.exists()
+          ? conversationsSnapshot.val()
+          : null;
+        const archivedPatients =
+          realtimeConversations && typeof realtimeConversations === "object"
+            ? Object.entries(realtimeConversations as Record<string, unknown>)
+                .filter(([, conversation]) => {
+                  if (!conversation || typeof conversation !== "object") return false;
+
+                  const archivedHistory = (
+                    conversation as Record<string, unknown>
+                  ).conversasAntigas;
+
+                  return (
+                    archivedHistory !== null &&
+                    archivedHistory !== undefined &&
+                    typeof archivedHistory === "object" &&
+                    Object.keys(archivedHistory).length > 0
+                  );
+                })
+                .map(([patientId]) => patientId)
+            : [];
+        const allPatients = Array.from(
+          new Set([...firestorePatients, ...archivedPatients])
+        ).sort((a, b) => a.localeCompare(b));
 
         if (isCurrentRequest) {
-          setPatientList(snaps.docs.map((d) => d.id).sort((a, b) => a.localeCompare(b)));
+          setPatientList(allPatients);
         }
       } catch (err) {
         console.error("Erro ao carregar lista de pacientes:", err);
@@ -808,6 +764,63 @@ function EnviarMensagemComponent() {
     }
   };
 
+  /* -------------------- arquiva conversa -------------------- */
+  const handleArchiveConversation = async () => {
+    if (!selectedPatient || !selectedUnit) {
+      toast.error("Nenhum paciente ou unidade selecionada.");
+      return;
+    }
+
+    setIsArchiving(true);
+
+    try {
+      const historyKey =
+        selectedUnit === "OFT/45" ? "oft45HistoricoDaConversa" : "historicoDaConversa";
+      const conversationRef = doc(
+        getFirestoreInstance(environment),
+        historyKey,
+        selectedPatient
+      );
+      const conversationSnapshot = await getDoc(conversationRef);
+
+      if (!conversationSnapshot.exists()) {
+        toast.warning("Esta conversa não possui histórico atual no Firestore.");
+        return;
+      }
+
+      const currentHistory = conversationSnapshot.data().glbHistoricoDaConversa;
+
+      if (!Array.isArray(currentHistory) || currentHistory.length === 0) {
+        toast.warning("O histórico atual está vazio e não pode ser arquivado.");
+        return;
+      }
+
+      const timestamp = createSaoPauloArchiveTimestamp();
+      const archivePath =
+        `/${selectedUnit}/agendamentoWhatsApp/operacional/conversas/` +
+        `${selectedPatient}/conversasAntigas/${timestamp}`;
+
+      // A exclusão só acontece depois que o histórico foi salvo com sucesso.
+      await set(ref(getDatabaseInstance(environment), archivePath), currentHistory);
+      await deleteDoc(conversationRef);
+
+      setPatientList((patients) =>
+        patients.includes(selectedPatient)
+          ? patients
+          : [...patients, selectedPatient].sort((a, b) => a.localeCompare(b))
+      );
+      await handlePatientSelect(selectedPatient);
+      toast.success("Conversa arquivada com sucesso!");
+    } catch (error) {
+      console.error("Erro ao arquivar conversa:", error);
+      toast.error(
+        "Não foi possível arquivar a conversa. O histórico não foi removido sem antes ser salvo."
+      );
+    } finally {
+      setIsArchiving(false);
+    }
+  };
+
   const handleBack = () => {
     const unidade = searchParams.get('unidade');
     const data = searchParams.get('data');
@@ -908,14 +921,48 @@ function EnviarMensagemComponent() {
                   <Building className="h-4 w-4" />
                   <span className="hidden lg:inline">Enviar Clínicas</span>
                 </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="bg-amber-500 hover:bg-amber-400 text-white border-none shadow-none gap-2 h-8"
+                      disabled={!selectedPatient || isArchiving}
+                    >
+                      {isArchiving ? (
+                        <RefreshCcw className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Archive className="h-4 w-4" />
+                      )}
+                      <span className="hidden lg:inline">
+                        {isArchiving ? "Arquivando..." : "Arquivar"}
+                      </span>
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Arquivar esta conversa?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        O histórico atual de {selectedPatient} será salvo nas conversas antigas
+                        do Realtime Database e, somente depois, removido do Firestore.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={isArchiving}>Cancelar</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleArchiveConversation}
+                        disabled={isArchiving}
+                        className="bg-amber-600 text-white hover:bg-amber-700"
+                      >
+                        Confirmar arquivamento
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
                 <DownloadHeaderControl
                   patientId={selectedPatient}
                   environment={environment}
                   unit={selectedUnit}
-                  history={conversationHistory}
-                />
-                <PatientSourceHeaderControl
-                  patientId={selectedPatient}
                   history={conversationHistory}
                 />
               </div>

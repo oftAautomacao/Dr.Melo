@@ -369,9 +369,10 @@ export async function saveAppointmentAction(
       const financialDetails = valorString ? `\n\n${valorString}` : "";
       const message = `Seu agendamento foi realizado com sucesso! Aqui estão os detalhes:
 
-- *Data/Hora: ${formatLongDate(v.dataAgendamento)}  ${v.horario}*
+*${formatLongDate(v.dataAgendamento)}  ${v.horario}*
+
 - *Nome:* ${v.nomePaciente}${cpfLine}
-- Data de Nascimento: ${formatDateFn(v.dataNascimento, "dd/MM/yyyy")}
+- *Data de Nascimento:* ${formatDateFn(v.dataNascimento, "dd/MM/yyyy")}
 
 - *Unidade:* ${nomeUnidadeAmigavel}
 - *Endereço:* ${endereco}
@@ -664,7 +665,7 @@ export async function getConversasOriginsAction(
     const path = `/${firebaseBase}/agendamentoWhatsApp/operacional/conversas`;
     const snap = await get(ref(dbInstance, path));
     if (!snap.exists()) return {};
-    
+
     const val = snap.val();
     const result: Record<string, string> = {};
     for (const phone in val) {
@@ -1109,7 +1110,7 @@ export async function migratePhoneOriginAction(
     // 1. Buscar registros do telefone no espelho de conversas
     const convTargetRef = ref(dbInstance, `${convBase}/${phone}/${target}`);
     const snap = await get(convTargetRef);
-    
+
     if (!snap.exists()) {
       return { phone, origem, appointmentsUpdated: 0, success: true };
     }
@@ -1125,7 +1126,7 @@ export async function migratePhoneOriginAction(
         if (appt && typeof appt === "object") {
           if (appt.origem !== origem) {
             count++;
-            
+
             // 1. Atualizar no indice por unidade/medico
             const idxNode = getIdxNode(firebaseBase); // "unidades" ou "medicos"
             const setor = appt.unidade || appt.medico;

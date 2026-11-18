@@ -1,0 +1,50 @@
+[debug] [2026-11-18T12:46:06.111Z] ----------------------------------------------------------------------
+[debug] [2026-11-18T12:46:06.115Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js hosting:channel:list --project oftautomacao-9b427 --json
+[debug] [2026-11-18T12:46:06.115Z] CLI Version:   14.12.0
+[debug] [2026-11-18T12:46:06.115Z] Platform:      win32
+[debug] [2026-11-18T12:46:06.115Z] Node Version:  v21.7.1
+[debug] [2026-11-18T12:46:06.116Z] Time:          Wed Nov 18 2026 09:46:06 GMT-0300 (Horário Padrão de Brasília)
+[debug] [2026-11-18T12:46:06.116Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-11-18T12:46:06.347Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-11-18T12:46:06.347Z] > authorizing via signed-in user (oftautomacao@gmail.com)
+[debug] [2026-11-18T12:46:06.347Z] [iam] checking project oftautomacao-9b427 for permissions ["firebase.projects.get","firebasehosting.sites.update"]
+[debug] [2026-11-18T12:46:06.349Z] Checked if tokens are valid: false, expires at: 1794955976927
+[debug] [2026-11-18T12:46:06.350Z] Checked if tokens are valid: false, expires at: 1794955976927
+[debug] [2026-11-18T12:46:06.350Z] > refreshing access token with scopes: []
+[debug] [2026-11-18T12:46:06.352Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-11-18T12:46:06.352Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-11-18T12:46:06.503Z] *** [apiv2] error from fetch(https://www.googleapis.com/oauth2/v3/token, {"headers":{},"method":"POST","body":{"_overheadLength":545,"_valueLength":212,"_valuesToMeasure":[],"writable":false,"readable":true,"dataSize":0,"maxDataSize":2097152,"pauseStreams":true,"_released":true,"_streams":[],"_currentStream":null,"_insideLoop":false,"_pendingNext":false,"_boundary":"--------------------------31f10c79e1f7e796eb20ae19","_events":{},"_eventsCount":1}}): FetchError: request to https://www.googleapis.com/oauth2/v3/token failed, reason: unable to verify the first certificate
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-11-18T12:46:06.504Z] [iam] error while checking permissions, command may fail: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-11-18T12:46:06.504Z] Checked if tokens are valid: false, expires at: 1794955976927
+[debug] [2026-11-18T12:46:06.505Z] Checked if tokens are valid: false, expires at: 1794955976927
+[debug] [2026-11-18T12:46:06.505Z] > refreshing access token with scopes: []
+[debug] [2026-11-18T12:46:06.505Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-11-18T12:46:06.505Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-11-18T12:46:06.593Z] *** [apiv2] error from fetch(https://www.googleapis.com/oauth2/v3/token, {"headers":{},"method":"POST","body":{"_overheadLength":545,"_valueLength":212,"_valuesToMeasure":[],"writable":false,"readable":true,"dataSize":0,"maxDataSize":2097152,"pauseStreams":true,"_released":true,"_streams":[],"_currentStream":null,"_insideLoop":false,"_pendingNext":false,"_boundary":"--------------------------47098b0a9d49d38a33a4fbdb","_events":{},"_eventsCount":1}}): FetchError: request to https://www.googleapis.com/oauth2/v3/token failed, reason: unable to verify the first certificate
+[error] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-11-18T12:46:06.593Z] Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+[debug] [2026-11-18T12:46:06.814Z] FirebaseError: Authentication Error: Your credentials are no longer valid. Please run firebase login --reauth
+
+For CI servers and headless environments, generate a new token with firebase login:ci
+    at invalidCredentialError (C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\auth.js:167:12)
+    at refreshTokens (C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\auth.js:556:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async getAccessToken (C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\apiv2.js:42:18)
+    at async Client.addAuthHeader (C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\apiv2.js:169:21)
+    at async Client.request (C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\apiv2.js:120:34)
+    at async getFirebaseProject (C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\management\projects.js:345:21)
+    at async getDefaultHostingSite (C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\getDefaultHostingSite.js:14:21)
+    at async Object.requireHostingSite [as fn] (C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\requireHostingSite.js:9:18)
+    at async C:\Users\Master\AppData\Roaming\npm\node_modules\firebase-tools\lib\command.js:248:17
+[error] 
+[error] Error: Failed to get Firebase project oftautomacao-9b427. Please make sure the project exists and your account has permission to access it.

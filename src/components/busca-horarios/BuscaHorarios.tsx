@@ -23,13 +23,19 @@ import { toast as showToast } from "@/hooks/use-toast";
 import { getFirestoreInstance } from "@/lib/firebase";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
 import { getPhoneVariants } from "@/lib/patient-origin";
+import {
+  getUnitBlockedDateKeys,
+  getUnitDayBlockInfo,
+} from "@/lib/blocked-dates";
 import { doc, getDoc } from "firebase/firestore";
 import { ptBR } from "date-fns/locale";
 import { format, getDay, parseISO, isValid, startOfDay } from "date-fns";
 import { 
   Search, Plus, X, Loader2, Clock,
-  AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy, Eraser, MapPin, CircleHelp, Pencil, List, Trash2
+  AlertCircle, Calendar as CalendarIcon, CheckCircle2, Copy, Eraser, MapPin, CircleHelp, Pencil, List, Trash2,
+  Lock, LockOpen,
 } from "lucide-react";
+import { DayContent as DefaultDayContent, type DayContentProps } from "react-day-picker";
 import { ENVIRONMENT } from "../../../ambiente";
 
 const INCLUDED_IN_CONSULTA_OPTION = "__included_in_consulta__";
@@ -42,6 +48,24 @@ function buildDefaultSearchWeek() {
     date.setDate(today.getDate() + index);
     return date;
   });
+}
+
+function SearchBlockedDayContent(props: DayContentProps) {
+  const isHoliday = props.activeModifiers.holiday;
+  const isFullBlocked = props.activeModifiers.blockedFull;
+  const isPartialBlocked = props.activeModifiers.blockedPartial;
+
+  return (
+    <div className="relative flex h-8 w-8 items-center justify-center">
+      <DefaultDayContent {...props} />
+      {!isHoliday && isFullBlocked && (
+        <Lock className="pointer-events-none absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-white p-0.5 text-red-500 shadow-sm" strokeWidth={2.25} />
+      )}
+      {!isHoliday && !isFullBlocked && isPartialBlocked && (
+        <LockOpen className="pointer-events-none absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-white p-0.5 text-amber-500 shadow-sm" strokeWidth={2.25} />
+      )}
+    </div>
+  );
 }
 
 function normalizeSearchOption(value: string) {
@@ -123,6 +147,7 @@ export default function BuscaHorarios() {
   const {
     loading, searching, results,
     conveniosList, procedimentosList, unidadesList, subplanosMap, examesMetadata, feriadosData,
+    datasBloqueadas,
     buscar, limparResultados, gerarResposta, getNextDiscoveryDate,
   } = useBuscaHorarios();
 
@@ -182,6 +207,40 @@ export default function BuscaHorarios() {
       return startOfDay(new Date(y, m - 1, d));
     }).filter(Boolean) as Date[];
   }, [feriadosData]);
+
+  const blockedCalendarDates = useMemo(() => {
+    const relevantUnits = selectedUnidades.length > 0 ? selectedUnidades : unidadesList;
+    if (relevantUnits.length === 0) return { full: [] as Date[], partial: [] as Date[] };
+
+    const allBlockedDateKeys = new Set<string>();
+    relevantUnits.forEach((unit) => {
+      const unitDates = getUnitBlockedDateKeys(datasBloqueadas, unit);
+      unitDates.full.forEach((date) => allBlockedDateKeys.add(date));
+      unitDates.partial.forEach((date) => allBlockedDateKeys.add(date));
+    });
+
+    const full: Date[] = [];
+    const partial: Date[] = [];
+
+    allBlockedDateKeys.forEach((dateStr) => {
+      const blockInfos = relevantUnits.map((unit) =>
+        getUnitDayBlockInfo(datasBloqueadas, unit, dateStr)
+      );
+      const isFullForAllUnits = blockInfos.every((info) => info.isFullDay);
+      const hasAnyBlock = blockInfos.some(
+        (info) => info.isFullDay || info.blockedTimes.length > 0
+      );
+
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const date = startOfDay(new Date(year, month - 1, day));
+      if (!isValid(date)) return;
+
+      if (isFullForAllUnits) full.push(date);
+      else if (hasAnyBlock) partial.push(date);
+    });
+
+    return { full, partial };
+  }, [datasBloqueadas, selectedUnidades, unidadesList]);
 
   useEffect(() => {
     try {
@@ -1228,6 +1287,8 @@ export default function BuscaHorarios() {
                   }}
                   modifiers={{
                     holiday: holidayDates,
+                    blockedFull: blockedCalendarDates.full,
+                    blockedPartial: blockedCalendarDates.partial,
                     sunday: (d: Date) => getDay(d) === 0,
                     discovery: (d: Date) => format(d, "yyyy-MM-dd") === nextDiscoveryDate,
                   }}
@@ -1235,6 +1296,9 @@ export default function BuscaHorarios() {
                     holiday: "bg-amber-500 text-white rounded-md font-black shadow-sm",
                     sunday: "text-rose-500 font-bold",
                     discovery: "border-b-2 border-emerald-500 text-emerald-700 rounded-none",
+                  }}
+                  components={{
+                    DayContent: SearchBlockedDayContent,
                   }}
                   disabled={[
                     { before: startOfDay(new Date()) }
@@ -1250,6 +1314,16 @@ export default function BuscaHorarios() {
                 >
                   <Eraser className="h-3.5 w-3.5" />
                 </button>
+              </div>
+              <div className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1 text-[9px] font-bold text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  <Lock className="h-3 w-3 text-red-500" strokeWidth={2.25} />
+                  Bloqueio total
+                </span>
+                <span className="flex items-center gap-1">
+                  <LockOpen className="h-3 w-3 text-amber-500" strokeWidth={2.25} />
+                  Bloqueio parcial
+                </span>
               </div>
             </div>
           </div>

@@ -4,6 +4,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { ref, onValue, get, query, orderByKey, startAt, endAt } from "firebase/database";
 import { getDatabaseInstance } from "@/lib/firebase";
 import { getFirebasePathBase } from "@/lib/firebaseConfig";
+import {
+  getUnitDayBlockInfo,
+  isTimeInBlockedRanges,
+} from "@/lib/blocked-dates";
 import { ENVIRONMENT } from "../../ambiente";
 
 // ----- Constants -----
@@ -251,54 +255,12 @@ export function useBuscaHorarios() {
 
   // Check if a date/time is blocked for a unit
   const getBlockInfo = useCallback((dateStr: string, unitName: string) => {
-    let isFullDay = false;
-    const blockedTimes: { start: string; end: string }[] = [];
-
-    // Check holidays
-    if (feriadosData && feriadosData[dateStr]) {
-      isFullDay = true;
-    }
-
-    // Check unit-specific blocked dates/times
-    if (datasBloqueadas[unitName]) {
-      const blocked = datasBloqueadas[unitName];
-      if (typeof blocked === 'object') {
-        Object.values(blocked).forEach((v: any) => {
-          const vDate = typeof v === 'string' ? v : v?.data;
-          if (vDate === dateStr) {
-            if (v.horaInicio && v.horaFim) {
-              blockedTimes.push({ start: v.horaInicio, end: v.horaFim });
-            } else {
-              isFullDay = true;
-            }
-          }
-        });
-      }
-    }
-
-    return { isFullDay, blockedTimes };
+    const unitBlockInfo = getUnitDayBlockInfo(datasBloqueadas, unitName, dateStr);
+    return {
+      isFullDay: Boolean(feriadosData?.[dateStr]) || unitBlockInfo.isFullDay,
+      blockedTimes: unitBlockInfo.blockedTimes,
+    };
   }, [datasBloqueadas, feriadosData]);
-
-  const isTimeInBlockedRanges = (time: string, ranges: { start: string; end: string }[]) => {
-    if (!time || !ranges.length) return false;
-    const parts = time.split(':');
-    if (parts.length < 2) return false;
-    const [h, m] = parts.map(Number);
-    const timeVal = h * 60 + m;
-    
-    return ranges.some(range => {
-      if (!range.start || !range.end) return false;
-      const sParts = range.start.split(':');
-      const eParts = range.end.split(':');
-      if (sParts.length < 2 || eParts.length < 2) return false;
-      
-      const [sh, sm] = sParts.map(Number);
-      const [eh, em] = eParts.map(Number);
-      const startVal = sh * 60 + sm;
-      const endVal = eh * 60 + em;
-      return timeVal >= startVal && timeVal < endVal;
-    });
-  };
 
   // Main search function
   const buscar = useCallback(async (params: SearchParams) => {
@@ -666,6 +628,7 @@ export function useBuscaHorarios() {
     subplanosMap,
     examesMetadata,
     feriadosData,
+    datasBloqueadas,
     buscar,
     limparResultados,
     gerarResposta,

@@ -67,6 +67,11 @@ import {
   isHoliday as checkIsHoliday,
   type Holiday,
 } from "@/lib/holidays";
+import {
+  getUnitBlockedDateKeys,
+  getUnitDayBlockInfo,
+  type DayBlockInfo,
+} from "@/lib/blocked-dates";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -131,16 +136,6 @@ export interface CalendarAppointment {
 
 type AppointmentsByUnit = Record<string, CalendarAppointment[]>;
 
-type BlockedTimeRange = {
-  start: string;
-  end: string;
-};
-
-type DayBlockInfo = {
-  isFullDay: boolean;
-  blockedTimes: BlockedTimeRange[];
-};
-
 type NewAppointmentPreview = {
   dataAgendamento?: string;
   local?: string;
@@ -160,10 +155,10 @@ function CalendarBlockedDayContent(props: DayContentProps) {
     <div className="relative flex h-9 w-9 items-center justify-center">
       <DefaultDayContent {...props} />
       {!isHoliday && isFullBlocked && (
-        <Lock className="pointer-events-none absolute bottom-0.5 right-0.5 h-3 w-3 text-amber-500" strokeWidth={2.25} />
+        <Lock className="pointer-events-none absolute bottom-0.5 right-0.5 h-3 w-3 text-red-500" strokeWidth={2.25} />
       )}
       {!isHoliday && !isFullBlocked && isPartialBlocked && (
-        <LockOpen className="pointer-events-none absolute bottom-0.5 right-0.5 h-3 w-3 text-amber-400" strokeWidth={2.25} />
+        <LockOpen className="pointer-events-none absolute bottom-0.5 right-0.5 h-3 w-3 text-amber-500" strokeWidth={2.25} />
       )}
     </div>
   );
@@ -559,152 +554,18 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     }
   }, [initialUnit, selectedUnit, availableUnitsForSelectedMonth]);
 
-  const getDayBlockInfo = (unitName: string | undefined, dateStr: string): DayBlockInfo => {
-    if (!unitName || !dateStr) {
-      return { isFullDay: false, blockedTimes: [] };
-    }
-
-    const blockedUnitData = blockedDatesData[unitName];
-    if (!blockedUnitData || typeof blockedUnitData !== "object") {
-      return { isFullDay: false, blockedTimes: [] };
-    }
-
-    const blockedTimes: BlockedTimeRange[] = [];
-    let isFullDay = false;
-
-    Object.values(blockedUnitData).forEach((entry: any) => {
-      const blockedDate =
-        entry?.data ??
-        entry?.datasBloqueadas ??
-        entry?.date ??
-        null;
-
-      if (blockedDate !== dateStr) return;
-
-      const start =
-        entry?.horaInicio ??
-        entry?.horarioInicio ??
-        entry?.horarioinicio ??
-        entry?.inicio ??
-        "";
-      const end =
-        entry?.horaFim ??
-        entry?.horarioFim ??
-        entry?.horariofim ??
-        entry?.fim ??
-        "";
-
-      if (
-        (start === "00:00" || start === "0:00") &&
-        (end === "23:59" || end === "23:59:00" || end === "24:00")
-      ) {
-        isFullDay = true;
-        return;
-      }
-
-      if (start && end) {
-        blockedTimes.push({ start, end });
-        return;
-      }
-
-      isFullDay = true;
-    });
-
-    if (isFullDay) {
-      return { isFullDay: true, blockedTimes: [] };
-    }
-
-    return { isFullDay: false, blockedTimes };
-  };
-
   const fullyBlockedDays = useMemo(() => {
     if (!selectedUnit) return [];
-
-    const unitBlockedData = blockedDatesData[selectedUnit];
-    if (!unitBlockedData || typeof unitBlockedData !== "object") return [];
-
-    const dates = new Set<string>();
-    Object.values(unitBlockedData).forEach((entry: any) => {
-      const blockedDate =
-        entry?.data ??
-        entry?.datasBloqueadas ??
-        entry?.date ??
-        null;
-      if (!blockedDate) return;
-
-      const start =
-        entry?.horaInicio ??
-        entry?.horarioInicio ??
-        entry?.horarioinicio ??
-        entry?.inicio ??
-        "";
-      const end =
-        entry?.horaFim ??
-        entry?.horarioFim ??
-        entry?.horariofim ??
-        entry?.fim ??
-        "";
-
-      if (
-        !start ||
-        !end ||
-        ((start === "00:00" || start === "0:00") &&
-          (end === "23:59" || end === "23:59:00" || end === "24:00"))
-      ) {
-        dates.add(blockedDate);
-      }
-    });
-
-    return Array.from(dates)
+    const { full } = getUnitBlockedDateKeys(blockedDatesData, selectedUnit);
+    return Array.from(full)
       .map((date) => dateFnsStartOfDay(parseISO(date)))
       .filter((date) => dateFnsIsValid(date));
   }, [blockedDatesData, selectedUnit]);
 
   const partiallyBlockedDays = useMemo(() => {
     if (!selectedUnit) return [];
-
-    const unitBlockedData = blockedDatesData[selectedUnit];
-    if (!unitBlockedData || typeof unitBlockedData !== "object") return [];
-
-    const partialDates = new Set<string>();
-    const fullDates = new Set<string>();
-
-    Object.values(unitBlockedData).forEach((entry: any) => {
-      const blockedDate =
-        entry?.data ??
-        entry?.datasBloqueadas ??
-        entry?.date ??
-        null;
-      if (!blockedDate) return;
-
-      const start =
-        entry?.horaInicio ??
-        entry?.horarioInicio ??
-        entry?.horarioinicio ??
-        entry?.inicio ??
-        "";
-      const end =
-        entry?.horaFim ??
-        entry?.horarioFim ??
-        entry?.horariofim ??
-        entry?.fim ??
-        "";
-
-      if (
-        !start ||
-        !end ||
-        ((start === "00:00" || start === "0:00") &&
-          (end === "23:59" || end === "23:59:00" || end === "24:00"))
-      ) {
-        fullDates.add(blockedDate);
-        return;
-      }
-
-      partialDates.add(blockedDate);
-    });
-
-    return Array.from(partialDates)
-      .filter((date) => !fullDates.has(date))
+    const { partial } = getUnitBlockedDateKeys(blockedDatesData, selectedUnit);
+    return Array.from(partial)
       .map((date) => dateFnsStartOfDay(parseISO(date)))
       .filter((date) => dateFnsIsValid(date));
   }, [blockedDatesData, selectedUnit]);
@@ -735,7 +596,7 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
     }
 
     setSelectedDateBlockInfo(
-      getDayBlockInfo(selectedUnit, format(selectedDate, "yyyy-MM-dd"))
+      getUnitDayBlockInfo(blockedDatesData, selectedUnit, format(selectedDate, "yyyy-MM-dd"))
     );
   }, [blockedDatesData, selectedDate, selectedUnit]);
 
@@ -835,11 +696,11 @@ export const AppointmentCalendar: React.FC<AppointmentCalendarProps> = ({
                   Dias com agendamentos
                 </p>
                 <p className="flex items-center">
-                  <Lock className="mr-2 h-4 w-4 text-amber-500" strokeWidth={2.25} />
+                  <Lock className="mr-2 h-4 w-4 text-red-500" strokeWidth={2.25} />
                   Dias bloqueados
                 </p>
                 <p className="flex items-center">
-                  <LockOpen className="mr-2 h-4 w-4 text-amber-400" strokeWidth={2.25} />
+                  <LockOpen className="mr-2 h-4 w-4 text-amber-500" strokeWidth={2.25} />
                   Dias parcialmente bloqueados
                 </p>
               </div>

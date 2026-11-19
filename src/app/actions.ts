@@ -378,9 +378,9 @@ export async function saveAppointmentAction(
 - *Endereço:* ${endereco}
 - *Telefone:* ${telefoneUnidade}${financialDetails}
 
-A UNIDADE ENTRARÁ EM CONTATO COM VOCÊ: esse agendamento está sujeito a alterações não previstas e a erros da assistente virtual. A unidade entrará em contato para garantir que está tudo certo com o seu agendamento ou para realizar alguma alteração/cancelamento.
+*A UNIDADE ENTRARÁ EM CONTATO COM VOCÊ:* esse agendamento está sujeito a alterações não previstas e a erros da assistente virtual. A unidade entrará em contato para garantir que está tudo certo com o seu agendamento ou para realizar alguma alteração/cancelamento.
 
-Se gostou, SALVE nosso contato e COMPARTILHE com um amigo que precisa de um oftalmologista.`;
+Se gostou, *SALVE* nosso contato e *COMPARTILHE* com um amigo que precisa de um oftalmologista.`;
 
       await whatsappService.sendMessage(
         { phone: v.telefone, message },
